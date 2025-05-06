@@ -364,4 +364,42 @@ class MaintenanceLogController extends Controller
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
+    
+    /**
+     * Update the status of a maintenance log.
+     */
+    public function updateStatus(Request $request, MaintenanceLog $maintenanceLog)
+    {
+        $request->validate([
+            'status' => 'required|in:pending,in_progress,completed',
+        ]);
+        
+        DB::beginTransaction();
+        
+        try {
+            // Update the maintenance log status
+            $maintenanceLog->status = $request->status;
+            $maintenanceLog->save();
+            
+            // If status is completed, update the unit status back to active
+            if ($request->status === 'completed') {
+                $unit = Unit::find($maintenanceLog->unit_id);
+                if ($unit) {
+                    $unit->status = 'active';
+                    $unit->save();
+                }
+            }
+            
+            DB::commit();
+            
+            return redirect()->route('maintenance-logs.show', $maintenanceLog)
+                ->with('success', 'Status log perawatan berhasil diperbarui.');
+                
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return redirect()->back()
+                ->with('error', 'Gagal memperbarui status: ' . $e->getMessage());
+        }
+    }
 }

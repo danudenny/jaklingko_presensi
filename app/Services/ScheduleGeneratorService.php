@@ -8,6 +8,7 @@ use App\Models\DriverScheduleHistory;
 use App\Models\Route;
 use App\Models\Schedule;
 use App\Models\Unit;
+use App\Models\Holiday;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -68,9 +69,13 @@ class ScheduleGeneratorService
             // Determine resource percentage based on day type
             $resourcePercentage = $this->getResourcePercentage($currentDate);
             
-            // Prepare weekend drivers pool if it's a weekend
-            if ($dayOfWeek == 0 || $dayOfWeek == 6) {
-                $this->prepareWeekendDriversPool($currentDate);
+            // Check if it's a weekend or holiday
+            $isWeekend = ($dayOfWeek == 0 || $dayOfWeek == 6);
+            $isHoliday = Holiday::whereDate('date', $dateStr)->exists();
+            
+            // Prepare drivers pool if it's a weekend or holiday
+            if ($isWeekend || $isHoliday) {
+                $this->prepareRestrictedDriversPool($currentDate, $resourcePercentage);
             }
             
             $results['messages'][] = "Processing date: {$dateStr}, Day: {$currentDate->format('l')}, Resource allocation: {$resourcePercentage}%";
@@ -131,8 +136,9 @@ class ScheduleGeneratorService
     /**
      * Determine resource percentage based on day type
      * Weekdays: 100%
-     * Saturday/Holiday: 80%
+     * Saturday: 80%
      * Sunday: 70%
+     * Holiday: 80%
      *
      * @param Carbon $date
      * @return int
@@ -142,18 +148,19 @@ class ScheduleGeneratorService
         $dayOfWeek = $date->dayOfWeek;
         
         // Check if it's a holiday
-        $isHoliday = false; // TODO: Implement holiday checking logic if needed
+        $isHoliday = Holiday::whereDate('date', $date->format('Y-m-d'))->exists();
         
         if ($isHoliday) {
+            $this->messages[] = "Date {$date->format('Y-m-d')} is a holiday, using 80% resource allocation";
             return 80; // 80% for holidays
         }
         
         if ($dayOfWeek == 6) { // Saturday
-            return 80; // 80% for Saturday (Weekend 1)
+            return 80; // 80% for Saturday
         }
         
         if ($dayOfWeek == 0) { // Sunday
-            return 70; // 70% for Sunday (Weekend 2)
+            return 70; // 70% for Sunday
         }
         
         return 100; // 100% for weekdays
@@ -278,6 +285,9 @@ class ScheduleGeneratorService
         $year = $carbonDate->year;
         $dayOfWeek = $carbonDate->dayOfWeek;
         
+        // Check if it's a holiday
+        $isHoliday = Holiday::whereDate('date', $date)->exists();
+        
         // Get qualified fixed drivers (D) for this unit
         $qualifiedFixedDrivers = $this->fixedDrivers->filter(function ($driver) use ($unit) {
             return $driver->units->contains($unit->id);
@@ -288,43 +298,49 @@ class ScheduleGeneratorService
             return $driver->units->contains($unit->id);
         });
         
-        // Apply weekend resource restrictions if applicable
-        if ($dayOfWeek == 6 || $dayOfWeek == 0) { // Weekend (Saturday or Sunday)
-            // Filter fixed drivers to only those in the weekend pool
+        // Apply resource restrictions if it's a weekend or holiday
+        if ($dayOfWeek == 6 || $dayOfWeek == 0 || $isHoliday) {
+            // Filter fixed drivers to only those in the restricted pool
             $qualifiedFixedDrivers = $qualifiedFixedDrivers->filter(function ($driver) {
                 return in_array($driver->id, $this->weekendDriversPool['fixed']);
             });
             
-            // Filter non-fixed drivers to only those in the weekend pool
+            // Filter non-fixed drivers to only those in the restricted pool
             $qualifiedNonFixedDrivers = $qualifiedNonFixedDrivers->filter(function ($driver) {
                 return in_array($driver->id, $this->weekendDriversPool['non_fixed']);
             });
             
-            $dayName = ($dayOfWeek == 6) ? 'Saturday' : 'Sunday';
-            $percentage = ($dayOfWeek == 6) ? '80%' : '70%';
-            $this->messages[] = "{$dayName}: Using {$percentage} of drivers pool - {$qualifiedFixedDrivers->count()} qualified fixed drivers and {$qualifiedNonFixedDrivers->count()} qualified non-fixed drivers for unit {$unit->unit_number}";
+            if ($isHoliday) {
+                $this->messages[] = "Applying holiday resource restrictions for {$date}";
+            } else {
+                $dayName = ($dayOfWeek == 6) ? 'Saturday' : 'Sunday';
+                $this->messages[] = "Applying {$dayName} resource restrictions for {$date}";
+            }
         }
         
-        // Prioritize drivers who haven't met their target for the period (14 schedules)
-        $prioritizedFixedDrivers = $this->prioritizeDriversBelowTarget($qualifiedFixedDrivers, $periodStartDate, $periodEndDate);
-        $prioritizedNonFixedDrivers = $this->prioritizeDriversBelowTarget($qualifiedNonFixedDrivers, $periodStartDate, $periodEndDate);
+        // Filter available drivers
+        $availableFixedDrivers = $this->filterAvailableDrivers($qualifiedFixedDrivers, $date, $shift);
+        $availableNonFixedDrivers = $this->filterAvailableDrivers($qualifiedNonFixedDrivers, $date, $shift);
         
-        // Get available fixed drivers (Priority 1)
-        $availableFixedDrivers = $this->filterAvailableDrivers($prioritizedFixedDrivers, $date, $shift);
+        // Sort by schedule count in the current period to ensure fair distribution
+        $availableFixedDrivers = $this->sortDriversByPeriodScheduleCount($availableFixedDrivers, $periodStartDate, $periodEndDate);
+        $availableNonFixedDrivers = $this->sortDriversByPeriodScheduleCount($availableNonFixedDrivers, $periodStartDate, $periodEndDate);
         
+        // Prioritize drivers who haven't met their target
+        $availableFixedDrivers = $this->prioritizeDriversBelowTarget($availableFixedDrivers, $periodStartDate, $periodEndDate);
+        $availableNonFixedDrivers = $this->prioritizeDriversBelowTarget($availableNonFixedDrivers, $periodStartDate, $periodEndDate);
+        
+        // Try to assign a fixed driver first
         if ($availableFixedDrivers->isNotEmpty()) {
-            // Sort by schedule count in the current period and return the one with fewest schedules
-            return $this->sortDriversByPeriodScheduleCount($availableFixedDrivers, $periodStartDate, $periodEndDate)->first();
+            return $availableFixedDrivers->first();
         }
         
-        // Get available non-fixed drivers (Priority 2)
-        $availableNonFixedDrivers = $this->filterAvailableDrivers($prioritizedNonFixedDrivers, $date, $shift);
-        
+        // If no fixed driver available, try a non-fixed driver
         if ($availableNonFixedDrivers->isNotEmpty()) {
-            // Sort by schedule count in the current period and return the one with fewest schedules
-            return $this->sortDriversByPeriodScheduleCount($availableNonFixedDrivers, $periodStartDate, $periodEndDate)->first();
+            return $availableNonFixedDrivers->first();
         }
         
+        // No suitable driver found
         return null;
     }
     
@@ -520,22 +536,19 @@ class ScheduleGeneratorService
      * @param Carbon $date
      * @return void
      */
-    protected function prepareWeekendDriversPool(Carbon $date): void
+    protected function prepareRestrictedDriversPool(Carbon $date, int $resourcePercentage): void
     {
         $dayOfWeek = $date->dayOfWeek;
         $month = $date->month;
         $year = $date->year;
         
-        // Determine resource percentage
-        $percentage = ($dayOfWeek == 6) ? 80 : 70; // 80% for Saturday, 70% for Sunday
-        
         // Prepare fixed drivers pool
         $totalFixedDrivers = $this->fixedDrivers->count();
-        $fixedDriverLimit = ceil($totalFixedDrivers * $percentage / 100);
+        $fixedDriverLimit = ceil($totalFixedDrivers * $resourcePercentage / 100);
         
         // Prepare non-fixed drivers pool
         $totalNonFixedDrivers = $this->nonFixedDrivers->count();
-        $nonFixedDriverLimit = ceil($totalNonFixedDrivers * $percentage / 100);
+        $nonFixedDriverLimit = ceil($totalNonFixedDrivers * $resourcePercentage / 100);
         
         // Sort drivers by assignment count to ensure fair distribution
         $sortedFixedDrivers = $this->sortDriversByAssignmentCount($this->fixedDrivers, $month, $year);
@@ -552,7 +565,7 @@ class ScheduleGeneratorService
         ];
         
         $dayName = ($dayOfWeek == 6) ? 'Saturday' : 'Sunday';
-        $this->messages[] = "{$dayName}: Selected {$fixedDriverLimit} of {$totalFixedDrivers} fixed drivers and {$nonFixedDriverLimit} of {$totalNonFixedDrivers} non-fixed drivers for weekend pool ({$percentage}%)";
+        $this->messages[] = "{$dayName}: Selected {$fixedDriverLimit} of {$totalFixedDrivers} fixed drivers and {$nonFixedDriverLimit} of {$totalNonFixedDrivers} non-fixed drivers for weekend pool ({$resourcePercentage}%)";
     }
     
     /**

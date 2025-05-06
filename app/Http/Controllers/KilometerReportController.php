@@ -20,6 +20,7 @@ class KilometerReportController extends Controller
     public function index(Request $request)
     {
         $period = $request->input('period', 1); // Default to period 1
+        $activeRouteGroup = $request->input('group', 'all'); // Default to all groups
         
         // Determine date ranges based on period
         $today = Carbon::now();
@@ -36,7 +37,45 @@ class KilometerReportController extends Controller
         }
         
         // Get all routes with their assigned units
-        $routes = Route::with('units')->orderBy('route_number')->get();
+        $allRoutes = Route::with('units')->orderBy('route_number')->get();
+        
+        // Group routes by their exact route_number
+        $routeGroups = [];
+        $routesByGroup = [];
+        
+        foreach ($allRoutes as $route) {
+            $routeNumber = $route->route_number;
+            
+            // Skip empty route numbers
+            if (empty($routeNumber)) {
+                continue;
+            }
+            
+            if (!in_array($routeNumber, $routeGroups)) {
+                $routeGroups[] = $routeNumber;
+            }
+            
+            if (!isset($routesByGroup[$routeNumber])) {
+                $routesByGroup[$routeNumber] = [];
+            }
+            
+            $routesByGroup[$routeNumber][] = $route;
+        }
+        
+        // Sort route groups alphabetically
+        sort($routeGroups);
+        
+        // Move 'all' tab to the end
+        $routeGroups = array_merge(array_filter($routeGroups, function($group) {
+            return $group !== 'all';
+        }), ['all']);
+        
+        // Filter routes based on the active group
+        if ($activeRouteGroup !== 'all') {
+            $routes = collect($routesByGroup[$activeRouteGroup] ?? []);
+        } else {
+            $routes = $allRoutes;
+        }
         
         // Get all dates in the range
         $dates = [];
@@ -126,7 +165,9 @@ class KilometerReportController extends Controller
             'grandTotal',
             'startDate',
             'endDate',
-            'period'
+            'period',
+            'routeGroups',
+            'activeRouteGroup'
         ));
     }
 
@@ -315,7 +356,8 @@ class KilometerReportController extends Controller
      */
     public function exportExcel(Request $request)
     {
-        $period = $request->input('period', 1); // Default to period 1
+        $period = $request->input('period', 1);
+        $group = $request->input('group', 'all');
         
         // Determine date ranges based on period
         $today = Carbon::now();
@@ -331,38 +373,13 @@ class KilometerReportController extends Controller
             $endDate = $currentMonth->copy()->endOfMonth()->format('Y-m-d');
         }
         
-        // Get all routes with their assigned units through the unit_routes relationship
-        $routes = Route::with(['units' => function($query) {
-            $query->orderBy('unit_number');
-        }])->orderBy('route_number')->get();
+        $title = "Laporan Kilometer - Periode " . ($period == 1 ? "1 (1-15)" : "2 (16-" . $currentMonth->copy()->endOfMonth()->format('d') . ")") . " " . $today->format('F Y');
         
-        // Get all dates in the range
-        $dates = [];
-        $currentDate = Carbon::parse($startDate);
-        $lastDate = Carbon::parse($endDate);
-        
-        while ($currentDate->lte($lastDate)) {
-            $dates[] = $currentDate->format('Y-m-d');
-            $currentDate->addDay();
+        if ($group !== 'all') {
+            $title .= " - Rute " . $group;
         }
         
-        // Get all kilometer reports for the date range
-        $reports = KilometerReport::with(['unit', 'route'])
-            ->whereBetween('date', [$startDate, $endDate])
-            ->get();
-            
-        // Create a structured array of reports by route, unit, and date for easier access
-        $reportsByRouteUnitDate = [];
-        foreach ($reports as $report) {
-            $reportsByRouteUnitDate[$report->route_id][$report->unit_id][$report->date] = $report;
-        }
-            
-        // Generate filename
-        $periodText = $period == 1 ? '1-15' : '16-' . Carbon::parse($endDate)->format('d');
-        $monthYear = Carbon::parse($startDate)->format('F_Y');
-        $filename = "laporan_kilometer_periode_{$periodText}_{$monthYear}.xlsx";
-        
-        return Excel::download(new KilometerReportsExport($reports, $routes, $dates, $period, $reportsByRouteUnitDate), $filename);
+        return Excel::download(new KilometerReportsExport($startDate, $endDate, $group), $title . '.xlsx');
     }
     
     /**
@@ -370,7 +387,8 @@ class KilometerReportController extends Controller
      */
     public function exportPdf(Request $request)
     {
-        $period = $request->input('period', 1); // Default to period 1
+        $period = $request->input('period', 1);
+        $group = $request->input('group', 'all');
         
         // Determine date ranges based on period
         $today = Carbon::now();
@@ -386,33 +404,12 @@ class KilometerReportController extends Controller
             $endDate = $currentMonth->copy()->endOfMonth()->format('Y-m-d');
         }
         
-        // Get all routes with their assigned units through the unit_routes relationship
-        $routes = Route::with(['units' => function($query) {
-            $query->orderBy('unit_number');
-        }])->orderBy('route_number')->get();
+        $title = "Laporan Kilometer - Periode " . ($period == 1 ? "1 (1-15)" : "2 (16-" . $currentMonth->copy()->endOfMonth()->format('d') . ")") . " " . $today->format('F Y');
         
-        // Get all dates in the range
-        $dates = [];
-        $currentDate = Carbon::parse($startDate);
-        $lastDate = Carbon::parse($endDate);
-        
-        while ($currentDate->lte($lastDate)) {
-            $dates[] = $currentDate->format('Y-m-d');
-            $currentDate->addDay();
+        if ($group !== 'all') {
+            $title .= " - Rute " . $group;
         }
         
-        // Get all kilometer reports for the date range
-        $reports = KilometerReport::with(['unit', 'route'])
-            ->whereBetween('date', [$startDate, $endDate])
-            ->get();
-            
-        // Create a structured array of reports by route, unit, and date for easier access
-        $reportsByRouteUnitDate = [];
-        foreach ($reports as $report) {
-            $reportsByRouteUnitDate[$report->route_id][$report->unit_id][$report->date] = $report;
-        }
-            
-        $pdfExport = new KilometerReportsPdfExport($reports, $routes, $dates, $period, $reportsByRouteUnitDate);
-        return $pdfExport->download();
+        return (new KilometerReportsPdfExport($startDate, $endDate, $group))->download($title . '.pdf');
     }
 }

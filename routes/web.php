@@ -11,6 +11,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\UnitProblemController;
 use App\Http\Controllers\KilometerReportController;
 use App\Http\Controllers\MaintenanceLogController;
+use App\Http\Controllers\HolidayController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -64,6 +65,8 @@ Route::middleware('auth')->group(function () {
     Route::get('unit-problems/drivers-for-unit/{unitId}', [UnitProblemController::class, 'getDriversForUnit']);
     Route::post('unit-problems/driver-from-schedule', [UnitProblemController::class, 'getDriverFromSchedule']);
     Route::delete('unit-problems/photos/{id}', [UnitProblemController::class, 'deletePhoto']);
+    Route::get('unit-problems/{unitProblem}/convert-to-maintenance', [UnitProblemController::class, 'convertToMaintenance'])
+        ->name('unit-problems.convert-to-maintenance');
     
     // Maintenance Log Routes
     Route::resource('maintenance-logs', MaintenanceLogController::class);
@@ -71,6 +74,8 @@ Route::middleware('auth')->group(function () {
     Route::get('maintenance-logs/routes-for-unit/{unitId}', [MaintenanceLogController::class, 'getRoutesForUnit']);
     Route::post('maintenance-logs/driver-from-schedule', [MaintenanceLogController::class, 'getDriverFromSchedule']);
     Route::delete('maintenance-logs/photos/{id}', [MaintenanceLogController::class, 'deletePhoto']);
+    Route::patch('maintenance-logs/{maintenanceLog}/update-status', [MaintenanceLogController::class, 'updateStatus'])
+        ->name('maintenance-logs.update-status');
     
     // Kilometer Report Routes
     Route::get('kilometer-reports', [KilometerReportController::class, 'index'])->name('kilometer-reports.index');
@@ -78,6 +83,9 @@ Route::middleware('auth')->group(function () {
     Route::get('kilometer-reports/export/pdf', [KilometerReportController::class, 'exportPdf'])->name('kilometer-reports.export.pdf');
     Route::get('kilometer-reports/{unit}', [KilometerReportController::class, 'show'])->name('kilometer-reports.show');
     Route::post('kilometer-reports', [KilometerReportController::class, 'store'])->name('kilometer-reports.store');
+
+    // Holiday Routes
+    Route::resource('holidays', HolidayController::class);
 
     // Route routes
     Route::resource('routes', RouteController::class);

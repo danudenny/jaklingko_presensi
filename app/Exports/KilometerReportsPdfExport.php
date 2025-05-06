@@ -3,31 +3,88 @@
 namespace App\Exports;
 
 use App\Models\KilometerReport;
+use App\Models\Route;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\View;
 
 class KilometerReportsPdfExport
 {
-    protected $reports;
+    protected $startDate;
+    protected $endDate;
+    protected $routeGroup;
     protected $routes;
     protected $dates;
-    protected $period;
+    protected $reports;
     protected $reportsByRouteUnitDate;
 
-    public function __construct($reports, $routes, $dates, $period, $reportsByRouteUnitDate)
+    public function __construct($startDate, $endDate, $routeGroup = 'all')
     {
-        $this->reports = $reports;
-        $this->routes = $routes;
-        $this->dates = $dates;
-        $this->period = $period;
-        $this->reportsByRouteUnitDate = $reportsByRouteUnitDate;
+        $this->startDate = $startDate;
+        $this->endDate = $endDate;
+        $this->routeGroup = $routeGroup;
+        
+        // Load data
+        $this->loadData();
+    }
+    
+    /**
+     * Load all necessary data for the export
+     */
+    protected function loadData()
+    {
+        // Get all dates in the range
+        $this->dates = [];
+        $currentDate = Carbon::parse($this->startDate);
+        $lastDate = Carbon::parse($this->endDate);
+        
+        while ($currentDate->lte($lastDate)) {
+            $this->dates[] = $currentDate->format('Y-m-d');
+            $currentDate->addDay();
+        }
+        
+        // Get routes based on group filter
+        $routesQuery = Route::with(['units' => function($query) {
+            $query->orderBy('unit_number');
+        }])->orderBy('route_number');
+        
+        if ($this->routeGroup !== 'all') {
+            $routesQuery->where('route_number', 'like', $this->routeGroup . '%');
+        }
+        
+        $this->routes = $routesQuery->get();
+        
+        // Get all kilometer reports for the date range
+        $this->reports = KilometerReport::with(['unit', 'route'])
+            ->whereBetween('date', [$this->startDate, $this->endDate]);
+            
+        if ($this->routeGroup !== 'all') {
+            $this->reports = $this->reports->whereHas('route', function($query) {
+                $query->where('route_number', 'like', $this->routeGroup . '%');
+            });
+        }
+        
+        $this->reports = $this->reports->get();
+        
+        // Create a structured array of reports by route, unit, and date for easier access
+        $this->reportsByRouteUnitDate = [];
+        foreach ($this->reports as $report) {
+            if (!isset($this->reportsByRouteUnitDate[$report->route_id])) {
+                $this->reportsByRouteUnitDate[$report->route_id] = [];
+            }
+            
+            if (!isset($this->reportsByRouteUnitDate[$report->route_id][$report->unit_id])) {
+                $this->reportsByRouteUnitDate[$report->route_id][$report->unit_id] = [];
+            }
+            
+            $this->reportsByRouteUnitDate[$report->route_id][$report->unit_id][$report->date->format('Y-m-d')] = $report;
+        }
     }
 
     /**
      * Download the PDF file
      */
-    public function download()
+    public function download($filename = null)
     {
         // Format dates for display
         $formattedDates = [];
@@ -72,9 +129,8 @@ class KilometerReportsPdfExport
         }
 
         // Set the period text
-        $periodText = $this->period == 1 ? '1-15' : '16-' . Carbon::parse($this->dates[count($this->dates) - 1])->format('d');
-        $monthYear = Carbon::parse($this->dates[0])->format('F Y');
-        $title = "LAPORAN KILOMETER PERIODE $periodText $monthYear";
+        $monthYear = Carbon::parse($this->startDate)->format('F Y');
+        $title = "LAPORAN KILOMETER PERIODE $monthYear";
 
         // Generate the PDF
         $pdf = PDF::loadView('exports.kilometer-reports-pdf', [
@@ -88,6 +144,6 @@ class KilometerReportsPdfExport
         $pdf->setPaper('a4', 'landscape');
 
         // Download the file
-        return $pdf->download("laporan_kilometer_periode_{$this->period}_{$monthYear}.pdf");
+        return $pdf->download($filename ?: "laporan_kilometer_periode_{$monthYear}.pdf");
     }
 }

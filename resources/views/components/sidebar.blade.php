@@ -108,9 +108,15 @@
         ])
         
         @include('components.sidebar-item', [
+            'route' => 'holidays.index',
+            'icon' => 'calendar-day',
+            'text' => 'Hari Libur'
+        ])
+        
+        @include('components.sidebar-item', [
             'route' => 'kilometer-reports.index',
             'icon' => 'tachometer-alt',
-            'text' => 'Laporan KM'
+            'text' => 'Laporan Kilometer'
         ])
 
         @include('components.sidebar-item', [

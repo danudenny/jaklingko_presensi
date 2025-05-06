@@ -8,6 +8,8 @@ use App\Models\Schedule;
 use App\Models\Unit;
 use App\Models\UnitProblem;
 use App\Models\UnitProblemPhoto;
+use App\Models\MaintenanceLog;
+use App\Models\MaintenanceLogPhoto;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
@@ -310,15 +312,106 @@ class UnitProblemController extends Controller
     public function deletePhoto($id)
     {
         $photo = UnitProblemPhoto::findOrFail($id);
-        $unitProblemId = $photo->unit_problem_id;
         
-        // Delete the photo from storage
-        Storage::disk('public')->delete($photo->photo_path);
+        try {
+            // Delete the photo from storage
+            Storage::disk('public')->delete($photo->photo_path);
+            
+            // Delete the photo record
+            $photo->delete();
+            
+            return response()->json(['success' => true]);
+            
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+    
+    /**
+     * Convert a unit problem to a maintenance log.
+     */
+    public function convertToMaintenance(UnitProblem $unitProblem)
+    {
+        DB::beginTransaction();
         
-        // Delete the photo record
-        $photo->delete();
-        
-        return redirect()->route('unit-problems.edit', $unitProblemId)
-            ->with('success', 'Foto berhasil dihapus.');
+        try {
+            // Get the unit's routes
+            $unit = Unit::findOrFail($unitProblem->unit_id);
+            $route = $unit->routes->first(); // Get the first route for now
+            
+            if (!$route) {
+                return redirect()->back()->with('error', 'Unit tidak memiliki rute yang terkait. Silakan tambahkan rute terlebih dahulu.');
+            }
+            
+            // Create a new maintenance log from the unit problem
+            $maintenanceLog = MaintenanceLog::create([
+                'unit_id' => $unitProblem->unit_id,
+                'route_id' => $route->id,
+                'driver_id' => $unitProblem->driver_id,
+                'date_reported' => $unitProblem->date_reported,
+                'time_reported' => $unitProblem->time_reported,
+                'description' => $unitProblem->description,
+                'type' => 'perbaikan', // Default to 'perbaikan'
+                'parts' => 'Perlu ditentukan', // Default value
+                'source_of_sparepart' => 'Perlu ditentukan', // Default value
+                'costs' => [
+                    [
+                        'description' => 'Biaya Perbaikan',
+                        'amount' => 0
+                    ]
+                ],
+                'status' => 'pending',
+                'on_schedule' => $unitProblem->on_schedule,
+                'schedule_history_id' => $unitProblem->schedule_history_id,
+            ]);
+            
+            // Copy photos from unit problem to maintenance log
+            foreach ($unitProblem->photos as $photo) {
+                // Get the original file path
+                $originalPath = $photo->photo_path;
+                
+                // Create a new path for the maintenance log photo
+                $newPath = str_replace('unit-problems', 'maintenance-logs', $originalPath);
+                
+                // Copy the file to the new location
+                if (Storage::disk('public')->exists($originalPath)) {
+                    Storage::disk('public')->copy($originalPath, $newPath);
+                    
+                    // Create a new photo record for the maintenance log
+                    MaintenanceLogPhoto::create([
+                        'maintenance_log_id' => $maintenanceLog->id,
+                        'photo_path' => $newPath,
+                    ]);
+                }
+            }
+            
+            // Update unit status to maintenance
+            $unit = Unit::find($unitProblem->unit_id);
+            $unit->status = 'maintenance';
+            $unit->save();
+            
+            // Update any active schedules for this unit to absent
+            $schedules = Schedule::where('unit_id', $unitProblem->unit_id)
+                ->where('schedule_date', '>=', $unitProblem->date_reported)
+                ->where('status', 'scheduled')
+                ->get();
+                
+            foreach ($schedules as $schedule) {
+                $schedule->status = 'absent';
+                $schedule->notes = 'Unit in maintenance: ' . $unitProblem->description;
+                $schedule->save();
+            }
+            
+            DB::commit();
+            
+            return redirect()->route('maintenance-logs.edit', $maintenanceLog)
+                ->with('success', 'Laporan masalah berhasil dikonversi ke Log Perawatan.');
+                
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return redirect()->back()
+                ->with('error', 'Gagal mengkonversi ke Log Perawatan: ' . $e->getMessage());
+        }
     }
 }

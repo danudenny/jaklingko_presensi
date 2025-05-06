@@ -23,13 +23,33 @@
     <div class="mb-6">
         <div class="border-b border-gray-200">
             <nav class="-mb-px flex" aria-label="Tabs">
-                <a href="{{ route('kilometer-reports.index', ['period' => 1]) }}" 
+                <a href="{{ route('kilometer-reports.index', ['period' => 1, 'group' => $activeRouteGroup]) }}" 
                    class="py-4 px-6 text-center border-b-2 font-medium text-sm {{ $period == 1 ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
                     Periode 1 (1-15)
                 </a>
-                <a href="{{ route('kilometer-reports.index', ['period' => 2]) }}" 
+                <a href="{{ route('kilometer-reports.index', ['period' => 2, 'group' => $activeRouteGroup]) }}" 
                    class="py-4 px-6 text-center border-b-2 font-medium text-sm {{ $period == 2 ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
                     Periode 2 (16-{{ Carbon\Carbon::now()->endOfMonth()->format('d') }})
+                </a>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Route Group Tabs -->
+    <div class="mb-6">
+        <div class="border-b border-gray-200 overflow-x-auto">
+            <nav class="-mb-px flex space-x-2" aria-label="Route Groups">
+                @foreach($routeGroups as $group)
+                    @if($group !== 'all')
+                    <a href="{{ route('kilometer-reports.index', ['period' => $period, 'group' => $group]) }}" 
+                       class="py-3 px-4 text-center border-b-2 font-medium text-sm whitespace-nowrap {{ $activeRouteGroup == $group ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
+                        {{ $group }}
+                    </a>
+                    @endif
+                @endforeach
+                <a href="{{ route('kilometer-reports.index', ['period' => $period, 'group' => 'all']) }}" 
+                   class="py-3 px-4 text-center border-b-2 font-medium text-sm whitespace-nowrap {{ $activeRouteGroup == 'all' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
+                    Semua Rute
                 </a>
             </nav>
         </div>
@@ -41,19 +61,21 @@
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-medium text-gray-900">
                     Periode: {{ $period == 1 ? '1-15' : '16-' . Carbon\Carbon::now()->endOfMonth()->format('d') }} {{ Carbon\Carbon::now()->format('F Y') }}
+                    @if($activeRouteGroup != 'all')
+                        - Rute {{ $activeRouteGroup }}
+                    @endif
                 </h3>
                 <div class="flex space-x-2">
-                    <a href="{{ route('kilometer-reports.export.excel', ['period' => $period]) }}" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 active:bg-green-700 focus:outline-none focus:border-green-700 focus:ring ring-green-300 disabled:opacity-25 transition ease-in-out duration-150">
+                    <a href="{{ route('kilometer-reports.export.excel', ['period' => $period, 'group' => $activeRouteGroup]) }}" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 active:bg-green-700 focus:outline-none focus:border-green-700 focus:ring ring-green-300 disabled:opacity-25 transition ease-in-out duration-150">
                         <i class="fas fa-file-excel mr-2"></i>
                         Export Excel
                     </a>
-                    <a href="{{ route('kilometer-reports.export.pdf', ['period' => $period]) }}" class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-500 active:bg-red-700 focus:outline-none focus:border-red-700 focus:ring ring-red-300 disabled:opacity-25 transition ease-in-out duration-150">
+                    <a href="{{ route('kilometer-reports.export.pdf', ['period' => $period, 'group' => $activeRouteGroup]) }}" class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-500 active:bg-red-700 focus:outline-none focus:border-red-700 focus:ring ring-red-300 disabled:opacity-25 transition ease-in-out duration-150">
                         <i class="fas fa-file-pdf mr-2"></i>
                         Export PDF
                     </a>
-                    <button type="button" @click="toggleEditMode" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 active:bg-indigo-700 focus:outline-none focus:border-indigo-700 focus:ring ring-indigo-300 disabled:opacity-25 transition ease-in-out duration-150">
-                        <i class="fas" :class="editMode ? 'fa-eye' : 'fa-edit'"></i>
-                        <span class="ml-2" x-text="editMode ? 'Mode Lihat' : 'Mode Edit'"></span>
+                    <button type="button" @click="toggleEditMode" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 active:bg-blue-700 focus:outline-none focus:border-blue-700 focus:ring ring-blue-300 disabled:opacity-25 transition ease-in-out duration-150">
+                        <i class="fas" :class="editMode ? 'fa-eye' : 'fa-edit'" x-text="editMode ? ' View Mode' : ' Edit Mode'"></i>
                     </button>
                 </div>
             </div>
@@ -82,9 +104,6 @@
                                 <td class="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-gray-100 z-10">
                                     <div class="flex items-center justify-between">
                                         <span class="font-bold">{{ $route->route_number }} - {{ $route->name }}</span>
-                                        @if(isset($routeTotals[$route->id]))
-                                            <span class="text-xs text-gray-500">({{ count(array_filter($routeUnitTotals[$route->id] ?? [])) }} unit)</span>
-                                        @endif
                                     </div>
                                 </td>
                                 @foreach($dates as $date)

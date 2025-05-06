@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\KilometerReport;
+use App\Models\Route;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
@@ -13,19 +14,75 @@ use Carbon\Carbon;
 
 class KilometerReportsExport implements FromCollection, WithHeadings, WithMapping, WithStyles, ShouldAutoSize
 {
-    protected $reports;
+    protected $startDate;
+    protected $endDate;
+    protected $routeGroup;
     protected $routes;
     protected $dates;
-    protected $period;
+    protected $reports;
     protected $reportsByRouteUnitDate;
 
-    public function __construct($reports, $routes, $dates, $period, $reportsByRouteUnitDate)
+    public function __construct($startDate, $endDate, $routeGroup = 'all')
     {
-        $this->reports = $reports;
-        $this->routes = $routes;
-        $this->dates = $dates;
-        $this->period = $period;
-        $this->reportsByRouteUnitDate = $reportsByRouteUnitDate;
+        $this->startDate = $startDate;
+        $this->endDate = $endDate;
+        $this->routeGroup = $routeGroup;
+        
+        // Load data
+        $this->loadData();
+    }
+    
+    /**
+     * Load all necessary data for the export
+     */
+    protected function loadData()
+    {
+        // Get all dates in the range
+        $this->dates = [];
+        $currentDate = Carbon::parse($this->startDate);
+        $lastDate = Carbon::parse($this->endDate);
+        
+        while ($currentDate->lte($lastDate)) {
+            $this->dates[] = $currentDate->format('Y-m-d');
+            $currentDate->addDay();
+        }
+        
+        // Get routes based on group filter
+        $routesQuery = Route::with(['units' => function($query) {
+            $query->orderBy('unit_number');
+        }])->orderBy('route_number');
+        
+        if ($this->routeGroup !== 'all') {
+            $routesQuery->where('route_number', 'like', $this->routeGroup . '%');
+        }
+        
+        $this->routes = $routesQuery->get();
+        
+        // Get all kilometer reports for the date range
+        $this->reports = KilometerReport::with(['unit', 'route'])
+            ->whereBetween('date', [$this->startDate, $this->endDate]);
+            
+        if ($this->routeGroup !== 'all') {
+            $this->reports = $this->reports->whereHas('route', function($query) {
+                $query->where('route_number', 'like', $this->routeGroup . '%');
+            });
+        }
+        
+        $this->reports = $this->reports->get();
+        
+        // Create a structured array of reports by route, unit, and date for easier access
+        $this->reportsByRouteUnitDate = [];
+        foreach ($this->reports as $report) {
+            if (!isset($this->reportsByRouteUnitDate[$report->route_id])) {
+                $this->reportsByRouteUnitDate[$report->route_id] = [];
+            }
+            
+            if (!isset($this->reportsByRouteUnitDate[$report->route_id][$report->unit_id])) {
+                $this->reportsByRouteUnitDate[$report->route_id][$report->unit_id] = [];
+            }
+            
+            $this->reportsByRouteUnitDate[$report->route_id][$report->unit_id][$report->date->format('Y-m-d')] = $report;
+        }
     }
 
     /**
@@ -123,9 +180,8 @@ class KilometerReportsExport implements FromCollection, WithHeadings, WithMappin
         $lastColumn = chr(67 + count($this->dates));
         
         // Add title
-        $periodText = $this->period == 1 ? '1-15' : '16-' . Carbon::parse($this->dates[count($this->dates) - 1])->format('d');
-        $monthYear = Carbon::parse($this->dates[0])->format('F Y');
-        $title = "LAPORAN KILOMETER PERIODE $periodText $monthYear";
+        $periodText = $this->startDate . ' - ' . $this->endDate;
+        $title = "LAPORAN KILOMETER PERIODE $periodText";
         
         $sheet->mergeCells("A1:{$lastColumn}1");
         $sheet->setCellValue('A1', $title);

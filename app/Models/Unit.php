@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Driver;
 use App\Models\Route;
 use App\Models\Schedule;
+use App\Models\UnitProblem;
 
 class Unit extends Model
 {
@@ -69,5 +70,13 @@ class Unit extends Model
     public function scopeActive($query)
     {
         return $query->where('status', 'aktif');
+    }
+    
+    /**
+     * Get the unit problems for this unit.
+     */
+    public function unitProblems(): HasMany
+    {
+        return $this->hasMany(UnitProblem::class);
     }
 }
