@@ -3,13 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\KilometerReport;
-use App\Models\Unit;
 use App\Models\Route;
+use App\Models\Unit;
 use App\Exports\KilometerReportsExport;
 use App\Exports\KilometerReportsPdfExport;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 
 class KilometerReportController extends Controller
@@ -20,7 +20,6 @@ class KilometerReportController extends Controller
     public function index(Request $request)
     {
         $period = $request->input('period', 1); // Default to period 1
-        $activeRouteGroup = $request->input('group', 'all'); // Default to all groups
         
         // Determine date ranges based on period
         $today = Carbon::now();
@@ -37,7 +36,9 @@ class KilometerReportController extends Controller
         }
         
         // Get all routes with their assigned units
-        $allRoutes = Route::with('units')->orderBy('route_number')->get();
+        $allRoutes = Route::with(['units' => function($query) {
+            $query->with('drivers');
+        }])->orderBy('route_number')->get();
         
         // Group routes by their exact route_number
         $routeGroups = [];
@@ -65,6 +66,10 @@ class KilometerReportController extends Controller
         // Sort route groups alphabetically
         sort($routeGroups);
         
+        // Default to first route group if available, otherwise use 'all'
+        $defaultGroup = !empty($routeGroups) ? $routeGroups[0] : 'all';
+        $activeRouteGroup = $request->input('group', $defaultGroup);
+        
         // Move 'all' tab to the end
         $routeGroups = array_merge(array_filter($routeGroups, function($group) {
             return $group !== 'all';
@@ -85,6 +90,41 @@ class KilometerReportController extends Controller
         while ($currentDate->lte($lastDate)) {
             $dates[] = $currentDate->format('Y-m-d');
             $currentDate->addDay();
+        }
+        
+        // Get holidays for the date range
+        $holidays = \App\Models\Holiday::whereBetween('date', [$startDate, $endDate])
+            ->get()
+            ->keyBy(function($holiday) {
+                return $holiday->date->format('Y-m-d');
+            });
+            
+        // Get maintenance units for the date range using MaintenanceLog
+        $maintenanceUnitsByDate = [];
+        $maintenanceLogs = \App\Models\MaintenanceLog::whereBetween('date_reported', [$startDate, $endDate])
+            ->where('status', 'ongoing')
+            ->get();
+            
+        foreach ($maintenanceLogs as $maintenance) {
+            $date = $maintenance->date_reported->format('Y-m-d');
+            if (!isset($maintenanceUnitsByDate[$date])) {
+                $maintenanceUnitsByDate[$date] = [];
+            }
+            $maintenanceUnitsByDate[$date][] = $maintenance->unit_id;
+        }
+        
+        // Also check for unit problems that might indicate maintenance
+        $unitProblems = \App\Models\UnitProblem::whereBetween('date_reported', [$startDate, $endDate])
+            ->get();
+            
+        foreach ($unitProblems as $problem) {
+            $date = $problem->date_reported->format('Y-m-d');
+            if (!isset($maintenanceUnitsByDate[$date])) {
+                $maintenanceUnitsByDate[$date] = [];
+            }
+            if (!in_array($problem->unit_id, $maintenanceUnitsByDate[$date])) {
+                $maintenanceUnitsByDate[$date][] = $problem->unit_id;
+            }
         }
         
         // Get all kilometer reports for the date range
@@ -167,7 +207,9 @@ class KilometerReportController extends Controller
             'endDate',
             'period',
             'routeGroups',
-            'activeRouteGroup'
+            'activeRouteGroup',
+            'holidays',
+            'maintenanceUnitsByDate'
         ));
     }
 
@@ -411,5 +453,221 @@ class KilometerReportController extends Controller
         }
         
         return (new KilometerReportsPdfExport($startDate, $endDate, $group))->download($title . '.pdf');
+    }
+
+    /**
+     * Download Excel template for kilometer report import.
+     */
+    public function downloadTemplate(Request $request)
+    {
+        $period = $request->input('period', 1); // Default to period 1
+        $activeRouteGroup = $request->input('group', 'all'); // Default to all groups
+        
+        // Determine date ranges based on period
+        $today = Carbon::now();
+        $currentMonth = $today->copy()->startOfMonth();
+        
+        if ($period == 1) {
+            // Period 1: 1st to 15th of the month
+            $startDate = $currentMonth->copy()->format('Y-m-d');
+            $endDate = $currentMonth->copy()->addDays(14)->format('Y-m-d');
+        } else {
+            // Period 2: 16th to end of month
+            $startDate = $currentMonth->copy()->addDays(15)->format('Y-m-d');
+            $endDate = $currentMonth->copy()->endOfMonth()->format('Y-m-d');
+        }
+        
+        // Get all routes with their assigned units
+        if ($activeRouteGroup !== 'all') {
+            $routes = Route::where('route_number', $activeRouteGroup)
+                ->with('units')
+                ->orderBy('route_number')
+                ->get();
+        } else {
+            $routes = Route::with('units')
+                ->orderBy('route_number')
+                ->get();
+        }
+        
+        // Get all dates in the range
+        $dates = [];
+        $currentDate = Carbon::parse($startDate);
+        $lastDate = Carbon::parse($endDate);
+        
+        while ($currentDate->lte($lastDate)) {
+            $dates[] = $currentDate->format('Y-m-d');
+            $currentDate->addDay();
+        }
+        
+        // Create a new spreadsheet
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Kilometer Reports Template');
+        
+        // Set headers
+        $sheet->setCellValue('A1', 'Route ID');
+        $sheet->setCellValue('B1', 'Route Number');
+        $sheet->setCellValue('C1', 'Unit ID');
+        $sheet->setCellValue('D1', 'Unit Number');
+        $sheet->setCellValue('E1', 'Date');
+        $sheet->setCellValue('F1', 'Kilometers');
+        $sheet->setCellValue('G1', 'Notes');
+        
+        // Style the header row
+        $headerStyle = [
+            'font' => [
+                'bold' => true,
+                'color' => ['rgb' => 'FFFFFF'],
+            ],
+            'fill' => [
+                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '4F46E5'],
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                ],
+            ],
+        ];
+        
+        $sheet->getStyle('A1:G1')->applyFromArray($headerStyle);
+        
+        // Populate data rows
+        $row = 2;
+        foreach ($routes as $route) {
+            foreach ($route->units as $unit) {
+                foreach ($dates as $date) {
+                    $sheet->setCellValue('A' . $row, $route->id);
+                    $sheet->setCellValue('B' . $row, $route->route_number . ' - ' . $route->name);
+                    $sheet->setCellValue('C' . $row, $unit->id);
+                    $sheet->setCellValue('D' . $row, $unit->unit_number . ' - ' . $unit->plate_number);
+                    $sheet->setCellValue('E' . $row, $date);
+                    $sheet->setCellValue('F' . $row, ''); // Empty for user to fill
+                    $sheet->setCellValue('G' . $row, ''); // Empty for user to fill
+                    $row++;
+                }
+            }
+        }
+        
+        // Auto-size columns
+        foreach (range('A', 'G') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+        
+        // Create a writer
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        
+        // Set the filename
+        $periodText = $period == 1 ? '1-15' : '16-' . $today->copy()->endOfMonth()->format('d');
+        $filename = 'kilometer_report_template_' . $today->format('Y_m') . '_period_' . $periodText . '.xlsx';
+        
+        // Create response with headers
+        $response = new \Symfony\Component\HttpFoundation\StreamedResponse(function() use ($writer) {
+            $writer->save('php://output');
+        });
+        
+        $response->headers->set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $response->headers->set('Content-Disposition', 'attachment;filename="' . $filename . '"');
+        $response->headers->set('Cache-Control', 'max-age=0');
+        
+        return $response;
+    }
+    
+    /**
+     * Import kilometer reports from Excel file.
+     */
+    public function import(Request $request)
+    {
+        $request->validate([
+            'import_file' => 'required|file|mimes:xlsx,xls',
+            'period' => 'required|in:1,2',
+            'group' => 'required',
+        ]);
+        
+        try {
+            // Load the Excel file
+            $file = $request->file('import_file');
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file->getPathname());
+            $worksheet = $spreadsheet->getActiveSheet();
+            $rows = $worksheet->toArray();
+            
+            // Remove header row
+            array_shift($rows);
+            
+            // Start transaction
+            DB::beginTransaction();
+            
+            $importCount = 0;
+            $updateCount = 0;
+            $errorCount = 0;
+            
+            foreach ($rows as $row) {
+                // Skip empty rows
+                if (empty($row[0]) || empty($row[2]) || empty($row[4]) || $row[5] === '') {
+                    continue;
+                }
+                
+                $routeId = $row[0];
+                $unitId = $row[2];
+                $date = $row[4];
+                $kilometers = $row[5];
+                $notes = $row[6] ?? null;
+                
+                // Validate data
+                if (!is_numeric($kilometers) || $kilometers < 0 || $kilometers > 999.9) {
+                    $errorCount++;
+                    continue;
+                }
+                
+                try {
+                    // Check if record already exists
+                    $existingReport = KilometerReport::where('unit_id', $unitId)
+                        ->where('route_id', $routeId)
+                        ->where('date', $date)
+                        ->first();
+                        
+                    if ($existingReport) {
+                        // Update existing record
+                        $existingReport->update([
+                            'kilometers' => $kilometers,
+                            'notes' => $notes,
+                        ]);
+                        $updateCount++;
+                    } else {
+                        // Create new record
+                        KilometerReport::create([
+                            'unit_id' => $unitId,
+                            'route_id' => $routeId,
+                            'date' => $date,
+                            'kilometers' => $kilometers,
+                            'notes' => $notes,
+                        ]);
+                        $importCount++;
+                    }
+                } catch (\Exception $e) {
+                    $errorCount++;
+                }
+            }
+            
+            DB::commit();
+            
+            $message = "Import berhasil: {$importCount} data baru, {$updateCount} data diperbarui";
+            if ($errorCount > 0) {
+                $message .= ", {$errorCount} data gagal diimpor";
+            }
+            
+            return redirect()->route('kilometer-reports.index', [
+                'period' => $request->period,
+                'group' => $request->group
+            ])->with('success', $message);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return redirect()->route('kilometer-reports.index', [
+                'period' => $request->period,
+                'group' => $request->group
+            ])->with('error', 'Gagal mengimpor data: ' . $e->getMessage());
+        }
     }
 }

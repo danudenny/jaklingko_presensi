@@ -12,6 +12,8 @@ use App\Http\Controllers\UnitProblemController;
 use App\Http\Controllers\KilometerReportController;
 use App\Http\Controllers\MaintenanceLogController;
 use App\Http\Controllers\HolidayController;
+use App\Http\Controllers\UnitRenopsController;
+use App\Http\Controllers\GlobalKilometerReportController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -59,12 +61,14 @@ Route::middleware('auth')->group(function () {
 
     // Unit routes
     Route::resource('units', UnitController::class);
+    Route::patch('/units/{unit}/toggle-renops', [UnitController::class, 'toggleRenops'])->name('units.toggle-renops');
+    Route::post('/units/bulk-renops', [UnitController::class, 'bulkRenops'])->name('units.bulk-renops');
 
     // Unit Problem Routes
     Route::resource('unit-problems', UnitProblemController::class);
-    Route::get('unit-problems/drivers-for-unit/{unitId}', [UnitProblemController::class, 'getDriversForUnit']);
-    Route::post('unit-problems/driver-from-schedule', [UnitProblemController::class, 'getDriverFromSchedule']);
-    Route::delete('unit-problems/photos/{id}', [UnitProblemController::class, 'deletePhoto']);
+    Route::get('unit-problems/drivers-for-unit/{unitId}', [UnitProblemController::class, 'getDriversForUnit'])->name('unit-problems.drivers-for-unit');
+    Route::post('unit-problems/driver-from-schedule', [UnitProblemController::class, 'getDriverFromSchedule'])->name('unit-problems.get-driver-from-schedule');
+    Route::delete('unit-problems/photos/{id}', [UnitProblemController::class, 'deletePhoto'])->name('unit-problems.delete-photo');
     Route::get('unit-problems/{unitProblem}/convert-to-maintenance', [UnitProblemController::class, 'convertToMaintenance'])
         ->name('unit-problems.convert-to-maintenance');
     
@@ -79,13 +83,31 @@ Route::middleware('auth')->group(function () {
     
     // Kilometer Report Routes
     Route::get('kilometer-reports', [KilometerReportController::class, 'index'])->name('kilometer-reports.index');
+    Route::post('kilometer-reports', [KilometerReportController::class, 'store'])->name('kilometer-reports.store');
     Route::get('kilometer-reports/export/excel', [KilometerReportController::class, 'exportExcel'])->name('kilometer-reports.export.excel');
     Route::get('kilometer-reports/export/pdf', [KilometerReportController::class, 'exportPdf'])->name('kilometer-reports.export.pdf');
+    Route::get('kilometer-reports/template', [KilometerReportController::class, 'downloadTemplate'])->name('kilometer-reports.template');
+    Route::post('kilometer-reports/import', [KilometerReportController::class, 'import'])->name('kilometer-reports.import');
     Route::get('kilometer-reports/{unit}', [KilometerReportController::class, 'show'])->name('kilometer-reports.show');
-    Route::post('kilometer-reports', [KilometerReportController::class, 'store'])->name('kilometer-reports.store');
+
+    // Global Kilometer Report Routes
+    Route::get('global-kilometer-reports', [GlobalKilometerReportController::class, 'index'])->name('global-kilometer-reports.index');
+    Route::get('global-kilometer-reports/export/excel', [GlobalKilometerReportController::class, 'exportExcel'])->name('global-kilometer-reports.export.excel');
+    Route::get('global-kilometer-reports/export/pdf', [GlobalKilometerReportController::class, 'exportPdf'])->name('global-kilometer-reports.export.pdf');
 
     // Holiday Routes
     Route::resource('holidays', HolidayController::class);
+    Route::get('holidays/check-date', [HolidayController::class, 'checkDateStatus'])->name('holidays.check-date');
+    Route::get('holidays/get-holidays-and-weekends', [HolidayController::class, 'getHolidaysAndWeekends'])->name('holidays.get-holidays-and-weekends');
+
+    // Unit Renops Routes
+    Route::get('renops', [UnitRenopsController::class, 'index'])->name('renops.index');
+    Route::get('renops/create', [UnitRenopsController::class, 'create'])->name('renops.create');
+    Route::post('renops', [UnitRenopsController::class, 'store'])->name('renops.store');
+    Route::put('renops/{date}', [UnitRenopsController::class, 'update'])->name('renops.update');
+    Route::delete('renops/{date}', [UnitRenopsController::class, 'destroy'])->name('renops.destroy');
+    Route::post('renops/toggle-unit', [UnitRenopsController::class, 'toggleUnit'])->name('renops.toggle-unit');
+    Route::get('renops/date-range', [UnitRenopsController::class, 'getByDateRange'])->name('renops.date-range');
 
     // Route routes
     Route::resource('routes', RouteController::class);
@@ -100,6 +122,19 @@ Route::middleware('auth')->group(function () {
     Route::post('/schedules/{schedule}/backup', [ScheduleController::class, 'assignBackup'])->name('schedules.backup');
     Route::get('/schedules/export/excel', [ScheduleController::class, 'exportExcel'])->name('schedules.export.excel');
     Route::get('/schedules/export/pdf', [ScheduleController::class, 'exportPdf'])->name('schedules.export.pdf');
+    Route::get('/schedules/export/matrix-pdf', [ScheduleController::class, 'exportMatrixPdf'])->name('schedules.export.matrix-pdf');
+    Route::get('/schedules/matrix-data', [ScheduleController::class, 'getMatrixData'])->name('schedules.matrix-data');
+    Route::post('/schedules/save-matrix', [ScheduleController::class, 'saveMatrix'])->name('schedules.save-matrix');
+    Route::post('/schedules/save-individual', [ScheduleController::class, 'saveIndividualSchedule'])->name('schedules.save-individual');
+    Route::post('/schedules/update-status', [ScheduleController::class, 'updateStatus'])->name('schedules.update-status');
+    Route::post('/schedules/store-schedule', [ScheduleController::class, 'storeSchedule'])->name('schedules.store');
+    Route::get('/schedules/routes/{route}/units', [ScheduleController::class, 'getUnitsByRoute'])->name('api.routes.units');
+    Route::get('/schedules/units/{unit}/drivers', [ScheduleController::class, 'getDriversByUnit'])->name('api.units.drivers');
+    Route::get('/schedules/available-drivers', [ScheduleController::class, 'getAvailableDrivers'])->name('api.available-drivers');
+    Route::get('/schedules/driver/{driver}/schedule-check', [ScheduleController::class, 'checkDriverSchedule'])->name('api.driver.schedule-check');
+    Route::get('/units/list', [ScheduleController::class, 'getUnitsList'])->name('units.list');
+    Route::get('/drivers/list', [ScheduleController::class, 'getDriversList'])->name('drivers.list');
+    Route::get('/routes/list', [ScheduleController::class, 'getRoutesList'])->name('routes.list');
     Route::resource('schedules', ScheduleController::class);
 
     // Leave Request routes

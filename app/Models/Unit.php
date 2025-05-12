@@ -11,6 +11,7 @@ use App\Models\Driver;
 use App\Models\Route;
 use App\Models\Schedule;
 use App\Models\UnitProblem;
+use App\Models\UnitRenops;
 
 class Unit extends Model
 {
@@ -26,6 +27,7 @@ class Unit extends Model
         'expired_kir',
         'expired_kp',
         'status',
+        'is_renops',
         'notes',
     ];
 
@@ -38,6 +40,7 @@ class Unit extends Model
         'expired_stnk' => 'date',
         'expired_kir' => 'date',
         'expired_kp' => 'date',
+        'is_renops' => 'boolean',
     ];
 
     /**
@@ -62,6 +65,14 @@ class Unit extends Model
     public function schedules(): HasMany
     {
         return $this->hasMany(Schedule::class);
+    }
+
+    /**
+     * Get the renops plans for this unit.
+     */
+    public function renops(): HasMany
+    {
+        return $this->hasMany(UnitRenops::class);
     }
 
     /**

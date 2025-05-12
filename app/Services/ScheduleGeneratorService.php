@@ -9,6 +9,7 @@ use App\Models\Route;
 use App\Models\Schedule;
 use App\Models\Unit;
 use App\Models\Holiday;
+use App\Models\UnitRenops;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -61,30 +62,23 @@ class ScheduleGeneratorService
         $currentDate = $startDate->copy();
         while ($currentDate->lte($endDate)) {
             $dateStr = $currentDate->format('Y-m-d');
-            $dayOfWeek = $currentDate->dayOfWeek; // 0 (Sunday) to 6 (Saturday)
             
             // Reset weekend drivers pool for each day
             $this->weekendDriversPool = [];
             
-            // Determine resource percentage based on day type
-            $resourcePercentage = $this->getResourcePercentage($currentDate);
+            // Get total number of available units for this date based on UnitRenops
+            $unavailableUnitsCount = UnitRenops::forDate($dateStr)->count();
+            $totalUnits = $this->units->count();
+            $availableUnitsCount = $totalUnits - $unavailableUnitsCount;
             
-            // Check if it's a weekend or holiday
-            $isWeekend = ($dayOfWeek == 0 || $dayOfWeek == 6);
-            $isHoliday = Holiday::whereDate('date', $dateStr)->exists();
-            
-            // Prepare drivers pool if it's a weekend or holiday
-            if ($isWeekend || $isHoliday) {
-                $this->prepareRestrictedDriversPool($currentDate, $resourcePercentage);
-            }
-            
-            $results['messages'][] = "Processing date: {$dateStr}, Day: {$currentDate->format('l')}, Resource allocation: {$resourcePercentage}%";
+            // Log the unit availability for this date
+            $results['messages'][] = "Processing date: {$dateStr}, Day: {$currentDate->format('l')}, Available units: {$availableUnitsCount} of {$totalUnits} (excluding {$unavailableUnitsCount} units from UnitRenops)";
             
             // Process morning shifts
-            $this->generateShiftSchedules($dateStr, 'pagi', $resourcePercentage, $results, $startDate->format('Y-m-d'), $endDate->format('Y-m-d'));
+            $this->generateShiftSchedules($dateStr, 'pagi', 100, $results, $startDate->format('Y-m-d'), $endDate->format('Y-m-d'));
             
             // Process evening shifts
-            $this->generateShiftSchedules($dateStr, 'siang', $resourcePercentage, $results, $startDate->format('Y-m-d'), $endDate->format('Y-m-d'));
+            $this->generateShiftSchedules($dateStr, 'siang', 100, $results, $startDate->format('Y-m-d'), $endDate->format('Y-m-d'));
             
             $currentDate->addDay();
         }
@@ -191,18 +185,18 @@ class ScheduleGeneratorService
         
         $this->messages[] = "Found " . count($existingScheduledUnits) . " existing schedules for $date ($shift)";
         
-        // Only process units that don't have schedules yet
-        $unitsToSchedule = $this->units->filter(function ($unit) use ($existingScheduledUnits) {
-            return !in_array($unit->id, $existingScheduledUnits);
+        // Get unavailable units from UnitRenops for this date
+        $unavailableUnits = UnitRenops::forDate($date)->pluck('unit_id')->toArray();
+        
+        $this->messages[] = "Found " . count($unavailableUnits) . " unavailable units from UnitRenops for $date";
+        
+        // Filter units that are available (not in UnitRenops) and don't have schedules yet
+        $unitsToSchedule = $this->units->filter(function ($unit) use ($existingScheduledUnits, $unavailableUnits) {
+            // Unit is available if it's not in the UnitRenops list and doesn't have a schedule yet
+            return !in_array($unit->id, $unavailableUnits) && !in_array($unit->id, $existingScheduledUnits);
         });
         
-        // Apply resource percentage if not 100%
-        if ($resourcePercentage < 100) {
-            $unitCount = $unitsToSchedule->count();
-            $unitsToUse = ceil($unitCount * $resourcePercentage / 100);
-            $unitsToSchedule = $unitsToSchedule->take($unitsToUse);
-            $this->messages[] = "Using {$resourcePercentage}% of units: {$unitsToUse} of {$unitCount}";
-        }
+        $this->messages[] = "After filtering, " . $unitsToSchedule->count() . " units are available for scheduling on $date ($shift)";
         
         foreach ($unitsToSchedule as $unit) {
             // Find suitable driver for this unit
@@ -281,12 +275,6 @@ class ScheduleGeneratorService
     protected function findSuitableDriver(string $date, string $shift, Unit $unit, string $periodStartDate, string $periodEndDate): ?Driver
     {
         $carbonDate = Carbon::parse($date);
-        $month = $carbonDate->month;
-        $year = $carbonDate->year;
-        $dayOfWeek = $carbonDate->dayOfWeek;
-        
-        // Check if it's a holiday
-        $isHoliday = Holiday::whereDate('date', $date)->exists();
         
         // Get qualified fixed drivers (D) for this unit
         $qualifiedFixedDrivers = $this->fixedDrivers->filter(function ($driver) use ($unit) {
@@ -297,26 +285,6 @@ class ScheduleGeneratorService
         $qualifiedNonFixedDrivers = $this->nonFixedDrivers->filter(function ($driver) use ($unit) {
             return $driver->units->contains($unit->id);
         });
-        
-        // Apply resource restrictions if it's a weekend or holiday
-        if ($dayOfWeek == 6 || $dayOfWeek == 0 || $isHoliday) {
-            // Filter fixed drivers to only those in the restricted pool
-            $qualifiedFixedDrivers = $qualifiedFixedDrivers->filter(function ($driver) {
-                return in_array($driver->id, $this->weekendDriversPool['fixed']);
-            });
-            
-            // Filter non-fixed drivers to only those in the restricted pool
-            $qualifiedNonFixedDrivers = $qualifiedNonFixedDrivers->filter(function ($driver) {
-                return in_array($driver->id, $this->weekendDriversPool['non_fixed']);
-            });
-            
-            if ($isHoliday) {
-                $this->messages[] = "Applying holiday resource restrictions for {$date}";
-            } else {
-                $dayName = ($dayOfWeek == 6) ? 'Saturday' : 'Sunday';
-                $this->messages[] = "Applying {$dayName} resource restrictions for {$date}";
-            }
-        }
         
         // Filter available drivers
         $availableFixedDrivers = $this->filterAvailableDrivers($qualifiedFixedDrivers, $date, $shift);

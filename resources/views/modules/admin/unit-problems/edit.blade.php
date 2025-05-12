@@ -53,14 +53,14 @@
                 <!-- Date Reported -->
                 <div>
                     <x-input-label for="date_reported" :value="__('Tanggal Laporan')" />
-                    <input id="date_reported" type="date" name="date_reported" :value="old('date_reported', $unitProblem->date_reported->format('Y-m-d'))" class="mt-1 block w-full" required />
+                    <input id="date_reported" type="date" name="date_reported" value="{{ old('date_reported', $unitProblem->date_reported->format('Y-m-d')) }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required />
                     <x-input-error :messages="$errors->get('date_reported')" class="mt-2" />
                 </div>
 
                 <!-- Time Reported -->
                 <div>
                     <x-input-label for="time_reported" :value="__('Waktu Laporan')" />
-                    <input id="time_reported" type="time" name="time_reported" :value="old('time_reported', \Carbon\Carbon::parse($unitProblem->time_reported)->format('H:i'))" class="mt-1 block w-full" required />
+                    <input id="time_reported" type="time" name="time_reported" value="{{ old('time_reported', \Carbon\Carbon::parse($unitProblem->time_reported)->format('H:i')) }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required />
                     <x-input-error :messages="$errors->get('time_reported')" class="mt-2" />
                 </div>
 
@@ -81,7 +81,7 @@
                 <!-- Location -->
                 <div>
                     <x-input-label for="location" :value="__('Lokasi (Opsional)')" />
-                    <input id="location" type="text" name="location" :value="old('location', $unitProblem->location)" class="mt-1 block w-full" />
+                    <input id="location" type="text" name="location" value="{{ old('location', $unitProblem->location) }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
                     <x-input-error :messages="$errors->get('location')" class="mt-2" />
                 </div>
             </div>

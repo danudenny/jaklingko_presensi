@@ -215,7 +215,11 @@
         <x-slot name="actions">
             <a href="{{ route('schedules.generate.form') }}" class="inline-flex items-center px-4 py-2 mr-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out bg-blue-600 border border-transparent rounded-md hover:bg-blue-500 active:bg-blue-700 focus:outline-none focus:border-blue-700 focus:ring ring-blue-300 disabled:opacity-25">
                 <i class="mr-2 fas fa-calendar-plus"></i>
-                Buat Jadwal
+                Auto-Generate
+            </a>
+            <a href="{{ route('schedules.create') }}" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out bg-blue-600 border border-transparent rounded-md hover:bg-blue-500 active:bg-blue-700 focus:outline-none focus:border-blue-700 focus:ring ring-blue-300 disabled:opacity-25">
+                <i class="mr-2 fas fa-plus"></i>
+                Tambah Jadwal
             </a>
         </x-slot>
     </x-page-title>
@@ -243,9 +247,8 @@
 
     <x-card class="mb-6">
         <form id="filter-form" action="{{ route('schedules.index') }}" method="GET">
-            <div class="grid grid-cols-1 gap-4">
-                <!-- Date picker on top with full width -->
-                <div class="col-span-1">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <div class="col-span-1 md:col-span-2">
                     <label for="date-range" class="block mb-1 text-sm font-medium text-gray-700">Tanggal</label>
                     <div class="relative">
                         <div class="flex">
@@ -272,43 +275,40 @@
                     </div>
                 </div>
                 
-                <!-- Selectors below in a row -->
-                <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                    <div>
-                        <label for="route_id" class="block mb-1 text-sm font-medium text-gray-700">Rute</label>
-                        <select id="route_id" name="route_id" class="block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                            <option value="">Pilih Rute</option>
-                            @foreach($routes as $route)
-                                <option value="{{ $route->id }}" {{ request('route_id') == $route->id ? 'selected' : '' }}>
-                                    {{ $route->route_number }} - {{ $route->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
+                <div>
+                    <label for="route_id" class="block mb-1 text-sm font-medium text-gray-700">Rute</label>
+                    <select id="route_id" name="route_id" class="block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">Pilih Rute</option>
+                        @foreach($routes as $route)
+                            <option value="{{ $route->id }}" {{ request('route_id') == $route->id ? 'selected' : '' }}>
+                                {{ $route->route_number }} - {{ $route->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
 
-                    <div>
-                        <label for="unit_id" class="block mb-1 text-sm font-medium text-gray-700">Unit</label>
-                        <select id="unit_id" name="unit_id" class="block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                            <option value="">Pilih Unit</option>
-                            @foreach($units as $unit)
-                                <option value="{{ $unit->id }}" {{ request('unit_id') == $unit->id ? 'selected' : '' }}>
-                                    {{ $unit->unit_number }} ({{ $unit->plate_number }})
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
+                <div>
+                    <label for="unit_id" class="block mb-1 text-sm font-medium text-gray-700">Unit</label>
+                    <select id="unit_id" name="unit_id" class="block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">Pilih Unit</option>
+                        @foreach($units as $unit)
+                            <option value="{{ $unit->id }}" {{ request('unit_id') == $unit->id ? 'selected' : '' }}>
+                                {{ $unit->unit_number }} ({{ $unit->plate_number }})
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
 
-                    <div>
-                        <label for="driver_id" class="block mb-1 text-sm font-medium text-gray-700">Pengemudi</label>
-                        <select id="driver_id" name="driver_id" class="block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                            <option value="">Pilih Pengemudi</option>
-                            @foreach($drivers as $driver)
-                                <option value="{{ $driver->id }}" {{ request('driver_id') == $driver->id ? 'selected' : '' }}>
-                                    {{ $driver->name }} ({{ ucfirst($driver->type) }})
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
+                <div>
+                    <label for="driver_id" class="block mb-1 text-sm font-medium text-gray-700">Pengemudi</label>
+                    <select id="driver_id" name="driver_id" class="block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">Pilih Pengemudi</option>
+                        @foreach($drivers as $driver)
+                            <option value="{{ $driver->id }}" {{ request('driver_id') == $driver->id ? 'selected' : '' }}>
+                                {{ $driver->name }} ({{ ucfirst($driver->type) }})
+                            </option>
+                        @endforeach
+                    </select>
                 </div>
             </div>
 
@@ -587,143 +587,175 @@
 @endsection
 
 @push('scripts')
-<!-- jQuery is now included in the main layout -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
-$(document).ready(function() {
-    // Helper functions for date formatting
-    function formatDate(date) {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
-
-    function formatDisplayDate(date) {
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        return `${day}/${month}/${year}`;
-    }
-
-    // Initialize date values
-    const initialStartDate = $("#start_date").val() ? new Date($("#start_date").val()) : new Date();
-    const initialEndDate = $("#end_date").val() ? new Date($("#end_date").val()) : new Date();
-
-    if (initialStartDate && initialEndDate) {
-        const formattedStartDate = formatDisplayDate(initialStartDate);
-        const formattedEndDate = formatDisplayDate(initialEndDate);
-
-        if (formattedStartDate === formattedEndDate) {
-            $("#date-range").val(formattedStartDate);
-        } else {
-            $("#date-range").val(formattedStartDate + " - " + formattedEndDate);
+    $(document).ready(function() {
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
         }
-    }
 
-    // Initialize date picker
-    const fp = flatpickr("#date-range", {
-        mode: "range",
-        dateFormat: "d/m/Y",
-        defaultDate: [initialStartDate, initialEndDate],
-        maxRange: 30,
-        disableMobile: true,
-        allowInput: false,
-        onChange: function(selectedDates, dateStr, instance) {
-            if (selectedDates.length === 1) {
-                const formattedDate = formatDisplayDate(selectedDates[0]);
-                $("#date-range").val(formattedDate);
-            } else if (selectedDates.length === 2) {
-                const formattedStartDate = formatDisplayDate(selectedDates[0]);
-                const formattedEndDate = formatDisplayDate(selectedDates[1]);
+        function formatDisplayDate(date) {
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
 
-                if (formattedStartDate === formattedEndDate) {
-                    $("#date-range").val(formattedStartDate);
-                } else {
-                    $("#date-range").val(formattedStartDate + " - " + formattedEndDate);
-                }
-            }
-        },
-        onClose: function(selectedDates, dateStr, instance) {
-            if (selectedDates.length === 2) {
-                const diffTime = Math.abs(selectedDates[1] - selectedDates[0]);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (diffDays > 30) {
-                    const maxDate = new Date(selectedDates[0]);
-                    maxDate.setDate(maxDate.getDate() + 30);
-                    instance.setDate([selectedDates[0], maxDate]);
-                    alert("Maximum date range is 30 days. End date has been adjusted.");
-                    selectedDates[1] = maxDate;
-                }
+        const initialStartDate = $("#start_date").val() ? new Date($("#start_date").val()) : new Date();
+        const initialEndDate = $("#end_date").val() ? new Date($("#end_date").val()) : new Date();
 
-                $("#start_date").val(formatDate(selectedDates[0]));
-                $("#end_date").val(formatDate(selectedDates[1]));
+        if (initialStartDate && initialEndDate) {
+            const formattedStartDate = formatDisplayDate(initialStartDate);
+            const formattedEndDate = formatDisplayDate(initialEndDate);
 
-                $("#filter-form").submit();
-            } else if (selectedDates.length === 1) {
-                $("#start_date").val(formatDate(selectedDates[0]));
-                $("#end_date").val(formatDate(selectedDates[0]));
-
-                $("#filter-form").submit();
+            if (formattedStartDate === formattedEndDate) {
+                $("#date-range").val(formattedStartDate);
+            } else {
+                $("#date-range").val(formattedStartDate + " - " + formattedEndDate);
             }
         }
-    });
 
-    // Date preset buttons
-    $('.date-preset').on('click', function(e) {
-        e.preventDefault();
-        const days = parseInt($(this).data('days'));
-        const adjustedDays = Math.min(days, 30);
+        const fp = flatpickr("#date-range", {
+            mode: "range",
+            dateFormat: "d/m/Y",
+            defaultDate: [initialStartDate, initialEndDate],
+            maxRange: 30,
+            disableMobile: true,
+            allowInput: false,
+            onChange: function(selectedDates, dateStr, instance) {
+                if (selectedDates.length === 1) {
+                    const formattedDate = formatDisplayDate(selectedDates[0]);
+                    $("#date-range").val(formattedDate);
+                } else if (selectedDates.length === 2) {
+                    const formattedStartDate = formatDisplayDate(selectedDates[0]);
+                    const formattedEndDate = formatDisplayDate(selectedDates[1]);
 
-        const today = new Date();
-        const futureDate = new Date();
-        futureDate.setDate(today.getDate() + adjustedDays);
+                    if (formattedStartDate === formattedEndDate) {
+                        $("#date-range").val(formattedStartDate);
+                    } else {
+                        $("#date-range").val(formattedStartDate + " - " + formattedEndDate);
+                    }
+                }
+            },
+            onClose: function(selectedDates, dateStr, instance) {
+                if (selectedDates.length === 2) {
+                    const diffTime = Math.abs(selectedDates[1] - selectedDates[0]);
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    if (diffDays > 30) {
+                        const maxDate = new Date(selectedDates[0]);
+                        maxDate.setDate(maxDate.getDate() + 30);
+                        instance.setDate([selectedDates[0], maxDate]);
+                        alert("Maximum date range is 30 days. End date has been adjusted.");
+                        selectedDates[1] = maxDate;
+                    }
 
-        $("#start_date").val(formatDate(today));
-        $("#end_date").val(formatDate(futureDate));
+                    $("#start_date").val(formatDate(selectedDates[0]));
+                    $("#end_date").val(formatDate(selectedDates[1]));
 
-        fp.setDate([today, futureDate]);
-        $("#filter-form").submit();
+                    $("#filter-form").submit();
+                } else if (selectedDates.length === 1) {
+                    $("#start_date").val(formatDate(selectedDates[0]));
+                    $("#end_date").val(formatDate(selectedDates[0]));
 
-        return false;
-    });
-    
-    // Matrix export modal setup
-    const matrixDatePicker = flatpickr("#matrix-date", {
-        dateFormat: "Y-m-d",
-        defaultDate: new Date(),
-        maxDate: new Date().fp_incr(30),
-        locale: {
-            firstDayOfWeek: 1
-        }
-    });
-    
-    // Matrix modal controls
-    $('#open-matrix-export-modal').on('click', function(e) {
-        e.preventDefault();
-        $('#matrix-export-modal').removeClass('hidden');
-    });
-    
-    $('.close-matrix-modal').on('click', function(e) {
-        e.preventDefault();
-        $('#matrix-export-modal').addClass('hidden');
-    });
-    
-    // Export matrix PDF
-    $('#export-matrix-pdf').on('click', function(e) {
-        e.preventDefault();
-        const month = $('#matrix-month').val();
-        const year = $('#matrix-year').val();
-        const period = $('#matrix-period').val();
+                    $("#filter-form").submit();
+                }
+            }
+        });
+
+        $('.date-preset').on('click', function(e) {
+            e.preventDefault();
+            const days = parseInt($(this).data('days'));
+
+            const adjustedDays = Math.min(days, 30);
+
+            const today = new Date();
+            const futureDate = new Date();
+            futureDate.setDate(today.getDate() + adjustedDays);
+
+            $("#start_date").val(formatDate(today));
+            $("#end_date").val(formatDate(futureDate));
+
+            fp.setDate([today, futureDate]);
+            $("#filter-form").submit();
+
+            return false;
+        });
         
-        if (month && year) {
-            $('#loading-overlay').addClass('active');
-            $('#loading-text').text('Generating PDF...');
+        // Matrix export modal
+        const matrixDatePicker = flatpickr("#matrix-date", {
+            dateFormat: "Y-m-d",
+            defaultDate: new Date(),
+            maxDate: new Date().fp_incr(30),
+            locale: {
+                firstDayOfWeek: 1
+            }
+        });
+        
+        // Open matrix export modal
+        $('#open-matrix-export-modal').on('click', function(e) {
+            e.preventDefault();
+            $('#matrix-export-modal').removeClass('hidden');
+        });
+        
+        // Close matrix export modal
+        $('.close-matrix-modal').on('click', function(e) {
+            e.preventDefault();
+            $('#matrix-export-modal').addClass('hidden');
+        });
+        
+        // Export matrix PDF
+        $('#export-matrix-pdf').on('click', function(e) {
+            e.preventDefault();
+            const month = $('#matrix-month').val();
+            const year = $('#matrix-year').val();
+            const period = $('#matrix-period').val();
             
-            let url = "{{ route('schedules.export.matrix-pdf') }}?month=" + month + "&year=" + year;
-            if (period) {
-                url += "&period=" + period;
+            if (month && year) {
+                $('#loading-overlay').addClass('active');
+                $('#loading-text').text('Generating PDF...');
+                
+                let url = "{{ route('schedules.export.matrix-pdf') }}?month=" + month + "&year=" + year;
+                if (period) {
+                    url += "&period=" + period;
+                }
+                
+                const downloadFrame = document.createElement('iframe');
+                downloadFrame.style.display = 'none';
+                document.body.appendChild(downloadFrame);
+                
+                const loadingTimeout = setTimeout(function() {
+                    $('#loading-overlay').removeClass('active');
+                }, 10000);
+                
+                downloadFrame.onload = function() {
+                    clearTimeout(loadingTimeout);
+                    setTimeout(function() {
+                        $('#loading-overlay').removeClass('active');
+                    }, 1000);
+                };
+                
+                downloadFrame.src = url;
+                
+                $('#matrix-export-modal').addClass('hidden');
+            } else {
+                alert('Please select month and year');
+            }
+        });
+        
+        $('a[href*="export/pdf"], a[href*="export/excel"]').on('click', function(e) {
+            e.preventDefault();
+            
+            $('#loading-overlay').addClass('active');
+            
+            if ($(this).attr('href').includes('excel')) {
+                $('#loading-text').text('Generating Excel...');
+            } else {
+                $('#loading-text').text('Generating PDF...');
             }
             
             const downloadFrame = document.createElement('iframe');
@@ -732,7 +764,7 @@ $(document).ready(function() {
             
             const loadingTimeout = setTimeout(function() {
                 $('#loading-overlay').removeClass('active');
-            }, 10000);
+            }, 10000); 
             
             downloadFrame.onload = function() {
                 clearTimeout(loadingTimeout);
@@ -740,379 +772,216 @@ $(document).ready(function() {
                     $('#loading-overlay').removeClass('active');
                 }, 1000);
             };
-            
-            downloadFrame.src = url;
-            
-            $('#matrix-export-modal').addClass('hidden');
-        } else {
-            alert('Please select month and year');
-        }
-    });
-    
-    // Handle export buttons
-    $('a[href*="export/pdf"], a[href*="export/excel"]').on('click', function(e) {
-        e.preventDefault();
-        
-        $('#loading-overlay').addClass('active');
-        
-        if ($(this).attr('href').includes('excel')) {
-            $('#loading-text').text('Generating Excel...');
-        } else {
-            $('#loading-text').text('Generating PDF...');
-        }
-        
-        const downloadFrame = document.createElement('iframe');
-        downloadFrame.style.display = 'none';
-        document.body.appendChild(downloadFrame);
-        
-        const loadingTimeout = setTimeout(function() {
-            $('#loading-overlay').removeClass('active');
-        }, 10000); 
-        
-        downloadFrame.onload = function() {
-            clearTimeout(loadingTimeout);
-            setTimeout(function() {
-                $('#loading-overlay').removeClass('active');
-            }, 1000);
-        };
 
-        downloadFrame.src = $(this).attr('href');
-    });
+            downloadFrame.src = $(this).attr('href');
+        });
 
-    // View toggling
-    // Track current view mode
-    let isMatrixView = false;
-    
-    $('#toggle-view-mode').on('click', function() {
-        isMatrixView = !isMatrixView;
-        console.log('Toggle view mode clicked, matrix view:', isMatrixView);
-        
-        if (isMatrixView) {
-            // Switch to matrix view
-            $('#list-view').hide();
-            $('#matrix-view').show();
-            $(this).html('<i class="mr-2 fas fa-list"></i> List View');
-            
-            // Hide previous/next date navigation buttons
-            $('a:contains("Hari Sebelumnya"), a:contains("Hari Berikutnya")').hide();
-            
-            // Hide pagination
-            $('.flex.items-center.justify-between.px-4.py-3.mt-4.border-t.border-gray-200').hide();
-            
-            // Load the matrix data if not already loaded
-            if (!$('#matrix-view').data('loaded')) {
-                console.log('Loading matrix data...');
-                // Get current month and year
-                const month = parseInt($('#matrix-month').val() || new Date().getMonth() + 1);
-                const year = parseInt($('#matrix-year').val() || new Date().getFullYear());
-                
-                // Update period headers
-                updateMatrixMonthYear(month, year);
-                
-                // Show loading indicator
-                $('#period-1 tbody, #period-2 tbody').html(`
-                    <tr>
-                        <td colspan="20" class="px-6 py-4 text-sm text-center text-gray-500">
-                            <i class="mr-2 fas fa-spinner fa-spin"></i>
-                            Loading schedule data...
-                        </td>
-                    </tr>
-                `);
-                
-                // Fetch the data
-                fetch(`{{ route('schedules.matrix-data') }}?month=${month}&year=${year}&_=${Date.now()}`)
-                    .then(response => {
-                        if (!response.ok) throw new Error('Network response was not ok');
-                        return response.json();
-                    })
-                    .then(data => {
-                        if (data.success) {
-                            console.log('Matrix data loaded successfully');
-                            updateMatrixView(data.period1, 1, data.month, data.year);
-                            updateMatrixView(data.period2, 2, data.month, data.year);
-                            $('#matrix-view').data('loaded', true);
-                        } else {
-                            console.error('Failed to load matrix data:', data.message || 'Unknown error');
-                            $('#period-1 tbody, #period-2 tbody').html(`
-                                <tr>
-                                    <td colspan="20" class="px-6 py-4 text-sm font-medium text-center text-red-500">
-                                        <i class="mr-2 fas fa-exclamation-circle"></i>
-                                        ${data.message || 'Failed to load schedule data. Please try again later.'}
-                                    </td>
-                                </tr>
-                            `);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error loading matrix data:', error);
-                        $('#period-1 tbody, #period-2 tbody').html(`
-                            <tr>
-                                <td colspan="20" class="px-6 py-4 text-sm font-medium text-center text-red-500">
-                                    <i class="mr-2 fas fa-exclamation-circle"></i>
-                                    Failed to load schedule data. Please try again later.
-                                </td>
-                            </tr>
-                        `);
-                    });
-            }
-        } else {
-            // Switch back to list view
+        $('#list-view-btn').on('click', function() {
             $('#matrix-view').hide();
             $('#list-view').show();
-            $(this).html('<i class="mr-2 fas fa-table-cells"></i> Matrix View');
+            $('#list-view-btn').addClass('bg-indigo-600 text-white');
+            $('#matrix-view-btn').removeClass('bg-indigo-600 text-white').addClass('bg-white text-gray-700');
+        });
+
+        $('#matrix-view-btn').on('click', function() {
+            $('#list-view').hide();
+            $('#matrix-view').show();
+            $('#matrix-view-btn').addClass('bg-indigo-600 text-white');
+            $('#list-view-btn').removeClass('bg-indigo-600 text-white').addClass('bg-white text-gray-700');
+
+            if (typeof loadMatrixData === 'function') {
+                loadMatrixData(true); 
+            }
+        });
+
+        $('.period-tab').on('click', function() {
+            $('.period-tab').removeClass('active');
+            $(this).addClass('active');
+            $('#period-' + activePeriod + ' .matrix-checkbox:checked').each(function() {
+                matrix.push({
+                    unit_id: $(this).data('unit'),
+                    date: $(this).data('date'),
+                    shift: $(this).closest('tr').find('td:nth-child(4) span').text().trim().toLowerCase() === 'pagi' ? 'pagi' : 'siang'
+                });
+            });
             
-            // Show previous/next date navigation buttons
-            $('a:contains("Hari Sebelumnya"), a:contains("Hari Berikutnya")').show();
+            if (matrix.length === 0) {
+                alert('No schedules selected');
+                return;
+            }
             
-            // Show pagination
-            $('.flex.items-center.justify-between.px-4.py-3.mt-4.border-t.border-gray-200').show();
-        }
-    });
-
-    // Helper functions for matrix view
-    function updateMatrixMonthYear(month, year) {
-        // Get month name from select option
-        const monthName = $('#matrix-month option[value="' + month + '"]').text().trim();
-        
-        // Update headers
-        $('#period1-month-year, #period2-month-year').text(`${monthName} ${year}`);
-        
-        // Update end day for period 2
-        const lastDay = new Date(year, month, 0).getDate();
-        $('#end-day').text(lastDay);
-    }
-    
-    // Export matrix PDF
-    $('#export-matrix-pdf').on('click', function(e) {
-        e.preventDefault();
-        const month = $('#matrix-month').val();
-        const year = $('#matrix-year').val();
-        const period = $('#matrix-period').val();
-        // Show export modal
-        $('#matrix-export-modal').removeClass('hidden');
-    });
-    
-    // Close export modal
-    $('.close-modal').on('click', function() {
-        $('#matrix-export-modal').addClass('hidden');
-    });
-    
-    // Handle export form submission
-    $('#export-matrix-form').on('submit', function(e) {
-        e.preventDefault();
-        
-        // Show loading overlay
-        $('#loading-overlay').addClass('active');
-        $('#loading-text').text('Generating PDF...');
-        
-        // Submit form
-        this.submit();
-    });
-    
-    // Period tab switching
-    $('.period-tab').on('click', function() {
-        $('.period-tab').removeClass('active');
-        $(this).addClass('active');
-
-        $('.period-content').removeClass('active');
-        const period = $(this).data('period');
-        $('#period-' + period).addClass('active');
-    });
-
-    // Save matrix functionality
-    $('.save-matrix').on('click', function() {
-        const activePeriod = $('.period-tab.active').data('period');
-        const matrix = [];
-        
-        $('#period-' + activePeriod + ' .matrix-checkbox:checked').each(function() {
-            matrix.push({
-                unit_id: $(this).data('unit'),
-                date: $(this).data('date'),
-                shift: $(this).closest('tr').find('td:nth-child(4) span').text().trim().toLowerCase() === 'pagi' ? 'pagi' : 'siang'
+            const button = $(this);
+            const originalHtml = button.html();
+            button.html('<i class="mr-2 fas fa-spinner fa-spin"></i> Saving...');
+            button.prop('disabled', true);
+            
+            $.ajax({
+                url: '{{ route("schedules.save-matrix") }}',
+                type: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                data: JSON.stringify({
+                    matrix: matrix
+                }),
+                contentType: 'application/json',
+                success: function(response) {
+                    if (response.success) {
+                        alert('Schedules saved successfully');
+                    } else {
+                        alert('Error saving schedules: ' + response.message);
+                    }
+                },
+                error: function() {
+                    alert('Error saving schedules');
+                },
+                complete: function() {
+                    button.html(originalHtml);
+                    button.prop('disabled', false);
+                }
             });
         });
         
-        if (matrix.length === 0) {
-            alert('No schedules selected');
-            return;
+        function loadMatrixData() {
+            const now = new Date();
+            const month = now.getMonth() + 1;
+            const year = now.getFullYear();
+            
+            $('#matrix-view').prepend('<div class="flex justify-center p-4"><i class="mr-2 fas fa-spinner fa-spin"></i> Loading schedules...</div>');
+            
+            $.ajax({
+                url: '{{ route("schedules.matrix-data") }}',
+                type: 'GET',
+                data: {
+                    month: month,
+                    year: year
+                },
+                success: function(data) {
+                    $('#matrix-view > div:first-child').remove();
+                    
+                    if (data.success) {
+                        updateMatrixView(data.period1, 1, month, year);
+                        updateMatrixView(data.period2, 2, month, year);
+                    } else {
+                        $('#matrix-view').prepend('<div class="p-4 mb-4 text-red-700 bg-red-100 rounded">Failed to load schedule data: ' + (data.message || 'Unknown error') + '</div>');
+                    }
+                },
+                error: function(xhr) {
+                    $('#matrix-view > div:first-child').remove();
+                    $('#matrix-view').prepend('<div class="p-4 mb-4 text-red-700 bg-red-100 rounded">Failed to load schedule data. Please try again later.</div>');
+                    console.error('Error loading matrix data:', xhr.responseText);
+                }
+            });
         }
         
-        const button = $(this);
-        const originalHtml = button.html();
-        button.html('<i class="mr-2 fas fa-spinner fa-spin"></i> Saving...');
-        button.prop('disabled', true);
-        
-        $.ajax({
-            url: '{{ route("schedules.save-matrix") }}',
-            type: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': '{{ csrf_token() }}'
-            },
-            data: JSON.stringify({
-                matrix: matrix
-            }),
-            contentType: 'application/json',
-            success: function(response) {
-                if (response.success) {
-                    alert('Schedules saved successfully');
-                } else {
-                    alert('Error saving schedules: ' + response.message);
-                }
-            },
-            error: function() {
-                alert('Error saving schedules');
-            },
-            complete: function() {
-                button.html(originalHtml);
-                button.prop('disabled', false);
-            }
-        });
-    });
-    
-    // Load matrix data function
-    function loadMatrixData() {
-        const now = new Date();
-        const month = now.getMonth() + 1;
-        const year = now.getFullYear();
-        
-        $('#matrix-view').prepend('<div class="flex justify-center p-4"><i class="mr-2 fas fa-spinner fa-spin"></i> Loading schedules...</div>');
-        
-        $.ajax({
-            url: '{{ route("schedules.matrix-data") }}',
-            type: 'GET',
-            data: {
-                month: month,
-                year: year
-            },
-            success: function(data) {
-                $('#matrix-view > div:first-child').remove();
-                
-                if (data.success) {
-                    updateMatrixView(data.period1, 1, month, year);
-                    updateMatrixView(data.period2, 2, month, year);
-                } else {
-                    $('#matrix-view').prepend('<div class="p-4 mb-4 text-red-700 bg-red-100 rounded">Failed to load schedule data: ' + (data.message || 'Unknown error') + '</div>');
-                }
-            },
-            error: function(xhr) {
-                $('#matrix-view > div:first-child').remove();
-                $('#matrix-view').prepend('<div class="p-4 mb-4 text-red-700 bg-red-100 rounded">Failed to load schedule data. Please try again later.</div>');
-                console.error('Error loading matrix data:', xhr.responseText);
-            }
-        });
-    }
-    
-    // Update matrix view function
-    function updateMatrixView(data, period, month, year) {
-        $('#period-' + period + ' tbody').empty();
-        const routeGroups = {};
-        
-        if (data && data.length > 0) {
-            data.forEach(function(row) {
-                const routeNumber = row.route.route_number || 'Unknown Route';
-                if (!routeGroups[routeNumber]) {
-                    routeGroups[routeNumber] = {
-                        routeName: row.route.name,
-                        rows: []
-                    };
-                }
-                routeGroups[routeNumber].rows.push(row);
-            });
+        function updateMatrixView(data, period, month, year) {
+            $('#period-' + period + ' tbody').empty();
+            const routeGroups = {};
             
-            Object.keys(routeGroups).sort().forEach(function(routeNumber) {
-                const routeGroup = routeGroups[routeNumber];
+            if (data && data.length > 0) {
+                data.forEach(function(row) {
+                    const routeNumber = row.route.route_number || 'Unknown Route';
+                    if (!routeGroups[routeNumber]) {
+                        routeGroups[routeNumber] = {
+                            routeName: row.route.name,
+                            rows: []
+                        };
+                    }
+                    routeGroups[routeNumber].rows.push(row);
+                });
                 
-                const startDay = period === 1 ? 1 : 16;
-                const endDay = period === 1 ? 15 : new Date(year, month, 0).getDate();
-                const colCount = (endDay - startDay + 1) + 5;
-                
-                const routeHeader = $(`
-                    <tr class="bg-gray-100">
-                        <td colspan="${colCount}" class="z-10 px-6 py-2 text-sm font-bold text-gray-900 bg-gray-100 whitespace-nowrap sticky-left">
-                            ${routeNumber} - ${routeGroup.routeName}
-                        </td>
-                    </tr>
-                `);
-                
-                $('#period-' + period + ' tbody').append(routeHeader);
-                
-                routeGroup.rows.forEach(function(row) {
-                    const tr = $('<tr class="border-t border-gray-200 hover:bg-gray-50"></tr>');
-                    
-                    tr.append(`<td class="z-10 px-4 py-2 text-sm font-medium text-gray-900 bg-white whitespace-nowrap sticky-left hover:bg-gray-50">${row.unit.unit_number}</td>`);
-                    tr.append(`<td class="z-10 px-4 py-2 text-sm text-gray-500 bg-white whitespace-nowrap sticky-left hover:bg-gray-50">${routeNumber || ''} - ${routeGroup.routeName}</td>`);
-                    tr.append(`<td class="z-10 px-4 py-2 text-sm text-gray-500 bg-white whitespace-nowrap sticky-left hover:bg-gray-50">${row.driver.name}</td>`);
-                    
-                    const shiftClass = row.shift === 'pagi' || row.shift === 'morning' ? 'bg-yellow-100 text-yellow-800' : 'bg-indigo-100 text-indigo-800';
-                    const shiftText = row.shift === 'pagi' || row.shift === 'morning' ? 'Pagi' : 'Siang';
-                    tr.append(`
-                        <td class="z-10 px-4 py-2 text-sm text-center bg-white whitespace-nowrap sticky-left hover:bg-gray-50">
-                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${shiftClass}">
-                                ${shiftText}
-                            </span>
-                        </td>
-                    `);
-                    
-                    let totalScheduled = 0;
+                Object.keys(routeGroups).sort().forEach(function(routeNumber) {
+                    const routeGroup = routeGroups[routeNumber];
                     
                     const startDay = period === 1 ? 1 : 16;
                     const endDay = period === 1 ? 15 : new Date(year, month, 0).getDate();
+                    const colCount = (endDay - startDay + 1) + 5;
                     
-                    for (let day = startDay; day <= endDay; day++) {
-                        const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                        const dateObj = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+                    const routeHeader = $(`
+                        <tr class="bg-gray-100">
+                            <td colspan="${colCount}" class="z-10 px-6 py-2 text-sm font-bold text-gray-900 bg-gray-100 whitespace-nowrap sticky-left">
+                                ${routeNumber} - ${routeGroup.routeName}
+                            </td>
+                        </tr>
+                    `);
+                    
+                    $('#period-' + period + ' tbody').append(routeHeader);
+                    
+                    routeGroup.rows.forEach(function(row) {
+                        const tr = $('<tr class="border-t border-gray-200 hover:bg-gray-50"></tr>');
                         
-                        const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
-                        const cellClass = isWeekend ? 'weekend' : '';
+                        tr.append(`<td class="z-10 px-4 py-2 text-sm font-medium text-gray-900 bg-white whitespace-nowrap sticky-left hover:bg-gray-50">${row.unit.unit_number}</td>`);
+                        tr.append(`<td class="z-10 px-4 py-2 text-sm text-gray-500 bg-white whitespace-nowrap sticky-left hover:bg-gray-50">${routeNumber || ''} - ${routeGroup.routeName}</td>`);
+                        tr.append(`<td class="z-10 px-4 py-2 text-sm text-gray-500 bg-white whitespace-nowrap sticky-left hover:bg-gray-50">${row.driver.name}</td>`);
                         
-                        let isScheduled = false;
-                        if (row.schedules && row.schedules.length > 0) {
-                            isScheduled = row.schedules.some(s => {
-                                const scheduleDate = typeof s.schedule_date === 'string' ? s.schedule_date : s.schedule_date.date;
-                                return scheduleDate === date;
-                            });
-                        }
+                        const shiftClass = row.shift === 'pagi' || row.shift === 'morning' ? 'bg-yellow-100 text-yellow-800' : 'bg-indigo-100 text-indigo-800';
+                        const shiftText = row.shift === 'pagi' || row.shift === 'morning' ? 'Pagi' : 'Siang';
+                        tr.append(`
+                            <td class="z-10 px-4 py-2 text-sm text-center bg-white whitespace-nowrap sticky-left hover:bg-gray-50">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${shiftClass}">
+                                    ${shiftText}
+                                </span>
+                            </td>
+                        `);
                         
-                        if (isScheduled) {
-                            totalScheduled++;
+                        let totalScheduled = 0;
+                        
+                        const startDay = period === 1 ? 1 : 16;
+                        const endDay = period === 1 ? 15 : new Date(year, month, 0).getDate();
+                        
+                        for (let day = startDay; day <= endDay; day++) {
+                            const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                            const dateObj = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+                            
+                            const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+                            const cellClass = isWeekend ? 'weekend' : '';
+                            
+                            let isScheduled = false;
+                            if (row.schedules && row.schedules.length > 0) {
+                                isScheduled = row.schedules.some(s => {
+                                    const scheduleDate = typeof s.schedule_date === 'string' ? s.schedule_date : s.schedule_date.date;
+                                    return scheduleDate === date;
+                                });
+                            }
+                            
+                            if (isScheduled) {
+                                totalScheduled++;
+                            }
+                            
+                            tr.append(`
+                                <td class="px-3 py-2 text-sm text-center ${cellClass}">
+                                    <input type="checkbox" class="matrix-checkbox" 
+                                        data-unit="${row.unit.id}" 
+                                        data-driver="${row.driver.id}" 
+                                        data-route="${row.route.id}" 
+                                        data-date="${date}" 
+                                        ${isScheduled ? 'checked' : ''}>
+                                </td>
+                            `);
                         }
                         
                         tr.append(`
-                            <td class="px-3 py-2 text-sm text-center ${cellClass}">
-                                <input type="checkbox" class="matrix-checkbox" 
-                                    data-unit="${row.unit.id}" 
-                                    data-driver="${row.driver.id}" 
-                                    data-route="${row.route.id}" 
-                                    data-date="${date}" 
-                                    ${isScheduled ? 'checked' : ''}>
+                            <td class="px-4 py-2 text-sm font-bold text-center bg-gray-100">
+                                ${totalScheduled}
                             </td>
                         `);
-                    }
-                    
-                    tr.append(`
-                        <td class="px-4 py-2 text-sm font-bold text-center bg-gray-100">
-                            ${totalScheduled}
-                        </td>
-                    `);
-                    
-                    $('#period-' + period + ' tbody').append(tr);
+                        
+                        $('#period-' + period + ' tbody').append(tr);
+                    });
                 });
-            });
-        } else {
-            const colCount = period === 1 ? 20 : 20 + (new Date(year, month, 0).getDate() - 15);
-            $('#period-' + period + ' tbody').append(`
-                <tr>
-                    <td colspan="${colCount}" class="px-6 py-4 text-sm font-medium text-center text-gray-500 whitespace-nowrap bg-yellow-50">
-                        <i class="mr-2 fas fa-exclamation-circle"></i>
-                        No schedule data available for this period.
-                    </td>
-                </tr>
-            `);
+            } else {
+                const colCount = period === 1 ? 20 : 20 + (new Date(year, month, 0).getDate() - 15);
+                $('#period-' + period + ' tbody').append(`
+                    <tr>
+                        <td colspan="${colCount}" class="px-6 py-4 text-sm font-medium text-center text-gray-500 whitespace-nowrap bg-yellow-50">
+                            <i class="mr-2 fas fa-exclamation-circle"></i>
+                            No schedule data available for this period.
+                        </td>
+                    </tr>
+                `);
+            }
         }
-    }
-    
-    // Setup chained filtering
-    setupChainedFiltering();
+    });
     
     function setupChainedFiltering() {
         const allUnitOptions = $('#unit_id option').clone();
@@ -1204,7 +1073,6 @@ $(document).ready(function() {
             $('#route_id').trigger('change');
         }
     }
-});
 </script>
 @endpush
 

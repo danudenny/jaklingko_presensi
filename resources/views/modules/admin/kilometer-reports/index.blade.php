@@ -74,6 +74,10 @@
                         <i class="fas fa-file-pdf mr-2"></i>
                         Export PDF
                     </a>
+                    <button type="button" @click="toggleImportModal" class="inline-flex items-center px-4 py-2 bg-purple-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-purple-500 active:bg-purple-700 focus:outline-none focus:border-purple-700 focus:ring ring-purple-300 disabled:opacity-25 transition ease-in-out duration-150">
+                        <i class="fas fa-file-import mr-2"></i>
+                        Import
+                    </button>
                     <button type="button" @click="toggleEditMode" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 active:bg-blue-700 focus:outline-none focus:border-blue-700 focus:ring ring-blue-300 disabled:opacity-25 transition ease-in-out duration-150">
                         <i class="fas" :class="editMode ? 'fa-eye' : 'fa-edit'" x-text="editMode ? ' View Mode' : ' Edit Mode'"></i>
                     </button>
@@ -84,12 +88,24 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10 w-48">
-                                Rute / Unit
+                            <th scope="col" class="pl-6 pr-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-100 z-10">
+                                Unit
                             </th>
                             @foreach($dates as $date)
-                                <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    {{ \Carbon\Carbon::parse($date)->format('d') }}
+                                @php
+                                    $dateObj = \Carbon\Carbon::parse($date);
+                                    $isWeekend = $dateObj->isWeekend();
+                                    $isHoliday = isset($holidays[$date]);
+                                    $cellClass = $isHoliday ? 'bg-yellow-50' : ($isWeekend ? 'bg-orange-50' : '');
+                                @endphp
+                                <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider {{ $cellClass }}">
+                                    {{ $dateObj->format('d M') }}<br>
+                                    <span class="text-xs">{{ $dateObj->format('D') }}</span>
+                                    @if($isHoliday)
+                                        <span class="ml-1 text-yellow-600 cursor-help" title="{{ $holidays[$date]->name }}">
+                                            <i class="fas fa-question-circle"></i>
+                                        </span>
+                                    @endif
                                 </th>
                             @endforeach
                             <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-100">
@@ -101,50 +117,48 @@
                         @foreach($routes as $route)
                             <!-- Route Header Row -->
                             <tr class="bg-gray-100">
-                                <td class="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-gray-100 z-10">
-                                    <div class="flex items-center justify-between">
-                                        <span class="font-bold">{{ $route->route_number }} - {{ $route->name }}</span>
-                                    </div>
-                                </td>
-                                @foreach($dates as $date)
-                                    <td class="px-6 py-3 whitespace-nowrap text-sm text-center text-gray-500 bg-gray-100">
-                                        <!-- Date total for this route -->
-                                        @php
-                                            $routeDateTotal = 0;
-                                            if(isset($reportsByRouteUnitDate[$route->id])) {
-                                                foreach($reportsByRouteUnitDate[$route->id] as $unitReports) {
-                                                    if(isset($unitReports[$date])) {
-                                                        $routeDateTotal += $unitReports[$date]->kilometers;
-                                                    }
-                                                }
-                                            }
-                                        @endphp
-                                        {{ $routeDateTotal > 0 ? number_format($routeDateTotal, 1) : '-' }}
-                                    </td>
-                                @endforeach
-                                <td class="px-6 py-3 whitespace-nowrap text-sm text-center font-bold text-gray-900 bg-gray-200">
-                                    {{ isset($routeTotals[$route->id]) ? number_format($routeTotals[$route->id], 1) : '0.0' }}
+                                <td colspan="{{ count($dates) + 2 }}" class="px-6 py-2 whitespace-nowrap text-sm font-bold text-gray-900 sticky left-0 bg-gray-100 z-10">
+                                    {{ $route->route_number }} - {{ $route->name }}
                                 </td>
                             </tr>
                             
                             <!-- Unit Rows for this Route -->
                             @foreach($route->units as $unit)
                                 <tr class="hover:bg-gray-50 border-t border-gray-200">
-                                    <td class="pl-10 pr-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-white z-10 hover:bg-gray-50">
+                                    <td class="pl-8 pr-6 py-2 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-white z-10 hover:bg-gray-50">
                                         <a href="{{ route('kilometer-reports.show', ['unit' => $unit->id, 'period' => $period]) }}" class="text-indigo-600 hover:text-indigo-900">
                                             {{ $unit->unit_number }} - {{ $unit->plate_number }}
                                         </a>
+                                        @if($unit->status !== 'aktif')
+                                            <i class="fas fa-exclamation-circle text-red-500 ml-1" title="Unit tidak aktif"></i>
+                                        @endif
                                     </td>
                                     @foreach($dates as $date)
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500" x-data="{ 
+                                        @php
+                                            $dateObj = \Carbon\Carbon::parse($date);
+                                            $isWeekend = $dateObj->isWeekend();
+                                            $isHoliday = isset($holidays[$date]);
+                                            $isUnitMaintenance = in_array($unit->id, $maintenanceUnitsByDate[$date] ?? []);
+                                            $cellClass = $isHoliday ? 'bg-yellow-50' : ($isWeekend ? 'bg-orange-50' : '');
+                                            
+                                            $kilometers = isset($reportsByRouteUnitDate[$route->id][$unit->id][$date]) ? 
+                                                $reportsByRouteUnitDate[$route->id][$unit->id][$date]->kilometers : 0;
+                                            
+                                            $kmBelowThreshold = $kilometers > 0 && $kilometers < 150;
+                                            $cellBgClass = $kmBelowThreshold ? 'bg-red-100' : ($isHoliday ? 'bg-yellow-50' : ($isWeekend ? 'bg-orange-50' : ''));
+                                        @endphp
+                                        <td class="px-6 py-2 whitespace-nowrap text-sm text-center text-gray-500 {{ $cellBgClass }}" x-data="{ 
                                             isEditing: false, 
-                                            kilometers: '{{ isset($reportsByRouteUnitDate[$route->id][$unit->id][$date]) ? $reportsByRouteUnitDate[$route->id][$unit->id][$date]->kilometers : '' }}'
+                                            kilometers: '{{ $kilometers }}'
                                         }">
                                             <!-- View Mode -->
                                             <template x-if="!editMode">
                                                 <div>
-                                                    @if(isset($reportsByRouteUnitDate[$route->id][$unit->id][$date]))
-                                                        {{ number_format($reportsByRouteUnitDate[$route->id][$unit->id][$date]->kilometers, 1) }}
+                                                    @if($kilometers > 0)
+                                                        {{ number_format($kilometers, 1) }}
+                                                        @if($isUnitMaintenance)
+                                                            <i class="fas fa-exclamation-triangle text-yellow-500" title="Unit dalam maintenance"></i>
+                                                        @endif
                                                     @else
                                                         -
                                                     @endif
@@ -156,8 +170,8 @@
                                                 <div class="flex flex-col space-y-2">
                                                     <!-- Current Values -->
                                                     <div x-show="!isEditing" class="flex flex-col items-center">
-                                                        @if(isset($reportsByRouteUnitDate[$route->id][$unit->id][$date]))
-                                                            <span>{{ number_format($reportsByRouteUnitDate[$route->id][$unit->id][$date]->kilometers, 1) }}</span>
+                                                        @if($kilometers > 0)
+                                                            <span>{{ number_format($kilometers, 1) }}</span>
                                                         @else
                                                             <span>-</span>
                                                         @endif
@@ -200,24 +214,24 @@
                                             </template>
                                         </td>
                                     @endforeach
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-center font-bold text-gray-900 bg-gray-100">
+                                    <td class="px-6 py-2 whitespace-nowrap text-sm text-center font-bold text-gray-900 bg-gray-100">
                                         {{ isset($routeUnitTotals[$route->id][$unit->id]) ? number_format($routeUnitTotals[$route->id][$unit->id], 1) : '0.0' }}
                                     </td>
                                 </tr>
                             @endforeach
                         @endforeach
                     </tbody>
-                    <tfoot class="bg-gray-50">
+                    <tfoot class="bg-gray-200 font-bold">
                         <tr>
-                            <th scope="row" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">
+                            <th scope="row" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-200 z-10">
                                 Total
                             </th>
                             @foreach($dates as $date)
-                                <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-700">
+                                <th scope="row" class="px-6 py-3 text-center text-xs font-medium text-gray-700">
                                     {{ isset($dateTotals[$date]) ? number_format($dateTotals[$date], 1) : '0.0' }}
                                 </th>
                             @endforeach
-                            <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-700 bg-gray-200">
+                            <th scope="row" class="px-6 py-3 text-center text-sm font-bold text-gray-900 bg-gray-300">
                                 {{ number_format($grandTotal, 1) }}
                             </th>
                         </tr>
@@ -226,6 +240,64 @@
             </div>
         </x-card>
     </div>
+
+    <!-- Import Modal -->
+    <div x-show="showImportModal" class="fixed inset-0 overflow-y-auto z-50" style="display: none;">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div x-show="showImportModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            
+            <div x-show="showImportModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full" role="dialog" aria-modal="true" aria-labelledby="modal-headline">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-purple-100 sm:mx-0 sm:h-10 sm:w-10">
+                            <i class="fas fa-file-import text-purple-600"></i>
+                        </div>
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-headline">
+                                Import Laporan Kilometer
+                            </h3>
+                            <div class="mt-2">
+                                <p class="text-sm text-gray-500 mb-4">
+                                    Silakan unduh template dan isi data kilometer, kemudian unggah file yang telah diisi.
+                                </p>
+                                
+                                <div class="mb-4">
+                                    <a href="{{ route('kilometer-reports.template', ['period' => $period, 'group' => $activeRouteGroup]) }}" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 active:bg-green-700 focus:outline-none focus:border-green-700 focus:ring ring-green-300 disabled:opacity-25 transition ease-in-out duration-150">
+                                        <i class="fas fa-download mr-2"></i>
+                                        Download Template
+                                    </a>
+                                </div>
+                                
+                                <form id="import-form" action="{{ route('kilometer-reports.import') }}" method="POST" enctype="multipart/form-data">
+                                    @csrf
+                                    <input type="hidden" name="period" value="{{ $period }}">
+                                    <input type="hidden" name="group" value="{{ $activeRouteGroup }}">
+                                    
+                                    <div class="mb-4">
+                                        <label for="import_file" class="block text-sm font-medium text-gray-700 mb-1">File Excel</label>
+                                        <input type="file" id="import_file" name="import_file" accept=".xlsx,.xls" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100" required>
+                                        <p class="mt-1 text-xs text-gray-500">Format file: .xlsx, .xls</p>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="button" @click="submitImportForm" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-purple-600 text-base font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 sm:ml-3 sm:w-auto sm:text-sm">
+                        Import
+                    </button>
+                    <button type="button" @click="showImportModal = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Batal
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 @push('scripts')
@@ -233,6 +305,10 @@
     function kilometerReport() {
         return {
             editMode: false,
+            showImportModal: false,
+            toggleImportModal() {
+                this.showImportModal = !this.showImportModal;
+            },
             toggleEditMode() {
                 if (this.editMode) {
                     // Switching from edit mode to view mode
@@ -381,6 +457,10 @@
                     saveButton.innerHTML = originalHTML;
                     saveButton.disabled = false;
                 });
+            },
+            submitImportForm() {
+                const form = document.getElementById('import-form');
+                form.submit();
             }
         }
     }

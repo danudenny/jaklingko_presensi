@@ -61,9 +61,33 @@
                 <div class="sm:col-span-3">
                     <label for="edit_expired_license" class="block text-sm font-medium text-gray-700">License Expiry Date</label>
                     <div class="mt-1">
-                        <input type="date" name="expired_license" id="edit_expired_license" value="{{ $unit->expired_license ? $unit->expired_license->format('Y-m-d') : '' }}" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md">
+                        <input type="text" name="expired_license" id="edit_expired_license" value="{{ $unit->expired_license ? $unit->expired_license->format('Y-m-d') : '' }}" class="datepicker shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md">
                     </div>
                     <p class="mt-1 text-sm text-red-600" id="edit_expired_license_error"></p>
+                </div>
+
+                <div class="sm:col-span-3">
+                    <label for="edit_expired_stnk" class="block text-sm font-medium text-gray-700">Tanggal Berakhir STNK</label>
+                    <div class="mt-1">
+                        <input type="text" name="expired_stnk" id="edit_expired_stnk" value="{{ $unit->expired_stnk ? $unit->expired_stnk->format('Y-m-d') : '' }}" class="datepicker shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md">
+                    </div>
+                    <p class="mt-1 text-sm text-red-600" id="edit_expired_stnk_error"></p>
+                </div>
+
+                <div class="sm:col-span-3">
+                    <label for="edit_expired_kir" class="block text-sm font-medium text-gray-700">Tanggal Berakhir KIR</label>
+                    <div class="mt-1">
+                        <input type="text" name="expired_kir" id="edit_expired_kir" value="{{ $unit->expired_kir ? $unit->expired_kir->format('Y-m-d') : '' }}" class="datepicker shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md">
+                    </div>
+                    <p class="mt-1 text-sm text-red-600" id="edit_expired_kir_error"></p>
+                </div>
+
+                <div class="sm:col-span-3">
+                    <label for="edit_expired_kp" class="block text-sm font-medium text-gray-700">Tanggal Berakhir KP</label>
+                    <div class="mt-1">
+                        <input type="text" name="expired_kp" id="edit_expired_kp" value="{{ $unit->expired_kp ? $unit->expired_kp->format('Y-m-d') : '' }}" class="datepicker shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md">
+                    </div>
+                    <p class="mt-1 text-sm text-red-600" id="edit_expired_kp_error"></p>
                 </div>
 
                 <div class="sm:col-span-3">

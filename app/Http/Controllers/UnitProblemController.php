@@ -337,6 +337,21 @@ class UnitProblemController extends Controller
         try {
             // Get the unit's routes
             $unit = Unit::findOrFail($unitProblem->unit_id);
+            
+            // Check if the unit is already in maintenance
+            if ($unit->status === 'maintenance') {
+                return redirect()->back()->with('error', 'Unit ini sudah dalam status maintenance. Tidak dapat mengirim ke log perawatan lagi.');
+            }
+            
+            // Check if there's an active maintenance log for this unit
+            $existingMaintenanceLog = MaintenanceLog::where('unit_id', $unit->id)
+                ->where('status', '!=', 'completed')
+                ->first();
+                
+            if ($existingMaintenanceLog) {
+                return redirect()->back()->with('error', 'Unit ini sudah memiliki log perawatan yang aktif. Selesaikan log perawatan yang ada terlebih dahulu.');
+            }
+            
             $route = $unit->routes->first(); // Get the first route for now
             
             if (!$route) {

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Holiday;
+use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -104,5 +106,99 @@ class HolidayController extends Controller
             return redirect()->back()
                 ->with('error', 'Gagal menghapus hari libur: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Get all holidays and weekends for a given period.
+     * 
+     * @param string $startDate
+     * @param string $endDate
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getHolidaysAndWeekends(Request $request)
+    {
+        $validated = $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $startDate = Carbon::parse($validated['start_date']);
+        $endDate = Carbon::parse($validated['end_date']);
+        
+        // Get all holidays in the range
+        $holidays = Holiday::whereBetween('date', [$startDate, $endDate])
+            ->get()
+            ->map(function ($holiday) {
+                return [
+                    'date' => $holiday->date->format('Y-m-d'),
+                    'name' => $holiday->name,
+                    'type' => 'holiday',
+                    'holiday_id' => $holiday->id
+                ];
+            });
+        
+        // Get all weekends in the range
+        $weekends = collect();
+        $period = CarbonPeriod::create($startDate, $endDate);
+        
+        foreach ($period as $date) {
+            if ($date->isSaturday() || $date->isSunday()) {
+                $weekends->push([
+                    'date' => $date->format('Y-m-d'),
+                    'name' => $date->isSaturday() ? 'Saturday' : 'Sunday',
+                    'type' => $date->isSaturday() ? 'saturday' : 'sunday',
+                    'holiday_id' => null
+                ]);
+            }
+        }
+        
+        // Combine holidays and weekends
+        $result = $holidays->concat($weekends)->sortBy('date')->values();
+        
+        return response()->json([
+            'success' => true,
+            'data' => $result
+        ]);
+    }
+
+    /**
+     * Check if a date is a weekend or holiday.
+     * 
+     * @param string $date
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function checkDateStatus(Request $request)
+    {
+        $validated = $request->validate([
+            'date' => 'required|date',
+        ]);
+
+        $date = Carbon::parse($validated['date']);
+        $isWeekend = $date->isWeekend();
+        $holiday = Holiday::whereDate('date', $date)->first();
+        
+        $dayType = null;
+        $holidayId = null;
+        
+        if ($date->isSaturday()) {
+            $dayType = 'saturday';
+        } elseif ($date->isSunday()) {
+            $dayType = 'sunday';
+        } elseif ($holiday) {
+            $dayType = 'holiday';
+            $holidayId = $holiday->id;
+        }
+        
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'date' => $date->format('Y-m-d'),
+                'is_weekend' => $isWeekend,
+                'is_holiday' => $holiday ? true : false,
+                'day_type' => $dayType,
+                'holiday_id' => $holidayId,
+                'holiday_name' => $holiday ? $holiday->name : null
+            ]
+        ]);
     }
 }

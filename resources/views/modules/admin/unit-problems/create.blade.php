@@ -295,7 +295,7 @@
         
         // Function to load drivers for a unit
         function loadDriversForUnit(unitId) {
-            fetch(`{{ url('unit-problems/drivers') }}/${unitId}`)
+            fetch(`{{ url('unit-problems/drivers-for-unit') }}/${unitId}`)
                 .then(response => response.json())
                 .then(drivers => {
                     // Clear previous options

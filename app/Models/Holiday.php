@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Holiday extends Model
 {
@@ -50,5 +51,13 @@ class Holiday extends Model
     public function getFormattedTypeAttribute()
     {
         return $this->type === 'cuti_bersama' ? 'Cuti Bersama' : 'Libur Nasional';
+    }
+
+    /**
+     * Get the unit renops plans associated with this holiday.
+     */
+    public function unitRenops(): HasMany
+    {
+        return $this->hasMany(UnitRenops::class);
     }
 }

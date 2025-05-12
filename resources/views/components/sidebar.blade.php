@@ -1,11 +1,11 @@
 @props(['mobile' => false])
 
-<div 
-    x-data 
+<div
+    x-data
     class="{{ $mobile ? 'h-full' : 'h-screen fixed left-0 top-0' }} flex flex-col bg-gray-900 overflow-y-auto transition-all duration-300"
     :class="{
-        'w-64': !$store.sidebar.collapsed && !{{ $mobile ? 'true' : 'false' }}, 
-        'w-20': $store.sidebar.collapsed && !{{ $mobile ? 'true' : 'false' }}, 
+        'w-64': !$store.sidebar.collapsed && !{{ $mobile ? 'true' : 'false' }},
+        'w-20': $store.sidebar.collapsed && !{{ $mobile ? 'true' : 'false' }},
         'w-full': {{ $mobile ? 'true' : 'false' }}
     }"
 >
@@ -18,7 +18,7 @@
             <span class="ml-2 text-xl font-bold text-white transition-opacity duration-300" :class="$store.sidebar.collapsed && !{{ $mobile ? 'true' : 'false' }} ? 'opacity-0 hidden' : 'opacity-100'">{{ config('app.name', 'Presensi') }}</span>
         </a>
         @if(!$mobile)
-        <button 
+        <button
             @click="$store.sidebar.toggle()"
             class="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none"
         >
@@ -29,7 +29,7 @@
         </button>
         @endif
     </div>
-    
+
     <!-- User Info -->
     <div class="border-t border-b border-gray-700 py-4 px-4 shrink-0">
         <div class="flex items-center">
@@ -48,7 +48,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Navigation -->
     <nav class="flex-1 overflow-y-auto mt-4 px-2 space-y-1">
         @include('components.sidebar-item', [
@@ -67,56 +67,68 @@
 
         @include('components.sidebar-item', [
             'route' => 'drivers.index',
-            'icon' => 'user',
+            'icon' => 'id-card',
             'text' => 'Pengemudi'
         ])
 
         @include('components.sidebar-item', [
             'route' => 'units.index',
-            'icon' => 'truck',
-            'text' => 'Unit'   
+            'icon' => 'car',
+            'text' => 'Unit'
         ])
 
         @include('components.sidebar-item', [
             'route' => 'routes.index',
-            'icon' => 'map',
+            'icon' => 'route',
             'text' => 'Rute'
         ])
-        
-        @include('components.sidebar-item', [
+
+        @include('components.sidebar-item-pulse', [
             'route' => 'schedules.index',
-            'icon' => 'calendar',
+            'icon' => 'calendar-day',
             'text' => 'Jadwal'
         ])
 
         @include('components.sidebar-item', [
             'route' => 'leave-requests.index',
-            'icon' => 'document',
+            'icon' => 'person-walking-arrow-right',
             'text' => 'Pengajuan Cuti'
         ])
 
         @include('components.sidebar-item', [
             'route' => 'unit-problems.index',
-            'icon' => 'exclamation-triangle',
+            'icon' => 'car-burst',
             'text' => 'Laporan Masalah'
         ])
-        
+
         @include('components.sidebar-item', [
             'route' => 'maintenance-logs.index',
-            'icon' => 'tools',
+            'icon' => 'road-barrier',
             'text' => 'Log Perawatan'
         ])
-        
+
         @include('components.sidebar-item', [
             'route' => 'holidays.index',
-            'icon' => 'calendar-day',
+            'icon' => 'calendar-xmark',
             'text' => 'Hari Libur'
         ])
-        
+
         @include('components.sidebar-item', [
             'route' => 'kilometer-reports.index',
             'icon' => 'tachometer-alt',
             'text' => 'Laporan Kilometer'
+        ])
+
+        @include('components.sidebar-item', [
+            'route' => 'global-kilometer-reports.index',
+            'icon' => 'users-gear',
+            'text' => 'Laporan Kilometer Global'
+        ])
+
+        @include('components.sidebar-item', [
+            'route' => 'renops.index',
+            'icon' => 'car-tunnel',
+            'text' => 'Renops'
         ])
 
         @include('components.sidebar-item', [
@@ -125,7 +137,7 @@
             'text' => 'Laporan'
         ])
     </nav>
-    
+
     <!-- Logout -->
     <div class="px-3 py-4 border-t border-gray-700 mt-auto shrink-0">
         <form method="POST" action="{{ route('logout') }}">
@@ -136,4 +148,4 @@
             </button>
         </form>
     </div>
-</div> 
+</div>

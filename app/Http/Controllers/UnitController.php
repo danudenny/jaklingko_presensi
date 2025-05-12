@@ -336,4 +336,71 @@ class UnitController extends Controller
         return redirect()->route('units.index')
             ->with('success', 'Unit deleted successfully.');
     }
+
+    /**
+     * Toggle the is_renops status for a specific unit
+     *
+     * @param Unit $unit
+     * @return JsonResponse
+     */
+    public function toggleRenops(Unit $unit): JsonResponse
+    {
+        try {
+            $unit->is_renops = !$unit->is_renops;
+            $unit->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Renops status updated successfully',
+                'is_renops' => $unit->is_renops
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error toggling renops status: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update renops status'
+            ], 500);
+        }
+    }
+
+    /**
+     * Update is_renops status for multiple units
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function bulkRenops(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'unit_ids' => 'required|array',
+            'unit_ids.*' => 'exists:units,id',
+            'is_renops' => 'required|boolean'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $unitIds = $request->input('unit_ids');
+            $isRenops = $request->input('is_renops');
+
+            Unit::whereIn('id', $unitIds)->update(['is_renops' => $isRenops]);
+
+            return response()->json([
+                'success' => true,
+                'message' => count($unitIds) . ' units updated successfully'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error updating bulk renops status: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update units'
+            ], 500);
+        }
+    }
 }

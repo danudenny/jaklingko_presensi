@@ -24,7 +24,7 @@ class MaintenanceLogController extends Controller
             ->orderBy('date_reported', 'desc')
             ->orderBy('time_reported', 'desc')
             ->paginate(10);
-            
+
         return view('modules.admin.maintenance-logs.index', compact('maintenanceLogs'));
     }
 
@@ -36,7 +36,7 @@ class MaintenanceLogController extends Controller
         $units = Unit::orderBy('unit_number')->get();
         $routes = Route::orderBy('route_number')->get();
         $shifts = ['Pagi', 'Siang'];
-        
+
         return view('modules.admin.maintenance-logs.create', compact('units', 'routes', 'shifts'));
     }
 
@@ -47,10 +47,10 @@ class MaintenanceLogController extends Controller
     {
         $unit = Unit::findOrFail($unitId);
         $drivers = $unit->drivers;
-        
+
         return response()->json($drivers);
     }
-    
+
     /**
      * Get routes assigned to a specific unit.
      */
@@ -58,10 +58,10 @@ class MaintenanceLogController extends Controller
     {
         $unit = Unit::findOrFail($unitId);
         $routes = $unit->routes;
-        
+
         return response()->json($routes);
     }
-    
+
     /**
      * Get drivers from schedules for a specific unit, route, and date.
      */
@@ -70,22 +70,22 @@ class MaintenanceLogController extends Controller
         $unitId = $request->unit_id;
         $routeId = $request->route_id;
         $date = $request->date;
-        
+
         // Find all schedules for the unit, route, and date
         $schedules = Schedule::where('unit_id', $unitId)
             ->where('route_id', $routeId)
             ->where('schedule_date', $date)
             ->with('driver')
             ->get();
-        
+
         $result = [
             'schedules' => [],
             'has_schedules' => false
         ];
-        
+
         if ($schedules->isNotEmpty()) {
             $result['has_schedules'] = true;
-            
+
             foreach ($schedules as $schedule) {
                 if ($schedule->driver) {
                     // Find schedule history for this driver
@@ -93,7 +93,7 @@ class MaintenanceLogController extends Controller
                         ->where('period_start_date', '<=', $date)
                         ->where('period_end_date', '>=', $date)
                         ->first();
-                    
+
                     $result['schedules'][] = [
                         'driver' => $schedule->driver,
                         'shift' => $schedule->shift,
@@ -103,7 +103,7 @@ class MaintenanceLogController extends Controller
                 }
             }
         }
-        
+
         return response()->json($result);
     }
 
@@ -131,26 +131,26 @@ class MaintenanceLogController extends Controller
             'photos.*' => 'required|image|max:2048', // 2MB max per image
             'on_schedule' => 'boolean',
         ]);
-        
+
         // Check if driver is on schedule
         $onSchedule = false;
         $scheduleHistoryId = null;
-        
+
         if ($request->has('on_schedule') && $request->on_schedule) {
             // Find the schedule history for the driver on the reported date
             $scheduleHistory = DriverScheduleHistory::where('driver_id', $request->driver_id)
                 ->whereDate('period_start_date', '<=', $request->date_reported)
                 ->whereDate('period_end_date', '>=', $request->date_reported)
                 ->first();
-                
+
             if ($scheduleHistory) {
                 $onSchedule = true;
                 $scheduleHistoryId = $scheduleHistory->id;
             }
         }
-        
+
         DB::beginTransaction();
-        
+
         try {
             // Create the maintenance log
             $maintenanceLog = MaintenanceLog::create([
@@ -170,44 +170,44 @@ class MaintenanceLogController extends Controller
                 'schedule_history_id' => $scheduleHistoryId,
                 'status' => 'pending',
             ]);
-            
+
             // Upload and store photos
             if ($request->hasFile('photos')) {
                 foreach ($request->file('photos') as $photo) {
                     $path = $photo->store('maintenance-logs', 'public');
-                    
+
                     MaintenanceLogPhoto::create([
                         'maintenance_log_id' => $maintenanceLog->id,
                         'photo_path' => $path,
                     ]);
                 }
             }
-            
+
             // Update unit status to maintenance
             $unit = Unit::find($request->unit_id);
             $unit->status = 'maintenance';
             $unit->save();
-            
+
             // Update any active schedules for this unit to absent
             $schedules = Schedule::where('unit_id', $request->unit_id)
                 ->where('schedule_date', '>=', $request->date_reported)
                 ->where('status', 'scheduled')
                 ->get();
-                
+
             foreach ($schedules as $schedule) {
                 $schedule->status = 'absent';
                 $schedule->notes = 'Unit in maintenance: ' . $request->description;
                 $schedule->save();
             }
-            
+
             DB::commit();
-            
+
             return redirect()->route('maintenance-logs.index')
                 ->with('success', 'Maintenance log created successfully.');
-                
+
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             return redirect()->back()
                 ->withInput()
                 ->with('error', 'Failed to create maintenance log: ' . $e->getMessage());
@@ -220,7 +220,7 @@ class MaintenanceLogController extends Controller
     public function show(MaintenanceLog $maintenanceLog)
     {
         $maintenanceLog->load(['unit', 'route', 'driver', 'photos']);
-        
+
         return view('modules.admin.maintenance-logs.show', compact('maintenanceLog'));
     }
 
@@ -230,11 +230,11 @@ class MaintenanceLogController extends Controller
     public function edit(MaintenanceLog $maintenanceLog)
     {
         $maintenanceLog->load(['unit', 'route', 'driver', 'photos']);
-        
+
         $units = Unit::orderBy('unit_number')->get();
         $routes = Route::orderBy('route_number')->get();
         $shifts = ['Pagi', 'Siang'];
-        
+
         return view('modules.admin.maintenance-logs.edit', compact('maintenanceLog', 'units', 'routes', 'shifts'));
     }
 
@@ -256,9 +256,9 @@ class MaintenanceLogController extends Controller
             'photos' => 'nullable|array|max:3',
             'photos.*' => 'image|max:2048', // 2MB max per image
         ]);
-        
+
         DB::beginTransaction();
-        
+
         try {
             // Update the maintenance log
             $maintenanceLog->update([
@@ -270,45 +270,45 @@ class MaintenanceLogController extends Controller
                 'costs' => $request->costs,
                 'status' => $request->status,
             ]);
-            
+
             // Upload and store new photos
             if ($request->hasFile('photos')) {
                 // Count existing photos
                 $existingPhotoCount = $maintenanceLog->photos->count();
                 $newPhotoCount = count($request->file('photos'));
-                
+
                 // Check if the total number of photos would exceed 3
                 if ($existingPhotoCount + $newPhotoCount > 3) {
                     return redirect()->back()
                         ->withInput()
                         ->with('error', 'Maximum 3 photos allowed. You currently have ' . $existingPhotoCount . ' photos.');
                 }
-                
+
                 foreach ($request->file('photos') as $photo) {
                     $path = $photo->store('maintenance-logs', 'public');
-                    
+
                     MaintenanceLogPhoto::create([
                         'maintenance_log_id' => $maintenanceLog->id,
                         'photo_path' => $path,
                     ]);
                 }
             }
-            
+
             // If status is completed, update the unit status back to active
             if ($request->status === 'completed') {
                 $unit = Unit::find($maintenanceLog->unit_id);
-                $unit->status = 'active';
+                $unit->status = 'aktif';
                 $unit->save();
             }
-            
+
             DB::commit();
-            
+
             return redirect()->route('maintenance-logs.show', $maintenanceLog)
                 ->with('success', 'Maintenance log updated successfully.');
-                
+
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             return redirect()->back()
                 ->withInput()
                 ->with('error', 'Failed to update maintenance log: ' . $e->getMessage());
@@ -321,24 +321,24 @@ class MaintenanceLogController extends Controller
     public function destroy(MaintenanceLog $maintenanceLog)
     {
         DB::beginTransaction();
-        
+
         try {
             // Delete photos from storage
             foreach ($maintenanceLog->photos as $photo) {
                 Storage::disk('public')->delete($photo->photo_path);
             }
-            
+
             // Delete the maintenance log (photos will be deleted via cascade)
             $maintenanceLog->delete();
-            
+
             DB::commit();
-            
+
             return redirect()->route('maintenance-logs.index')
                 ->with('success', 'Maintenance log deleted successfully.');
-                
+
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             return redirect()->back()
                 ->with('error', 'Failed to delete maintenance log: ' . $e->getMessage());
         }
@@ -350,21 +350,21 @@ class MaintenanceLogController extends Controller
     public function deletePhoto($id)
     {
         $photo = MaintenanceLogPhoto::findOrFail($id);
-        
+
         try {
             // Delete the photo from storage
             Storage::disk('public')->delete($photo->photo_path);
-            
+
             // Delete the photo record
             $photo->delete();
-            
+
             return response()->json(['success' => true]);
-            
+
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
-    
+
     /**
      * Update the status of a maintenance log.
      */
@@ -373,31 +373,31 @@ class MaintenanceLogController extends Controller
         $request->validate([
             'status' => 'required|in:pending,in_progress,completed',
         ]);
-        
+
         DB::beginTransaction();
-        
+
         try {
             // Update the maintenance log status
             $maintenanceLog->status = $request->status;
             $maintenanceLog->save();
-            
+
             // If status is completed, update the unit status back to active
             if ($request->status === 'completed') {
                 $unit = Unit::find($maintenanceLog->unit_id);
                 if ($unit) {
-                    $unit->status = 'active';
+                    $unit->status = 'aktif';
                     $unit->save();
                 }
             }
-            
+
             DB::commit();
-            
+
             return redirect()->route('maintenance-logs.show', $maintenanceLog)
                 ->with('success', 'Status log perawatan berhasil diperbarui.');
-                
+
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             return redirect()->back()
                 ->with('error', 'Gagal memperbarui status: ' . $e->getMessage());
         }
