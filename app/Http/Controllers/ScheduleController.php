@@ -15,7 +15,6 @@ use App\Exports\SchedulesExport;
 use App\Exports\SchedulesPdfExport;
 use App\Exports\SchedulesMatrixPdfExport;
 use Maatwebsite\Excel\Facades\Excel;
-use Illuminate\Support\Facades\Validator;
 
 class ScheduleController extends Controller
 {
@@ -778,64 +777,64 @@ class ScheduleController extends Controller
     {
         $month = $request->input('month', Carbon::now()->month);
         $year = $request->input('year', Carbon::now()->year);
-        
+
         // Log the received parameters for debugging
         \Log::info('Matrix Data Request', [
             'month' => $month,
             'year' => $year,
             'request_all' => $request->all()
         ]);
-        
+
         // Calculate the start and end dates for period 1 and 2
         $firstDayOfMonth = Carbon::createFromDate($year, $month, 1);
         $lastDayOfMonth = Carbon::createFromDate($year, $month, 1)->endOfMonth();
-        
+
         // Period 1: Days 1-15
         $period1StartDate = $firstDayOfMonth->format('Y-m-d');
         $period1EndDate = Carbon::createFromDate($year, $month, 15)->format('Y-m-d');
-        
+
         // Period 2: Days 16-end of month
         $period2StartDate = Carbon::createFromDate($year, $month, 16)->format('Y-m-d');
         $period2EndDate = $lastDayOfMonth->format('Y-m-d');
-        
+
         // Get all units with their routes and qualified drivers
         $units = Unit::with(['routes'])->active()->orderBy('unit_number')->get();
-        
+
         // Get all active drivers
         $drivers = Driver::active()->orderBy('name')->get();
-        
+
         // Get all schedules for both periods with optimized data loading
         $period1Schedules = Schedule::select('id', 'driver_id', 'unit_id', 'route_id', 'schedule_date', 'shift')
             ->with([
-                'driver:id,name,type,status', 
-                'unit:id,unit_number,plate_number', 
+                'driver:id,name,type,status',
+                'unit:id,unit_number,plate_number',
                 'route:id,route_number,name,status'
             ])
             ->whereBetween('schedule_date', [$period1StartDate, $period1EndDate])
             ->get()
             ->groupBy(['unit_id', 'shift', 'driver_id']);
-            
+
         $period2Schedules = Schedule::select('id', 'driver_id', 'unit_id', 'route_id', 'schedule_date', 'shift')
             ->with([
-                'driver:id,name,type,status', 
-                'unit:id,unit_number,plate_number', 
+                'driver:id,name,type,status',
+                'unit:id,unit_number,plate_number',
                 'route:id,name,status'
             ])
             ->whereBetween('schedule_date', [$period2StartDate, $period2EndDate])
             ->get()
             ->groupBy(['unit_id', 'shift', 'driver_id']);
-            
+
         // Format data for the matrix view
         $period1Data = $this->formatMatrixData($units, $period1Schedules, $period1StartDate, $period1EndDate);
         $period2Data = $this->formatMatrixData($units, $period2Schedules, $period2StartDate, $period2EndDate);
-        
+
         // Get unassigned units and drivers
         $assignedUnitIds = collect($period1Data)->merge($period2Data)->pluck('unit.id')->unique()->toArray();
         $assignedDriverIds = collect($period1Data)->merge($period2Data)->pluck('driver.id')->unique()->toArray();
-        
+
         $unassignedUnits = $units->whereNotIn('id', $assignedUnitIds)->values();
         $unassignedDrivers = $drivers->whereNotIn('id', $assignedDriverIds)->values();
-        
+
         return response()->json([
             'success' => true,
             'period1' => $period1Data,
@@ -1095,7 +1094,7 @@ class ScheduleController extends Controller
 
     /**
      * Save or delete an individual schedule based on checkbox state
-     * 
+     *
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
@@ -1115,7 +1114,7 @@ class ScheduleController extends Controller
         \Log::info('Individual Schedule Save Request', $validated);
 
         try {
-            // Check if schedule exists for this unit, date and shift
+            // Check if schedule exists for this unit, date, and shift
             $schedule = Schedule::where('unit_id', $validated['unit_id'])
                 ->where('schedule_date', $validated['date'])
                 ->where('shift', $validated['shift'])
@@ -1137,14 +1136,14 @@ class ScheduleController extends Controller
                 }
 
                 // Create the schedule
-                $schedule = new Schedule();
-                $schedule->unit_id = $validated['unit_id'];
-                $schedule->driver_id = $validated['driver_id'];
-                $schedule->route_id = $validated['route_id'];
-                $schedule->shift = $validated['shift'];
-                $schedule->date = $validated['date'];
-                $schedule->status = 'active';
-                $schedule->save();
+                $schedule = Schedule::create([
+                    'unit_id' => $validated['unit_id'],
+                    'route_id' => $validated['route_id'],
+                    'driver_id' => $validated['driver_id'],
+                    'schedule_date' => $validated['date'],
+                    'shift' => $validated['shift'],
+                    'status' => 'scheduled',
+                ]);
 
                 return response()->json([
                     'success' => true,
@@ -1152,11 +1151,11 @@ class ScheduleController extends Controller
                     'message' => 'Schedule created successfully',
                     'schedule' => $schedule
                 ]);
-            } 
+            }
             // If checkbox is unchecked and schedule exists, delete it
             else if (!$validated['checked'] && $schedule) {
                 $schedule->delete();
-                
+
                 return response()->json([
                     'success' => true,
                     'checked' => false,
@@ -1176,189 +1175,12 @@ class ScheduleController extends Controller
                 'error' => $e->getMessage(),
                 'data' => $validated
             ]);
-            
+
             return response()->json([
                 'success' => false,
                 'checked' => $schedule ? true : false,
                 'message' => 'Error: ' . $e->getMessage()
             ], 500);
-        }
-    }
-
-    /**
-     * Store a newly created schedule.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function storeSchedule(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'unit_id' => 'required|exists:units,id',
-                'driver_id' => 'required|exists:drivers,id',
-                'route_id' => 'required|exists:routes,id',
-                'shift' => 'required|in:pagi,siang',
-                'date' => 'required|date',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => $validator->errors()->first()
-                ]);
-            }
-
-            // Check if a schedule already exists for this unit, date and shift
-            $existingUnitSchedule = Schedule::where('unit_id', $request->unit_id)
-                ->where('date', $request->date)
-                ->where('shift', $request->shift)
-                ->first();
-
-            if ($existingUnitSchedule) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unit already has a schedule for this date and shift'
-                ]);
-            }
-
-            // Check if a schedule already exists for this driver, date and shift
-            $existingDriverSchedule = Schedule::where('driver_id', $request->driver_id)
-                ->where('date', $request->date)
-                ->where('shift', $request->shift)
-                ->first();
-
-            if ($existingDriverSchedule) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Driver already has a schedule for this date and shift'
-                ]);
-            }
-
-            // Create the schedule
-            $schedule = new Schedule();
-            $schedule->unit_id = $request->unit_id;
-            $schedule->driver_id = $request->driver_id;
-            $schedule->route_id = $request->route_id;
-            $schedule->shift = $request->shift;
-            $schedule->date = $request->date;
-            $schedule->status = 'active';
-            $schedule->save();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Schedule created successfully',
-                'schedule' => $schedule
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create schedule: ' . $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * Update the status of a schedule.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function updateStatus(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'id' => 'required|exists:schedules,id',
-                'checked' => 'required|boolean',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => $validator->errors()->first()
-                ]);
-            }
-
-            $schedule = Schedule::findOrFail($request->id);
-            $schedule->status = $request->checked ? 'active' : 'inactive';
-            $schedule->save();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Schedule status updated successfully',
-                'schedule' => $schedule
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update schedule status: ' . $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * Get list of units for assignment.
-     *
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function getUnitsList()
-    {
-        try {
-            $units = Unit::where('status', 'active')->get();
-            
-            return response()->json([
-                'success' => true,
-                'units' => $units
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get units: ' . $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * Get list of drivers for assignment.
-     *
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function getDriversList()
-    {
-        try {
-            $drivers = Driver::where('status', 'active')->get();
-            
-            return response()->json([
-                'success' => true,
-                'drivers' => $drivers
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get drivers: ' . $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * Get list of routes for assignment.
-     *
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function getRoutesList()
-    {
-        try {
-            $routes = Route::where('status', 'active')->get();
-            
-            return response()->json([
-                'success' => true,
-                'routes' => $routes
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get routes: ' . $e->getMessage()
-            ]);
         }
     }
 }
