@@ -20,7 +20,29 @@ class DriverController extends Controller
      */
     public function index(Request $request): View|Application|Factory|JsonResponse|string
     {
-        $drivers = Driver::with(['units', 'routes'])->paginate(10);
+        $query = Driver::with(['units', 'routes']);
+
+        // Filter by name
+        if ($request->has('name') && !empty($request->name)) {
+            $query->where('name', 'like', '%' . $request->name . '%');
+        }
+
+        // Filter by KTP
+        if ($request->has('ktp') && !empty($request->ktp)) {
+            $query->where('ktp', 'like', '%' . $request->ktp . '%');
+        }
+
+        // Filter by type
+        if ($request->has('type') && !empty($request->type)) {
+            $query->where('type', $request->type);
+        }
+
+        // Filter by status
+        if ($request->has('status') && !empty($request->status)) {
+            $query->where('status', $request->status);
+        }
+
+        $drivers = $query->paginate(10)->withQueryString();
 
         if ($request->ajax()) {
             if ($request->header('X-Requested-With') === 'XMLHttpRequest') {

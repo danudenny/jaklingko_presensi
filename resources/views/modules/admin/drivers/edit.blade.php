@@ -33,6 +33,15 @@
                     </div>
 
                     <div class="mb-4">
+                        <x-input-label for="type" value="Type" />
+                        <select id="type" name="type" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm block mt-1 w-full">
+                            <option value="batangan" {{ old('type', $driver->type) == 'batangan' ? 'selected' : '' }}>Batangan</option>
+                            <option value="cadangan" {{ old('type', $driver->type) == 'cadangan' ? 'selected' : '' }}>Cadangan</option>
+                        </select>
+                        <x-input-error :message="$errors->first('type')" class="mt-2" />
+                    </div>
+
+                    <div class="mb-4">
                         <x-input-label for="ktp" value="No KTP" />
                         <x-text-input id="ktp" class="block mt-1 w-full" type="text" name="ktp" :value="old('ktp', $driver->ktp)" required />
                         <x-input-error :message="$errors->first('ktp')" class="mt-2" />
@@ -65,21 +74,6 @@
                     </div>
 
                     <div class="mb-4">
-                        <x-input-label for="email" value="Email" />
-                        <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email', $driver->email)" />
-                        <x-input-error :message="$errors->first('email')" class="mt-2" />
-                    </div>
-
-                    <div class="mb-4">
-                        <x-input-label for="type" value="Type" />
-                        <select id="type" name="type" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm block mt-1 w-full">
-                            <option value="batangan" {{ old('type', $driver->type) == 'batangan' ? 'selected' : '' }}>Batangan</option>
-                            <option value="cadangan" {{ old('type', $driver->type) == 'cadangan' ? 'selected' : '' }}>Cadangan</option>
-                        </select>
-                        <x-input-error :message="$errors->first('type')" class="mt-2" />
-                    </div>
-
-                    <div class="mb-4">
                         <x-input-label for="status" value="Status" />
                         <select id="status" name="status" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm block mt-1 w-full">
                             <option value="aktif" {{ old('status', $driver->status) == 'aktif' ? 'selected' : '' }}>Aktif</option>
@@ -91,46 +85,68 @@
 
                 <!-- Right Column: Route and Unit Selection -->
                 <div x-data="routeUnitSelector()">
-                    <h2 class="text-lg font-medium text-gray-900 mb-4">Route & Unit Assignment</h2>
-                    
+                    <h2 class="text-lg font-medium text-gray-900 mb-4">Penugasan Rute & Unit</h2>
+
                     <!-- Routes Selection -->
-                    <div class="mb-4">
-                        <x-input-label for="routes" :value="__('Routes')" />
-                        
-                        <div class="border border-gray-300 rounded-md p-4 max-h-60 overflow-y-auto">
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between mb-2">
+                            <x-input-label for="routes" value="Rute" class="text-base font-medium" />
+                            <span class="text-xs text-gray-500" x-text="selectedRoutes.length + ' rute dipilih'"></span>
+                        </div>
+
+                        <div class="border border-gray-300 rounded-md p-4 max-h-60 overflow-y-auto bg-white">
                             @foreach($routes as $route)
-                                <div class="flex items-center mb-2">
-                                    <input type="checkbox" id="route_{{ $route->id }}" name="routes[]" value="{{ $route->id }}" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 route-checkbox" @change="handleRouteChange($event)" {{ $driver->routes->contains($route->id) ? 'checked' : '' }}>
-                                    <label for="route_{{ $route->id }}" class="ml-2 text-sm text-gray-700">{{ $route->route_number }} - {{ $route->name }}</label>
+                                <div class="flex items-center mb-3 p-2 hover:bg-gray-50 rounded border border-gray-100">
+                                    <input type="checkbox" id="route_{{ $route->id }}" name="routes[]" value="{{ $route->id }}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 route-checkbox" @change="handleRouteChange($event)" {{ $driver->routes->contains($route->id) ? 'checked' : '' }}>
+                                    <label for="route_{{ $route->id }}" class="ml-3 text-sm text-gray-700 font-medium">{{ $route->route_number }} - {{ $route->name }}</label>
                                     <span class="ml-auto px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $route->status === 'aktif' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
                                         {{ ucfirst($route->status) }}
                                     </span>
                                 </div>
                             @endforeach
                         </div>
+                        <div class="mt-1 text-xs text-gray-500">
+                            <span x-show="driver_type === 'batangan'" class="text-amber-600">
+                                <i class="fas fa-exclamation-triangle mr-1"></i> Driver batangan hanya dapat ditugaskan ke 1 rute
+                            </span>
+                        </div>
                         <x-input-error :message="$errors->first('routes')" class="mt-2" />
                     </div>
-                    
+
                     <!-- Units Selection -->
                     <div class="mb-4">
-                        <x-input-label for="units" :value="__('Units')" />
-                        
-                        <div class="border border-gray-300 rounded-md p-4 max-h-60 overflow-y-auto">
+                        <div class="flex items-center justify-between mb-2">
+                            <x-input-label for="units" value="Unit" class="text-base font-medium" />
+                            <span class="text-xs text-gray-500" x-text="selectedUnits.length + ' unit dipilih'"></span>
+                        </div>
+
+                        <div class="border border-gray-300 rounded-md p-4 max-h-72 overflow-y-auto bg-white">
                             <div x-show="loadingUnits" class="flex justify-center py-4">
-                                <i class="fas fa-spinner fa-spin"></i>
+                                <i class="fas fa-spinner fa-spin text-indigo-500"></i>
+                                <span class="ml-2 text-sm text-gray-600">Memuat unit...</span>
                             </div>
-                            
-                            <div x-show="!loadingUnits && availableUnits.length === 0" class="text-sm text-gray-500 py-2">
-                                Pilih rute terlebih dahulu, lalu pilih unit dari unit yang tersedia.
+
+                            <div x-show="!loadingUnits && availableUnits.length === 0" class="text-sm text-gray-500 py-4 text-center">
+                                <i class="fas fa-info-circle mr-1 text-blue-500"></i>
+                                Pilih rute terlebih dahulu untuk melihat unit yang tersedia
                             </div>
-                            
-                            <template x-for="unit in availableUnits" :key="unit.id">
-                                <div class="flex items-center unit-item">
-                                    <input type="checkbox" :id="'unit_' + unit.id" name="units[]" :value="unit.id" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 unit-checkbox" @change="selectedUnits = [...document.querySelectorAll('.unit-checkbox:checked')].map(cb => cb.value)" :checked="selectedUnits.includes(unit.id.toString())">
-                                    <label :for="'unit_' + unit.id" class="ml-2 text-sm text-gray-700" x-text="unit.unit_number + (unit.plate_number ? ' - ' + unit.plate_number : '')"></label>
-                                    <span class="ml-auto px-2 inline-flex text-xs leading-5 font-semibold rounded-full" :class="unit.status === 'aktif' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'" x-text="unit.status.charAt(0).toUpperCase() + unit.status.slice(1)"></span>
-                                </div>
-                            </template>
+
+                            <div x-show="!loadingUnits && availableUnits.length > 0" class="mb-3">
+                                <input type="text" x-model="unitSearch" placeholder="Cari unit..." class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+
+                            <div x-show="!loadingUnits && availableUnits.length > 0" class="grid grid-cols-1 gap-2">
+                                <template x-for="unit in filteredUnits" :key="unit.id">
+                                    <div class="flex items-center p-2 hover:bg-gray-50 rounded border border-gray-100">
+                                        <input type="checkbox" :id="'unit_' + unit.id" name="units[]" :value="unit.id" class="h-4 w-4 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 unit-checkbox" @change="handleUnitChange" :checked="selectedUnits.includes(unit.id.toString())">
+                                        <label :for="'unit_' + unit.id" class="ml-3 text-sm text-gray-700 font-medium cursor-pointer flex-grow">
+                                            <div class="font-medium" x-text="unit.unit_number"></div>
+                                            <div class="text-xs text-gray-500" x-text="unit.plate_number || '-'"></div>
+                                        </label>
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full" :class="unit.status === 'aktif' ? 'bg-green-100 text-green-800' : (unit.status === 'nonaktif' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800')" x-text="unit.status.charAt(0).toUpperCase() + unit.status.slice(1)"></span>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
                         <x-input-error :message="$errors->first('units')" class="mt-2" />
                     </div>
@@ -155,15 +171,17 @@
 <script>
     function routeUnitSelector() {
         return {
-            search: '', 
+            search: '',
+            unitSearch: '',
+            driver_type: '{{ $driver->type }}',
             selectedRoutes: @json($driver->routes->pluck('id')->map(fn($id) => (string) $id)),
             availableUnits: @json($routeUnits),
             selectedUnits: @json($driver->units->pluck('id')->map(fn($id) => (string) $id)),
             loadingUnits: false,
-            
+
             async loadUnitsForRoute(routeId) {
                 if (!routeId) return;
-                
+
                 this.loadingUnits = true;
                 try {
                     const url = '/drivers/get-units-for-route?route_id=' + routeId;
@@ -174,13 +192,13 @@
                             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                         }
                     });
-                    
+
                     if (!response.ok) {
                         throw new Error(`HTTP error! Status: ${response.status}`);
                     }
-                    
+
                     const data = await response.json();
-                    
+
                     if (data.success) {
                         // Add units from this route to available units
                         this.availableUnits = [...this.availableUnits, ...data.data];
@@ -190,55 +208,102 @@
                         );
                     } else {
                         // Handle error silently
-                        this.availableUnits = [];
+                        console.error('Error loading units:', data);
                     }
                 } catch (error) {
-                    // Reset units on error
-                    this.availableUnits = [];
+                    console.error('Error loading units:', error);
                 } finally {
                     this.loadingUnits = false;
                 }
             },
-            
+
             handleRouteChange(event) {
-                const checkbox = event.target;
-                const routeId = checkbox.value;
-                
-                if (checkbox.checked) {
-                    // Check if driver is batangan and already has a route selected
-                    if (document.getElementById('type').value === 'batangan' && this.selectedRoutes.length > 0) {
-                        // Uncheck all other routes
-                        document.querySelectorAll('.route-checkbox').forEach(cb => {
-                            if (cb !== checkbox) {
-                                cb.checked = false;
+                const routeId = event.target.value;
+                const isChecked = event.target.checked;
+
+                // Update selectedRoutes array
+                if (isChecked) {
+                    // For batangan drivers, only allow one route
+                    if (this.driver_type === 'batangan' && this.selectedRoutes.length > 0) {
+                        // Uncheck all other route checkboxes
+                        document.querySelectorAll('.route-checkbox:checked').forEach(checkbox => {
+                            if (checkbox.value !== routeId) {
+                                checkbox.checked = false;
                             }
                         });
+                        // Clear selectedRoutes array
                         this.selectedRoutes = [routeId];
-                        this.availableUnits = [];
                     } else {
                         this.selectedRoutes.push(routeId);
                     }
-                    
+
                     // Load units for this route
                     this.loadUnitsForRoute(routeId);
                 } else {
-                    // Remove route from selected routes
+                    // Remove from selectedRoutes
                     this.selectedRoutes = this.selectedRoutes.filter(id => id !== routeId);
-                    
-                    // Reload all units for remaining selected routes
+
+                    // Remove units associated with this route from availableUnits
+                    // This is a simplified approach; in a real app, you'd need to track which units came from which route
+                    // For now, we'll just reload all units for the remaining selected routes
                     this.availableUnits = [];
-                    this.selectedRoutes.forEach(id => this.loadUnitsForRoute(id));
+                    if (this.selectedRoutes.length > 0) {
+                        this.selectedRoutes.forEach(id => this.loadUnitsForRoute(id));
+                    }
                 }
             },
-            
-            init() {
-                // Load units for pre-selected routes
-                if (this.selectedRoutes.length > 0) {
-                    this.selectedRoutes.forEach(id => this.loadUnitsForRoute(id));
+
+            handleUnitChange(event) {
+                const unitId = event.target.value;
+                const isChecked = event.target.checked;
+
+                // Update selectedUnits array
+                if (isChecked) {
+                    if (!this.selectedUnits.includes(unitId)) {
+                        this.selectedUnits.push(unitId);
+                    }
+                } else {
+                    this.selectedUnits = this.selectedUnits.filter(id => id !== unitId);
                 }
+            },
+
+            get filteredUnits() {
+                return this.availableUnits.filter(unit => {
+                    return unit.unit_number.toLowerCase().includes(this.unitSearch.toLowerCase()) ||
+                           (unit.plate_number && unit.plate_number.toLowerCase().includes(this.unitSearch.toLowerCase()));
+                });
             }
         }
     }
+
+    // Type change handler
+    document.addEventListener('DOMContentLoaded', function() {
+        const typeSelect = document.getElementById('type');
+        if (typeSelect) {
+            typeSelect.addEventListener('change', function() {
+                const routeSelector = document.querySelector('[x-data="routeUnitSelector()"]').__x.$data;
+                routeSelector.driver_type = this.value;
+
+                // If changing to batangan and multiple routes are selected, keep only the first one
+                if (this.value === 'batangan' && routeSelector.selectedRoutes.length > 1) {
+                    const firstRouteId = routeSelector.selectedRoutes[0];
+
+                    // Uncheck all route checkboxes except the first one
+                    document.querySelectorAll('.route-checkbox:checked').forEach(checkbox => {
+                        if (checkbox.value !== firstRouteId) {
+                            checkbox.checked = false;
+                        }
+                    });
+
+                    // Update selectedRoutes array
+                    routeSelector.selectedRoutes = [firstRouteId];
+
+                    // Show warning message
+                    alert('Driver batangan hanya dapat ditugaskan ke 1 rute. Hanya rute pertama yang akan dipertahankan.');
+                }
+            });
+        }
+    });
 </script>
 @endpush
 

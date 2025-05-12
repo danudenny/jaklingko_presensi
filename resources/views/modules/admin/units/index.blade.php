@@ -931,30 +931,40 @@
 
         // Unit search functionality
         if (unitSearch) {
-            unitSearch.addEventListener('input', filterUnits);
+            unitSearch.addEventListener('keyup', function() {
+                const searchTerm = this.value.toLowerCase();
+                const unitRows = document.querySelectorAll('.unit-row');
+                
+                unitRows.forEach(row => {
+                    const unitNumber = row.getAttribute('data-unit-number');
+                    const plateNumber = row.getAttribute('data-plate-number');
+                    const status = row.getAttribute('data-status');
+                    
+                    if (unitNumber.includes(searchTerm) || 
+                        plateNumber.includes(searchTerm) || 
+                        status.includes(searchTerm)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            });
         }
 
         if (statusFilter) {
-            statusFilter.addEventListener('change', filterUnits);
-        }
+            statusFilter.addEventListener('change', function() {
+                const statusValue = this.value;
+                const unitRows = document.querySelectorAll('.unit-row');
 
-        function filterUnits() {
-            const searchTerm = unitSearch ? unitSearch.value.toLowerCase() : '';
-            const statusValue = statusFilter ? statusFilter.value : '';
+                unitRows.forEach(row => {
+                    const status = row.getAttribute('data-status');
 
-            unitRows.forEach(row => {
-                const unitNumber = row.querySelector('.unit-number').textContent.toLowerCase();
-                const plateNumber = row.querySelector('.plate-number').textContent.toLowerCase();
-                const status = row.querySelector('.unit-status').dataset.status;
-
-                const matchesSearch = unitNumber.includes(searchTerm) || plateNumber.includes(searchTerm);
-                const matchesStatus = statusValue === '' || status === statusValue;
-
-                if (matchesSearch && matchesStatus) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
+                    if (statusValue === '' || status === statusValue) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
             });
         }
 
