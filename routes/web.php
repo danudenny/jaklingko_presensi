@@ -71,7 +71,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('unit-problems/photos/{id}', [UnitProblemController::class, 'deletePhoto'])->name('unit-problems.delete-photo');
     Route::get('unit-problems/{unitProblem}/convert-to-maintenance', [UnitProblemController::class, 'convertToMaintenance'])
         ->name('unit-problems.convert-to-maintenance');
-    
+
     // Maintenance Log Routes
     Route::resource('maintenance-logs', MaintenanceLogController::class);
     Route::get('maintenance-logs/drivers-for-unit/{unitId}', [MaintenanceLogController::class, 'getDriversForUnit']);
@@ -80,7 +80,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('maintenance-logs/photos/{id}', [MaintenanceLogController::class, 'deletePhoto']);
     Route::patch('maintenance-logs/{maintenanceLog}/update-status', [MaintenanceLogController::class, 'updateStatus'])
         ->name('maintenance-logs.update-status');
-    
+
     // Kilometer Report Routes
     Route::get('kilometer-reports', [KilometerReportController::class, 'index'])->name('kilometer-reports.index');
     Route::post('kilometer-reports', [KilometerReportController::class, 'store'])->name('kilometer-reports.store');
@@ -126,15 +126,17 @@ Route::middleware('auth')->group(function () {
     Route::get('/schedules/matrix-data', [ScheduleController::class, 'getMatrixData'])->name('schedules.matrix-data');
     Route::post('/schedules/save-matrix', [ScheduleController::class, 'saveMatrix'])->name('schedules.save-matrix');
     Route::post('/schedules/save-individual', [ScheduleController::class, 'saveIndividualSchedule'])->name('schedules.save-individual');
+    Route::post('/schedules/save-individual-batch', [ScheduleController::class, 'saveIndividualBatch'])->name('schedules.save-individual-batch');
     Route::post('/schedules/update-status', [ScheduleController::class, 'updateStatus'])->name('schedules.update-status');
-    Route::post('/schedules/store-schedule', [ScheduleController::class, 'storeSchedule'])->name('schedules.store');
-    Route::get('/schedules/routes/{route}/units', [ScheduleController::class, 'getUnitsByRoute'])->name('api.routes.units');
-    Route::get('/schedules/units/{unit}/drivers', [ScheduleController::class, 'getDriversByUnit'])->name('api.units.drivers');
-    Route::get('/schedules/available-drivers', [ScheduleController::class, 'getAvailableDrivers'])->name('api.available-drivers');
-    Route::get('/schedules/driver/{driver}/schedule-check', [ScheduleController::class, 'checkDriverSchedule'])->name('api.driver.schedule-check');
-    Route::get('/units/list', [ScheduleController::class, 'getUnitsList'])->name('units.list');
-    Route::get('/drivers/list', [ScheduleController::class, 'getDriversList'])->name('drivers.list');
-    Route::get('/routes/list', [ScheduleController::class, 'getRoutesList'])->name('routes.list');
+    Route::post('/schedules/store-schedule', [ScheduleController::class, 'storeSchedule'])->name('schedule.store');
+    Route::get('/api/schedules/routes/{route}/units', [ScheduleController::class, 'getUnitsByRoute'])->name('api.routes.units');
+    Route::get('/api/schedules/units/{unit}/drivers', [ScheduleController::class, 'getDriversByUnit'])->name('api.units.drivers');
+    Route::get('/api/schedules/available-drivers', [ScheduleController::class, 'getAvailableDrivers'])->name('api.available-drivers');
+    Route::get('/api/schedules/driver/{driver}/schedule-check', [ScheduleController::class, 'checkDriverSchedule'])->name('api.driver.schedule-check');
+    Route::get('/api/schedules/qualified-drivers/{route}/{unit}', [ScheduleController::class, 'getQualifiedDrivers'])->name('api.qualified-drivers');
+    Route::get('/api/units/list', [ScheduleController::class, 'getUnitsList'])->name('units.list');
+    Route::get('/api/drivers/list', [ScheduleController::class, 'getDriversList'])->name('drivers.list');
+    Route::get('/api/routes/list', [ScheduleController::class, 'getRoutesList'])->name('routes.list');
     Route::resource('schedules', ScheduleController::class);
 
     // Leave Request routes

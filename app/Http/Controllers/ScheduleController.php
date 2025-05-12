@@ -1069,7 +1069,7 @@ class ScheduleController extends Controller
 
                     // Create the schedule
                     Schedule::create([
-                        'unit_id' => $unit->id,
+                        'unit_id' => $item['unit_id'],
                         'route_id' => $route->id,
                         'driver_id' => $driver->id,
                         'schedule_date' => $item['date'],
@@ -1136,7 +1136,7 @@ class ScheduleController extends Controller
                 }
 
                 // Create the schedule
-                $schedule = Schedule::create([
+                $newSchedule = Schedule::create([
                     'unit_id' => $validated['unit_id'],
                     'route_id' => $validated['route_id'],
                     'driver_id' => $validated['driver_id'],
@@ -1149,7 +1149,7 @@ class ScheduleController extends Controller
                     'success' => true,
                     'checked' => true,
                     'message' => 'Schedule created successfully',
-                    'schedule' => $schedule
+                    'schedule' => $newSchedule
                 ]);
             }
             // If checkbox is unchecked and schedule exists, delete it
@@ -1182,5 +1182,194 @@ class ScheduleController extends Controller
                 'message' => 'Error: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Save a batch of individual schedules
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function saveIndividualBatch(Request $request)
+    {
+        // Validate the request
+        $validated = $request->validate([
+            'assignments' => 'required|array',
+            'assignments.*.date' => 'required|date',
+            'assignments.*.unit_id' => 'required|exists:units,id',
+            'assignments.*.driver_id' => 'required|exists:drivers,id',
+            'assignments.*.route_id' => 'required|exists:routes,id',
+            'assignments.*.shift' => 'required|in:pagi,siang',
+        ]);
+
+        // Log the request for debugging
+        \Log::info('Batch Schedule Save Request', $validated);
+
+        $results = [];
+        $success = true;
+
+        try {
+            // Process each assignment in the batch
+            foreach ($validated['assignments'] as $index => $assignment) {
+                // Check if schedule exists for this unit, date, and shift
+                $schedule = Schedule::where('unit_id', $assignment['unit_id'])
+                    ->where('schedule_date', $assignment['date'])
+                    ->where('shift', $assignment['shift'])
+                    ->first();
+
+                // If schedule already exists, skip or return error
+                if ($schedule) {
+                    $results[] = [
+                        'index' => $index,
+                        'success' => false,
+                        'message' => 'Schedule already exists for this unit, date, and shift',
+                        'data' => $assignment
+                    ];
+                    $success = false;
+                    continue;
+                }
+
+                // Check if unit is in renops for this date (should not be scheduled)
+                $inRenops = UnitRenops::where('unit_id', $assignment['unit_id'])
+                    ->whereDate('date', $assignment['date'])
+                    ->exists();
+
+                if ($inRenops) {
+                    $results[] = [
+                        'index' => $index,
+                        'success' => false,
+                        'message' => 'Unit is in renops for this date and cannot be scheduled',
+                        'data' => $assignment
+                    ];
+                    $success = false;
+                    continue;
+                }
+
+                // Create the schedule
+                $newSchedule = Schedule::create([
+                    'unit_id' => $assignment['unit_id'],
+                    'route_id' => $assignment['route_id'],
+                    'driver_id' => $assignment['driver_id'],
+                    'schedule_date' => $assignment['date'],
+                    'shift' => $assignment['shift'],
+                    'status' => 'scheduled',
+                ]);
+
+                $results[] = [
+                    'index' => $index,
+                    'success' => true,
+                    'message' => 'Schedule created successfully',
+                    'schedule_id' => $newSchedule->id,
+                    'data' => $assignment
+                ];
+            }
+
+            return response()->json([
+                'success' => $success,
+                'message' => $success ? 'All schedules created successfully' : 'Some schedules could not be created',
+                'results' => $results
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error saving batch schedules', [
+                'error' => $e->getMessage(),
+                'data' => $validated
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage(),
+                'results' => $results
+            ], 500);
+        }
+    }
+
+    /**
+     * Get drivers qualified for a specific route and unit combination
+     * 
+     * @param int $routeId
+     * @param int $unitId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getQualifiedDrivers($routeId, $unitId)
+    {
+        // Get drivers qualified for both the route and unit
+        $qualifiedDrivers = Driver::whereHas('routes', function($query) use ($routeId) {
+                $query->where('routes.id', $routeId);
+            })
+            ->whereHas('units', function($query) use ($unitId) {
+                $query->where('units.id', $unitId);
+            })
+            ->with(['routes', 'units'])
+            ->get();
+        
+        // Get drivers qualified for the route only
+        $routeOnlyDrivers = Driver::whereHas('routes', function($query) use ($routeId) {
+                $query->where('routes.id', $routeId);
+            })
+            ->whereDoesntHave('units', function($query) use ($unitId) {
+                $query->where('units.id', $unitId);
+            })
+            ->with(['routes', 'units'])
+            ->get();
+        
+        // Get drivers qualified for the unit only
+        $unitOnlyDrivers = Driver::whereHas('units', function($query) use ($unitId) {
+                $query->where('units.id', $unitId);
+            })
+            ->whereDoesntHave('routes', function($query) use ($routeId) {
+                $query->where('routes.id', $routeId);
+            })
+            ->with(['routes', 'units'])
+            ->get();
+        
+        // Get unqualified drivers (neither route nor unit)
+        $unqualifiedDrivers = Driver::whereDoesntHave('routes', function($query) use ($routeId) {
+                $query->where('routes.id', $routeId);
+            })
+            ->whereDoesntHave('units', function($query) use ($unitId) {
+                $query->where('units.id', $unitId);
+            })
+            ->with(['routes', 'units'])
+            ->get();
+        
+        return response()->json([
+            'qualified' => $qualifiedDrivers,
+            'routeOnly' => $routeOnlyDrivers,
+            'unitOnly' => $unitOnlyDrivers,
+            'unqualified' => $unqualifiedDrivers
+        ]);
+    }
+
+    /**
+     * Get a list of all routes for dropdown selection
+     * 
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getRoutesList()
+    {
+        $routes = Route::orderBy('route_number')->get();
+        return response()->json($routes);
+    }
+
+    /**
+     * Get a list of all units for dropdown selection
+     * 
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getUnitsList()
+    {
+        $units = Unit::orderBy('unit_number')->get();
+        return response()->json($units);
+    }
+
+    /**
+     * Get a list of all drivers for dropdown selection
+     * 
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getDriversList()
+    {
+        $drivers = Driver::with(['routes', 'units'])->orderBy('name')->get();
+        return response()->json($drivers);
     }
 }

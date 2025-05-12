@@ -37,9 +37,6 @@
 <div class="container mx-auto px-4 py-6">
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold text-gray-800">Rencana Operasi Unit</h1>
-        <a href="{{ route('renops.create') }}" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded create-button">
-            <i class="fas fa-plus mr-2"></i> Buat Baru
-        </a>
     </div>
 
     <div class="bg-white rounded-lg shadow-md p-6 mb-6">
