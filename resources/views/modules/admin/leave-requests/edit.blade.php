@@ -17,14 +17,14 @@
             font-weight: 500;
             color: #4F46E5;
         }
-        
+
         .flatpickr-calendar.inline {
             box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
             border-radius: 0.5rem;
             border: 1px solid #E5E7EB;
             margin-top: 0.5rem;
         }
-        
+
         .date-preview {
             display: flex;
             align-items: center;
@@ -55,7 +55,7 @@
         <form action="{{ route('leave-requests.update', $leaveRequest) }}" method="POST" enctype="multipart/form-data">
             @csrf
             @method('PUT')
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Driver -->
                 <div>
@@ -78,10 +78,10 @@
                     <label for="type" class="block text-sm font-medium text-gray-700">Tipe Cuti</label>
                     <select id="type" name="type" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md @error('type') border-red-500 @enderror">
                         <option value="">Pilih Tipe Cuti</option>
-                        <option value="planned" {{ old('type', $leaveRequest->type) == 'planned' ? 'selected' : '' }}>Terencana</option>
-                        <option value="sick" {{ old('type', $leaveRequest->type) == 'sick' ? 'selected' : '' }}>Sakit</option>
-                        <option value="emergency" {{ old('type', $leaveRequest->type) == 'emergency' ? 'selected' : '' }}>Darurat</option>
-                        <option value="other" {{ old('type', $leaveRequest->type) == 'other' ? 'selected' : '' }}>Lainnya</option>
+                        <option value="terencana" {{ old('type', $leaveRequest->type) == 'terencana' ? 'selected' : '' }}>Terencana</option>
+                        <option value="sakit" {{ old('type', $leaveRequest->type) == 'sakit' ? 'selected' : '' }}>Sakit</option>
+                        <option value="darurat" {{ old('type', $leaveRequest->type) == 'darurat' ? 'selected' : '' }}>Darurat</option>
+                        <option value="lainnya" {{ old('type', $leaveRequest->type) == 'lainnya' ? 'selected' : '' }}>Lainnya</option>
                     </select>
                     @error('type')
                         <p class="mt-1 text-sm text-red-500">{{ $message }}</p>
@@ -103,7 +103,7 @@
                                     <i class="fas fa-calendar text-gray-400"></i>
                                 </div>
                             </div>
-                            
+
                             <div class="date-preview mt-2">
                                 <div>
                                     <span class="text-sm text-gray-500">Dari:</span>
@@ -121,18 +121,18 @@
                                     </span>
                                 </div>
                             </div>
-                            
+
                             @error('start_date')
                                 <p class="mt-1 text-sm text-red-500">{{ $message }}</p>
                             @enderror
                             @error('end_date')
                                 <p class="mt-1 text-sm text-red-500">{{ $message }}</p>
                             @enderror
-                            
+
                             <!-- Inline Calendar -->
                             <div id="inline-calendar" class="mt-3"></div>
                         </div>
-                        
+
                         <!-- Documentation Image Upload -->
                         <div>
                             <label for="documentation" class="block text-sm font-medium text-gray-700">Dokumentasi (Opsional)</label>
@@ -225,22 +225,22 @@
                 if (selectedDates.length === 2) {
                     const startDate = selectedDates[0];
                     const endDate = selectedDates[1];
-                    
+
                     // Update hidden inputs
                     document.getElementById('start_date').value = formatDate(startDate);
                     document.getElementById('end_date').value = formatDate(endDate);
-                    
+
                     // Update display
                     document.getElementById('start-date-display').textContent = formatDisplayDate(startDate);
                     document.getElementById('end-date-display').textContent = formatDisplayDate(endDate);
-                    
+
                     // Calculate days
                     const days = calculateDays(startDate, endDate);
                     document.getElementById('days-count').textContent = days;
                 }
             }
         });
-        
+
         // Initialize inline calendar
         flatpickr("#inline-calendar", {
             inline: true,
@@ -248,7 +248,7 @@
             dateFormat: "Y-m-d",
             minDate: "today",
             defaultDate: [
-                "{{ $leaveRequest->start_date->format('Y-m-d') }}", 
+                "{{ $leaveRequest->start_date->format('Y-m-d') }}",
                 "{{ $leaveRequest->end_date->format('Y-m-d') }}"
             ],
             onChange: function(selectedDates, dateStr, instance) {
@@ -258,23 +258,23 @@
                 }
             }
         });
-        
+
         // Initialize with any existing values
         const startDateValue = document.getElementById('start_date').value;
         const endDateValue = document.getElementById('end_date').value;
-        
+
         if (startDateValue && endDateValue) {
             const startDate = new Date(startDateValue);
             const endDate = new Date(endDateValue);
-            
+
             dateRangePicker.setDate([startDate, endDate]);
         }
-        
+
         // Image preview
         const documentationInput = document.getElementById('documentation');
         const imagePreview = document.getElementById('image-preview');
         const previewContainer = document.getElementById('preview-container');
-        
+
         documentationInput.addEventListener('change', function() {
             const file = this.files[0];
             if (file) {
@@ -288,7 +288,7 @@
                 previewContainer.classList.add('hidden');
             }
         });
-        
+
         // Helper functions
         function formatDate(date) {
             const year = date.getFullYear();
@@ -296,12 +296,12 @@
             const day = String(date.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         }
-        
+
         function formatDisplayDate(date) {
             const options = { day: 'numeric', month: 'short', year: 'numeric' };
             return date.toLocaleDateString('id-ID', options);
         }
-        
+
         function calculateDays(startDate, endDate) {
             const diffTime = Math.abs(endDate - startDate);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end days

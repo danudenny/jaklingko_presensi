@@ -105,7 +105,7 @@
                 </tbody>
             </table>
         </div>
-        
+
         <!-- Pagination Links -->
         <div class="px-6 py-4">
             {{ $drivers->links() }}

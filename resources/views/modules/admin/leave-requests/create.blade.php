@@ -17,14 +17,14 @@
             font-weight: 500;
             color: #4F46E5;
         }
-        
+
         .flatpickr-calendar.inline {
             box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
             border-radius: 0.5rem;
             border: 1px solid #E5E7EB;
             margin-top: 0.5rem;
         }
-        
+
         .date-preview {
             display: flex;
             align-items: center;
@@ -34,7 +34,7 @@
             border-radius: 0.375rem;
             border: 1px solid #E5E7EB;
         }
-        
+
         .date-picker-container {
             position: relative;
         }
@@ -58,7 +58,7 @@
     <x-card>
         <form action="{{ route('leave-requests.store') }}" method="POST" enctype="multipart/form-data">
             @csrf
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Driver -->
                 <div>
@@ -81,10 +81,10 @@
                     <label for="type" class="block text-sm font-medium text-gray-700">Tipe Cuti</label>
                     <select id="type" name="type" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md @error('type') border-red-500 @enderror">
                         <option value="">Pilih Tipe Cuti</option>
-                        <option value="planned" {{ old('type') == 'planned' ? 'selected' : '' }}>Terencana</option>
-                        <option value="sick" {{ old('type') == 'sick' ? 'selected' : '' }}>Sakit</option>
-                        <option value="emergency" {{ old('type') == 'emergency' ? 'selected' : '' }}>Darurat</option>
-                        <option value="other" {{ old('type') == 'other' ? 'selected' : '' }}>Lainnya</option>
+                        <option value="terencana" {{ old('type') == 'terencana' ? 'selected' : '' }}>Terencana</option>
+                        <option value="sakit" {{ old('type') == 'sakit' ? 'selected' : '' }}>Sakit</option>
+                        <option value="darurat" {{ old('type') == 'darurat' ? 'selected' : '' }}>Darurat</option>
+                        <option value="lainnya" {{ old('type') == 'lainnya' ? 'selected' : '' }}>Lainnya</option>
                     </select>
                     @error('type')
                         <p class="mt-1 text-sm text-red-500">{{ $message }}</p>
@@ -106,7 +106,7 @@
                                     <i class="fas fa-calendar text-gray-400"></i>
                                 </div>
                             </div>
-                            
+
                             <div class="date-preview mt-2">
                                 <div>
                                     <span class="text-sm text-gray-500">Dari:</span>
@@ -124,7 +124,7 @@
                                     </span>
                                 </div>
                             </div>
-                            
+
                             @error('start_date')
                                 <p class="mt-1 text-sm text-red-500">{{ $message }}</p>
                             @enderror
@@ -132,7 +132,7 @@
                                 <p class="mt-1 text-sm text-red-500">{{ $message }}</p>
                             @enderror
                         </div>
-                        
+
                         <!-- Documentation Image Upload -->
                         <div>
                             <label for="documentation" class="block text-sm font-medium text-gray-700">Dokumentasi (Opsional)</label>
@@ -203,44 +203,44 @@
                 if (selectedDates.length === 2) {
                     const startDate = selectedDates[0];
                     const endDate = selectedDates[1];
-                    
+
                     // Update hidden inputs
                     document.getElementById('start_date').value = formatDate(startDate);
                     document.getElementById('end_date').value = formatDate(endDate);
-                    
+
                     // Update display
                     document.getElementById('start-date-display').textContent = formatDisplayDate(startDate);
                     document.getElementById('end-date-display').textContent = formatDisplayDate(endDate);
-                    
+
                     // Calculate days
                     const days = calculateDays(startDate, endDate);
                     document.getElementById('days-count').textContent = days;
                 }
             }
         });
-        
+
         // Initialize with any existing values
         const startDateValue = document.getElementById('start_date').value;
         const endDateValue = document.getElementById('end_date').value;
-        
+
         if (startDateValue && endDateValue) {
             const startDate = new Date(startDateValue);
             const endDate = new Date(endDateValue);
-            
+
             dateRangePicker.setDate([startDate, endDate]);
-            
+
             document.getElementById('start-date-display').textContent = formatDisplayDate(startDate);
             document.getElementById('end-date-display').textContent = formatDisplayDate(endDate);
-            
+
             const days = calculateDays(startDate, endDate);
             document.getElementById('days-count').textContent = days;
         }
-        
+
         // Image preview
         const documentationInput = document.getElementById('documentation');
         const imagePreview = document.getElementById('image-preview');
         const previewContainer = document.getElementById('preview-container');
-        
+
         documentationInput.addEventListener('change', function() {
             const file = this.files[0];
             if (file) {
@@ -254,7 +254,7 @@
                 previewContainer.classList.add('hidden');
             }
         });
-        
+
         // Helper functions
         function formatDate(date) {
             const year = date.getFullYear();
@@ -262,12 +262,12 @@
             const day = String(date.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         }
-        
+
         function formatDisplayDate(date) {
             const options = { day: 'numeric', month: 'short', year: 'numeric' };
             return date.toLocaleDateString('id-ID', options);
         }
-        
+
         function calculateDays(startDate, endDate) {
             const diffTime = Math.abs(endDate - startDate);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end days

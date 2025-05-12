@@ -17,7 +17,7 @@
             font-weight: 500;
             color: #4F46E5;
         }
-        
+
         .status-badge {
             display: inline-flex;
             align-items: center;
@@ -26,11 +26,11 @@
             font-size: 0.75rem;
             font-weight: 600;
         }
-        
+
         .detail-section {
             border-bottom: 1px solid #E5E7EB;
         }
-        
+
         .detail-section:last-child {
             border-bottom: none;
         }
@@ -58,14 +58,14 @@
                 <h3 class="text-lg leading-6 font-medium text-gray-900">Informasi Pengajuan</h3>
                 <p class="mt-1 max-w-2xl text-sm text-gray-500">Detail pengajuan cuti #{{ $leaveRequest->id }}</p>
             </div>
-            <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
+            <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full
                 @if($leaveRequest->status == 'requested') bg-yellow-100 text-yellow-800
                 @elseif($leaveRequest->status == 'approved') bg-green-100 text-green-800
                 @else bg-red-100 text-red-800 @endif">
                 {{ ucfirst($leaveRequest->status) }}
             </span>
         </div>
-        
+
         <dl>
             <div class="detail-section bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                 <dt class="text-sm font-medium text-gray-500">Pengemudi</dt>
@@ -97,10 +97,10 @@
             <div class="detail-section bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                 <dt class="text-sm font-medium text-gray-500">Tipe Cuti</dt>
                 <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                        @if($leaveRequest->type == 'planned') bg-blue-100 text-blue-800
-                        @elseif($leaveRequest->type == 'sick') bg-red-100 text-red-800
-                        @elseif($leaveRequest->type == 'emergency') bg-orange-100 text-orange-800
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                        @if($leaveRequest->type == 'terencana') bg-blue-100 text-blue-800
+                        @elseif($leaveRequest->type == 'sakit') bg-red-100 text-red-800
+                        @elseif($leaveRequest->type == 'darurat') bg-orange-100 text-orange-800
                         @else bg-gray-100 text-gray-800 @endif">
                         {{ ucfirst($leaveRequest->type) }}
                     </span>
@@ -110,7 +110,7 @@
                 <dt class="text-sm font-medium text-gray-500">Alasan</dt>
                 <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{{ $leaveRequest->reason ?: '-' }}</dd>
             </div>
-            
+
             @if($leaveRequest->documentation)
             <div class="detail-section bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                 <dt class="text-sm font-medium text-gray-500">Dokumentasi</dt>
@@ -127,7 +127,7 @@
                 </dd>
             </div>
             @endif
-            
+
             @if($leaveRequest->status != 'requested')
                 <div class="detail-section {{ $leaveRequest->documentation ? 'bg-white' : 'bg-gray-50' }} px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                     <dt class="text-sm font-medium text-gray-500">Catatan Admin</dt>
@@ -140,13 +140,13 @@
                     </dd>
                 </div>
             @endif
-            
+
             <div class="detail-section {{ $leaveRequest->status != 'requested' ? (($leaveRequest->documentation && $leaveRequest->status != 'requested') ? 'bg-white' : 'bg-gray-50') : ($leaveRequest->documentation ? 'bg-white' : 'bg-gray-50') }} px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                 <dt class="text-sm font-medium text-gray-500">Tanggal Pengajuan</dt>
                 <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{{ $leaveRequest->created_at->format('d M Y H:i') }}</dd>
             </div>
         </dl>
-        
+
         @if($leaveRequest->status == 'requested')
             <div class="px-4 py-4 sm:px-6 border-t border-gray-200 flex justify-end space-x-3">
                 <a href="{{ route('leave-requests.edit', $leaveRequest) }}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
@@ -179,7 +179,7 @@
                 {{ isset($affectedSchedules) ? $affectedSchedules->count() : 0 }} jadwal
             </span>
         </div>
-        
+
         @if(isset($affectedSchedules) && $affectedSchedules->count() > 0)
             @if($leaveRequest->status == 'requested' && !$hasAllBackups)
                 <div class="bg-yellow-50 p-4 border-b border-yellow-100">
@@ -204,7 +204,7 @@
                     </div>
                 </div>
             @endif
-            
+
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -257,7 +257,7 @@
                     </tbody>
                 </table>
             </div>
-            
+
             @if($leaveRequest->status == 'requested')
                 <div id="manual-assignment" class="px-4 py-5 sm:px-6 border-t border-gray-200">
                     <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Pilih Pengemudi Pengganti</h3>
@@ -282,8 +282,8 @@
                                 <div class="mb-4 p-4 bg-gray-50 rounded-md">
                                     <div class="mb-2">
                                         <span class="text-sm font-medium text-gray-700">
-                                            {{ \Carbon\Carbon::parse($schedule->schedule_date)->format('d M Y') }} - 
-                                            {{ ucfirst($schedule->shift) }} - 
+                                            {{ \Carbon\Carbon::parse($schedule->schedule_date)->format('d M Y') }} -
+                                            {{ ucfirst($schedule->shift) }} -
                                             Unit: {{ $schedule->unit->unit_number ?? $schedule->unit->name ?? 'N/A' }}
                                         </span>
                                     </div>
@@ -298,7 +298,7 @@
                                 </div>
                             @endif
                         @endforeach
-                        
+
                         <div class="mt-6 flex justify-end">
                             <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                                 <i class="fas fa-save mr-2"></i>
@@ -354,7 +354,7 @@
         document.getElementById('rejectForm').action = `/leave-requests/${id}/reject`;
         document.getElementById('rejectModal').classList.remove('hidden');
     }
-    
+
     function closeRejectModal() {
         document.getElementById('rejectModal').classList.add('hidden');
     }

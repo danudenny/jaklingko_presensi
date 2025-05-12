@@ -57,7 +57,7 @@
                                 <h3 class="text-xl font-medium text-gray-900">{{ $driver->name }}</h3>
                             </div>
                         </div>
-                        
+
                         <div class="bg-white overflow-hidden">
                             <dl>
                                 <div class="py-3 flex justify-between">
@@ -108,14 +108,6 @@
                                     <dt class="text-sm font-medium text-gray-500">Email</dt>
                                     <dd class="text-sm text-gray-900">{{ $driver->email ?: 'N/A' }}</dd>
                                 </div>
-                                <div class="py-3 flex justify-between">
-                                    <dt class="text-sm font-medium text-gray-500">Dibuat Pada</dt>
-                                    <dd class="text-sm text-gray-900">{{ $driver->created_at->format('M d, Y') }}</dd>
-                                </div>
-                                <div class="py-3 flex justify-between">
-                                    <dt class="text-sm font-medium text-gray-500">Terakhir Diupdate Pada</dt>
-                                    <dd class="text-sm text-gray-900">{{ $driver->updated_at->format('M d, Y') }}</dd>
-                                </div>
                             </dl>
                         </div>
                     </div>
@@ -129,7 +121,7 @@
                         <div class="flex justify-between items-center mb-4">
                             <h2 class="text-lg font-medium text-gray-900">Rute yang Aktif</h2>
                         </div>
-                        
+
                         @if($driver->routes->isEmpty())
                             <div class="py-8 flex flex-col items-center justify-center bg-gray-50 rounded-md border border-gray-200 border-dashed">
                                 <i class="fas fa-route text-gray-400 text-2xl"></i>
@@ -172,7 +164,7 @@
                         <div class="flex justify-between items-center mb-4">
                             <h2 class="text-lg font-medium text-gray-900">Unit yang Aktif</h2>
                         </div>
-                        
+
                         @if($driver->units->isEmpty())
                             <div class="py-8 flex flex-col items-center justify-center bg-gray-50 rounded-md border border-gray-200 border-dashed">
                                 <i class="fas fa-bus text-gray-400 text-2xl"></i>
@@ -216,7 +208,7 @@
                             <h2 class="text-lg font-medium text-gray-900">Jadwal</h2>
                             <a href="#" class="text-sm text-blue-600 hover:text-blue-800">Lihat Semua</a>
                         </div>
-                        
+
                         @if($driver->schedules->count() > 0)
                             <div class="border border-gray-200 rounded-md overflow-hidden">
                                 <table class="min-w-full divide-y divide-gray-200">
@@ -232,13 +224,14 @@
                                         @foreach($driver->schedules->take(5) as $schedule)
                                             <tr>
                                                 <td class="px-6 py-4 whitespace-nowrap">
-                                                    <div class="text-sm text-gray-900">{{ $schedule->date->format('d M Y') }}</div>
-                                                    <div class="text-sm text-gray-500">{{ $schedule->shift }}</div>
+                                                    <div class="text-sm text-gray-900">{{ $schedule->schedule_date->format('d M Y') }}</div>
+                                                    <div class="text-xs uppercase text-gray-500 bg-green-200 rounded-xl px-2 py-0.5 inline-block">{{ $schedule->shift }}</div>
                                                 </td>
                                                 <td class="px-6 py-4 whitespace-nowrap">
                                                     @if($schedule->route)
                                                         <div class="flex items-center">
-                                                            <span class="h-2 w-2 flex-shrink-0 rounded-full bg-indigo-500 mr-1.5"></span>
+                                                            <i class="fas fa-route text-blue-400 mr-1.5"></i>
+                                                            {{ $schedule->route->route_number }} -
                                                             {{ $schedule->route->name }}
                                                         </div>
                                                     @else
@@ -248,7 +241,7 @@
                                                 <td class="px-6 py-4 whitespace-nowrap">
                                                     @if($schedule->unit)
                                                         <div class="flex items-center">
-                                                            <span class="h-2 w-2 flex-shrink-0 rounded-full bg-yellow-500 mr-1.5"></span>
+                                                            <i class="fas fa-bus text-yellow-400 mr-1.5"></i>
                                                             {{ $schedule->unit->unit_number }}
                                                         </div>
                                                     @else
@@ -264,10 +257,10 @@
                                                             'in_progress' => 'bg-yellow-100 text-yellow-800'
                                                         ];
                                                         $scheduleStatusLabels = [
-                                                            'scheduled' => 'Scheduled',
-                                                            'completed' => 'Completed',
-                                                            'missed' => 'Missed',
-                                                            'in_progress' => 'In Progress'
+                                                            'scheduled' => 'Terjadwal',
+                                                            'completed' => 'Selesai',
+                                                            'missed' => 'Dilewatkan',
+                                                            'in_progress' => 'Sedang Berlangsung'
                                                         ];
                                                     @endphp
                                                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $scheduleStatusColors[$schedule->status] ?? 'bg-gray-100 text-gray-800' }}">
@@ -295,8 +288,5 @@
 
 @push('scripts')
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Any additional JavaScript for the show page can go here
-});
 </script>
 @endpush

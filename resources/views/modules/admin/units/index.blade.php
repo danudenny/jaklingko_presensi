@@ -18,7 +18,7 @@
         display: block;
         margin-top: 2px;
         padding: 1px 5px;
-        border-radius: 10px;
+        border-radius: 5px;
         width: fit-content;
     }
 
@@ -267,7 +267,7 @@
                                     {{ $unit->unit_number }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    <div class="bg-yellow-300 border border-black rounded-lg p-1 px-2 flex justify-center items-center max-w-xs shadow-md">
+                                    <div class="bg-yellow-300 border inline-block border-black rounded-md p-1 px-2 justify-center items-center max-w-xs shadow-md">
                                         <div class="text-black font-bold text-xs tracking-wider">
                                             @php
                                                 $plateNumber = $unit->plate_number;

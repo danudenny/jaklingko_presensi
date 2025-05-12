@@ -7,8 +7,10 @@ use App\Models\Driver;
 use App\Models\Schedule;
 use App\Models\DriverHistory;
 use App\Models\DriverScheduleHistory;
+use App\Mail\LeaveRequestNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
 
@@ -23,14 +25,19 @@ class LeaveRequestController extends Controller
             ->pending()
             ->orderBy('start_date')
             ->get();
-            
+
         $approvedRequests = LeaveRequest::with('driver')
             ->approved()
             ->where('end_date', '>=', Carbon::today())
             ->orderBy('start_date')
             ->get();
-            
-        return view('modules.admin.leave-requests.index', compact('pendingRequests', 'approvedRequests'));
+
+        $rejectedRequests = LeaveRequest::with('driver')
+            ->rejected()
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return view('modules.admin.leave-requests.index', compact('pendingRequests', 'approvedRequests', 'rejectedRequests'));
     }
 
     /**
@@ -51,7 +58,7 @@ class LeaveRequestController extends Controller
             'driver_id' => 'required|exists:drivers,id',
             'start_date' => 'required|date|after_or_equal:today',
             'end_date' => 'required|date|after_or_equal:start_date',
-            'type' => 'required|in:planned,sick,emergency,other',
+            'type' => 'required|in:terencana,sakit,darurat,lainnya',
             'reason' => 'nullable|string',
             'documentation' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
@@ -75,6 +82,10 @@ class LeaveRequestController extends Controller
 
         $leaveRequest->save();
 
+        // Send email notification
+        $recipients = ['danudenny@gmail.com', 'denny.danuwijaya@gmail.com'];
+        Mail::to($recipients)->send(new LeaveRequestNotification($leaveRequest));
+
         return redirect()->route('leave-requests.index')
             ->with('success', 'Leave request created successfully.');
     }
@@ -85,29 +96,29 @@ class LeaveRequestController extends Controller
     public function show(LeaveRequest $leaveRequest)
     {
         $leaveRequest->load('driver');
-        
+
         // Get affected schedules
         $affectedSchedules = Schedule::with(['route', 'unit', 'backupDriver'])
             ->where('driver_id', $leaveRequest->driver_id)
             ->whereBetween('schedule_date', [$leaveRequest->start_date, $leaveRequest->end_date])
             ->get();
-            
+
         // Check if there are available backup drivers for each schedule
         $availableBackupDrivers = [];
         $hasAllBackups = true;
-        
+
         foreach ($affectedSchedules as $schedule) {
             $backups = $schedule->findAvailableBackupDrivers();
             $availableBackupDrivers[$schedule->id] = $backups;
-            
+
             if ($backups->isEmpty()) {
                 $hasAllBackups = false;
             }
         }
-            
+
         return view('modules.admin.leave-requests.show', compact(
-            'leaveRequest', 
-            'affectedSchedules', 
+            'leaveRequest',
+            'affectedSchedules',
             'availableBackupDrivers',
             'hasAllBackups'
         ));
@@ -131,19 +142,26 @@ class LeaveRequestController extends Controller
             'driver_id' => 'required|exists:drivers,id',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
-            'type' => 'required|in:planned,sick,emergency,other',
+            'type' => 'required|in:terencana,sakit,darurat,lainnya',
             'reason' => 'nullable|string',
             'status' => 'required|in:requested,approved,rejected',
             'admin_notes' => 'nullable|string',
             'documentation' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
+        // Check if user is trying to approve and is not a superadmin
+        if ($validated['status'] === 'approved' && $leaveRequest->status !== 'approved' && !Auth::user()->isSuperAdmin()) {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors(['status' => 'Hanya superadmin yang dapat menyetujui permohonan cuti.']);
+        }
+
         // If trying to approve, check for available backup drivers
         if ($validated['status'] === 'approved' && $leaveRequest->status !== 'approved') {
             $leaveRequest->driver_id = $validated['driver_id'];
             $leaveRequest->start_date = $validated['start_date'];
             $leaveRequest->end_date = $validated['end_date'];
-            
+
             if (!$leaveRequest->hasAvailableBackups()) {
                 return redirect()->back()
                     ->withInput()
@@ -152,36 +170,36 @@ class LeaveRequestController extends Controller
         }
 
         $validated['approved_by'] = ($validated['status'] === 'approved') ? Auth::id() : null;
-        
+
         // Store original values before update
         $originalDriverId = $leaveRequest->driver_id;
         $originalStartDate = $leaveRequest->start_date;
         $originalEndDate = $leaveRequest->end_date;
         $originalStatus = $leaveRequest->status;
-        
+
         // Handle documentation image upload
         if ($request->hasFile('documentation')) {
             // Delete old image if exists
             if ($leaveRequest->documentation) {
                 Storage::delete('public/' . $leaveRequest->documentation);
             }
-            
+
             $image = $request->file('documentation');
             $imageName = time() . '_' . $image->getClientOriginalName();
             $image->storeAs('public/leave-requests', $imageName);
             $validated['documentation'] = 'leave-requests/' . $imageName;
         }
-        
+
         $leaveRequest->update($validated);
 
         // If approved, update affected schedules to mark driver as on leave
         if ($validated['status'] === 'approved') {
             // If this is a newly approved request or the date range/driver has changed
-            if ($originalStatus !== 'approved' || 
-                $originalDriverId != $validated['driver_id'] || 
-                $originalStartDate != $validated['start_date'] || 
+            if ($originalStatus !== 'approved' ||
+                $originalDriverId != $validated['driver_id'] ||
+                $originalStartDate != $validated['start_date'] ||
                 $originalEndDate != $validated['end_date']) {
-                
+
                 // If previously approved with different parameters, clean up old records
                 if ($originalStatus === 'approved') {
                     // Get previously affected schedules
@@ -189,7 +207,7 @@ class LeaveRequestController extends Controller
                         ->whereBetween('schedule_date', [$originalStartDate, $originalEndDate])
                         ->where('status', 'on_leave')
                         ->get();
-                    
+
                     // Reset schedules and remove driver history records
                     foreach ($oldSchedules as $schedule) {
                         // Delete driver history records for this schedule
@@ -199,7 +217,7 @@ class LeaveRequestController extends Controller
                             ->where('start_date', $schedule->schedule_date)
                             ->where('on_leave', true)
                             ->delete();
-                            
+
                         // Delete backup driver history records
                         if ($schedule->backup_driver_id) {
                             DriverHistory::where('driver_id', $schedule->backup_driver_id)
@@ -208,23 +226,23 @@ class LeaveRequestController extends Controller
                                 ->where('start_date', $schedule->schedule_date)
                                 ->where('as_backup', true)
                                 ->delete();
-                                
+
                             // Decrement the backup driver's schedule count
                             $periodStart = Carbon::parse($schedule->schedule_date)->startOfMonth()->format('Y-m-d');
                             $periodEnd = Carbon::parse($schedule->schedule_date)->endOfMonth()->format('Y-m-d');
-                            
+
                             $history = DriverScheduleHistory::where('driver_id', $schedule->backup_driver_id)
                                 ->where('period_start_date', $periodStart)
                                 ->where('period_end_date', $periodEnd)
                                 ->first();
-                                
+
                             if ($history && $history->schedule_count > 0) {
                                 $history->schedule_count -= 1;
                                 $history->target_met = $history->schedule_count >= $history->target_count;
                                 $history->save();
                             }
                         }
-                        
+
                         // Reset the schedule
                         $schedule->update([
                             'status' => 'active',
@@ -233,25 +251,25 @@ class LeaveRequestController extends Controller
                         ]);
                     }
                 }
-                
+
                 // Get newly affected schedules
                 $affectedSchedules = Schedule::where('driver_id', $validated['driver_id'])
                     ->whereBetween('schedule_date', [$validated['start_date'], $validated['end_date']])
                     ->get();
-                    
+
                 foreach ($affectedSchedules as $schedule) {
                     $backupDrivers = $schedule->findAvailableBackupDrivers();
-                    
+
                     if ($backupDrivers->isNotEmpty()) {
                         $backupDriver = $backupDrivers->first();
-                        
+
                         // Update the schedule with backup driver
                         $schedule->update([
                             'status' => 'on_leave',
                             'backup_driver_id' => $backupDriver->id,
                             'notes' => 'Automatically assigned backup driver due to approved leave request #' . $leaveRequest->id,
                         ]);
-                        
+
                         // Create driver history record for the original driver (on leave)
                         DriverHistory::create([
                             'driver_id' => $validated['driver_id'],
@@ -264,7 +282,7 @@ class LeaveRequestController extends Controller
                             'on_leave' => true,
                             'on_duty' => false,
                         ]);
-                        
+
                         // Create driver history record for the backup driver
                         DriverHistory::create([
                             'driver_id' => $backupDriver->id,
@@ -277,7 +295,7 @@ class LeaveRequestController extends Controller
                             'on_leave' => false,
                             'on_duty' => true,
                         ]);
-                        
+
                         // Update driver schedule history for the backup driver
                         DriverScheduleHistory::incrementScheduleCount(
                             $backupDriver->id,
@@ -287,7 +305,7 @@ class LeaveRequestController extends Controller
                     }
                 }
             }
-        } 
+        }
         // If the request was previously approved but now rejected or back to requested
         else if ($originalStatus === 'approved' && $validated['status'] !== 'approved') {
             // Get affected schedules
@@ -295,7 +313,7 @@ class LeaveRequestController extends Controller
                 ->whereBetween('schedule_date', [$originalStartDate, $originalEndDate])
                 ->where('status', 'on_leave')
                 ->get();
-                
+
             // Reset schedules and remove driver history records
             foreach ($affectedSchedules as $schedule) {
                 // Delete driver history records for this schedule
@@ -305,7 +323,7 @@ class LeaveRequestController extends Controller
                     ->where('start_date', $schedule->schedule_date)
                     ->where('on_leave', true)
                     ->delete();
-                    
+
                 // Delete backup driver history records
                 if ($schedule->backup_driver_id) {
                     DriverHistory::where('driver_id', $schedule->backup_driver_id)
@@ -314,23 +332,23 @@ class LeaveRequestController extends Controller
                         ->where('start_date', $schedule->schedule_date)
                         ->where('as_backup', true)
                         ->delete();
-                        
+
                     // Decrement the backup driver's schedule count
                     $periodStart = Carbon::parse($schedule->schedule_date)->startOfMonth()->format('Y-m-d');
                     $periodEnd = Carbon::parse($schedule->schedule_date)->endOfMonth()->format('Y-m-d');
-                    
+
                     $history = DriverScheduleHistory::where('driver_id', $schedule->backup_driver_id)
                         ->where('period_start_date', $periodStart)
                         ->where('period_end_date', $periodEnd)
                         ->first();
-                        
+
                     if ($history && $history->schedule_count > 0) {
                         $history->schedule_count -= 1;
                         $history->target_met = $history->schedule_count >= $history->target_count;
                         $history->save();
                     }
                 }
-                
+
                 // Reset the schedule
                 $schedule->update([
                     'status' => 'active',
@@ -354,9 +372,9 @@ class LeaveRequestController extends Controller
             return redirect()->route('leave-requests.index')
                 ->with('error', 'Hanya permohonan cuti yang belum disetujui yang dapat dihapus.');
         }
-        
+
         $leaveRequest->delete();
-        
+
         return redirect()->route('leave-requests.index')
             ->with('success', 'Permohonan cuti berhasil dihapus.');
     }
@@ -366,35 +384,41 @@ class LeaveRequestController extends Controller
      */
     public function approve(LeaveRequest $leaveRequest)
     {
+        // Check if user is a superadmin
+        if (!Auth::user()->isSuperAdmin()) {
+            return redirect()->route('leave-requests.show', $leaveRequest)
+                ->with('error', 'Hanya superadmin yang dapat menyetujui permohonan cuti.');
+        }
+
         // Check if there are available backup drivers
         if (!$leaveRequest->hasAvailableBackups()) {
             return redirect()->route('leave-requests.show', $leaveRequest)
                 ->with('error', 'Tidak dapat menyetujui permohonan cuti. Tidak ada backup driver yang tersedia untuk satu atau lebih jadwal yang terpengaruh.');
         }
-        
+
         $leaveRequest->update([
             'status' => 'approved',
             'approved_by' => Auth::id(),
         ]);
-        
+
         // Update affected schedules to mark driver as on leave
         $affectedSchedules = Schedule::where('driver_id', $leaveRequest->driver_id)
             ->whereBetween('schedule_date', [$leaveRequest->start_date, $leaveRequest->end_date])
             ->get();
-            
+
         foreach ($affectedSchedules as $schedule) {
             $backupDrivers = $schedule->findAvailableBackupDrivers();
-            
+
             if ($backupDrivers->isNotEmpty()) {
                 $backupDriver = $backupDrivers->first();
-                
+
                 // Update the schedule with backup driver
                 $schedule->update([
                     'status' => 'on_leave',
                     'backup_driver_id' => $backupDriver->id,
                     'notes' => 'Automatically assigned backup driver due to approved leave request #' . $leaveRequest->id,
                 ]);
-                
+
                 // Create driver history record for the original driver (on leave)
                 DriverHistory::create([
                     'driver_id' => $leaveRequest->driver_id,
@@ -407,7 +431,7 @@ class LeaveRequestController extends Controller
                     'on_leave' => true,
                     'on_duty' => false,
                 ]);
-                
+
                 // Create driver history record for the backup driver
                 DriverHistory::create([
                     'driver_id' => $backupDriver->id,
@@ -420,7 +444,7 @@ class LeaveRequestController extends Controller
                     'on_leave' => false,
                     'on_duty' => true,
                 ]);
-                
+
                 // Update driver schedule history for the backup driver
                 DriverScheduleHistory::incrementScheduleCount(
                     $backupDriver->id,
@@ -429,7 +453,7 @@ class LeaveRequestController extends Controller
                 );
             }
         }
-        
+
         return redirect()->route('leave-requests.index')
             ->with('success', 'Leave request approved successfully.');
     }
@@ -442,16 +466,16 @@ class LeaveRequestController extends Controller
         $validated = $request->validate([
             'admin_notes' => 'nullable|string',
         ]);
-        
+
         $leaveRequest->update([
             'status' => 'rejected',
             'admin_notes' => $validated['admin_notes'],
         ]);
-        
+
         return redirect()->route('leave-requests.index')
             ->with('success', 'Leave request rejected successfully.');
     }
-    
+
     /**
      * Check available backup drivers for a leave request.
      */
@@ -462,54 +486,60 @@ class LeaveRequestController extends Controller
             ->where('driver_id', $leaveRequest->driver_id)
             ->whereBetween('schedule_date', [$leaveRequest->start_date, $leaveRequest->end_date])
             ->get();
-            
+
         // Check if there are available backup drivers for each schedule
         $availableBackupDrivers = [];
         $hasAllBackups = true;
-        
+
         foreach ($affectedSchedules as $schedule) {
             $backups = $schedule->findAvailableBackupDrivers();
             $availableBackupDrivers[$schedule->id] = $backups;
-            
+
             if ($backups->isEmpty()) {
                 $hasAllBackups = false;
             }
         }
-        
+
         return response()->json([
             'has_all_backups' => $hasAllBackups,
             'affected_schedules_count' => $affectedSchedules->count(),
             'available_backups' => $availableBackupDrivers,
         ]);
     }
-    
+
     /**
      * Assign backup drivers to schedules affected by a leave request.
      */
     public function assignBackupDrivers(Request $request, LeaveRequest $leaveRequest)
     {
+        // Check if user is a superadmin
+        if (!Auth::user()->isSuperAdmin()) {
+            return redirect()->route('leave-requests.show', $leaveRequest)
+                ->with('error', 'Hanya superadmin yang dapat menyetujui permohonan cuti.');
+        }
+
         $validated = $request->validate([
             'backup_assignments' => 'required|array',
             'backup_assignments.*' => 'required|exists:drivers,id',
         ]);
-        
+
         // Get affected schedules
         $affectedSchedules = Schedule::where('driver_id', $leaveRequest->driver_id)
             ->whereBetween('schedule_date', [$leaveRequest->start_date, $leaveRequest->end_date])
             ->get();
-            
+
         // Assign backup drivers
         foreach ($affectedSchedules as $schedule) {
             if (isset($validated['backup_assignments'][$schedule->id])) {
                 $backupDriverId = $validated['backup_assignments'][$schedule->id];
-                
+
                 // Update the schedule with backup driver
                 $schedule->update([
                     'status' => 'on_leave',
                     'backup_driver_id' => $backupDriverId,
                     'notes' => 'Manually assigned backup driver due to approved leave request #' . $leaveRequest->id,
                 ]);
-                
+
                 // Create driver history record for the original driver (on leave)
                 DriverHistory::create([
                     'driver_id' => $leaveRequest->driver_id,
@@ -522,7 +552,7 @@ class LeaveRequestController extends Controller
                     'on_leave' => true,
                     'on_duty' => false,
                 ]);
-                
+
                 // Create driver history record for the backup driver
                 DriverHistory::create([
                     'driver_id' => $backupDriverId,
@@ -535,7 +565,7 @@ class LeaveRequestController extends Controller
                     'on_leave' => false,
                     'on_duty' => true,
                 ]);
-                
+
                 // Update driver schedule history for the backup driver
                 DriverScheduleHistory::incrementScheduleCount(
                     $backupDriverId,
@@ -544,13 +574,13 @@ class LeaveRequestController extends Controller
                 );
             }
         }
-        
+
         // Approve the leave request
         $leaveRequest->update([
             'status' => 'approved',
             'approved_by' => Auth::id(),
         ]);
-        
+
         return redirect()->route('leave-requests.index')
             ->with('success', 'Leave request approved and backup drivers assigned successfully.');
     }
