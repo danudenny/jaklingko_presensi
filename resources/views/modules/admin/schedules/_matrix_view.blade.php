@@ -29,9 +29,8 @@
     <table class="min-w-full divide-y divide-gray-200 matrix-table">
         <thead class="bg-gray-50">
         <tr>
+            <th scope="col" class="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Tanggal</th>
             <th scope="col" class="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">UNIT</th>
-            <th scope="col" class="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">PENGEMUDI</th>
-            <th scope="col" class="px-4 py-3 text-xs font-medium tracking-wider text-center text-gray-500 uppercase">SHIFT</th>
 
             @for($day = 1; $day <= 15; $day++)
                 @php
@@ -67,12 +66,6 @@
         <h3 class="text-lg font-medium text-gray-900">
             Periode 2: Tanggal 16-<span id="end-day">{{ Carbon\Carbon::now()->endOfMonth()->format('d') }}</span> <span id="period2-month-year">{{ Carbon\Carbon::now()->format('F Y') }}</span>
         </h3>
-        <div>
-            <button type="button" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out bg-green-600 border border-transparent rounded-md save-matrix hover:bg-green-500 active:bg-green-700 focus:outline-none focus:ring ring-green-300 disabled:opacity-25">
-                <i class="mr-2 fas fa-save"></i>
-                Simpan
-            </button>
-        </div>
     </div>
 
     <table class="min-w-full divide-y divide-gray-200 matrix-table">
@@ -80,7 +73,6 @@
         <tr>
             <th scope="col" class="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">UNIT</th>
             <th scope="col" class="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">PENGEMUDI</th>
-            <th scope="col" class="px-4 py-3 text-xs font-medium tracking-wider text-center text-gray-500 uppercase">SHIFT</th>
 
             @php
                 $lastDay = \Carbon\Carbon::now()->endOfMonth()->day;
@@ -232,7 +224,6 @@
 
 @push('scripts')
     <script>
-        // Constants and configuration
         const MATRIX_SELECTORS = {
             month: '#matrix-month',
             year: '#matrix-year',
@@ -257,19 +248,10 @@
             `
         };
 
-        // Matrix data loading and rendering
         function loadMatrixData(forceReload = false) {
-            // Get the selected month and year values directly from the DOM elements
-            const monthElement = document.getElementById('matrix-month');
-            const yearElement = document.getElementById('matrix-year');
+            let month = $(MATRIX_SELECTORS.month).val();
+            let year = $(MATRIX_SELECTORS.year).val();
 
-            // Ensure we're getting the current values from the DOM
-            const month = parseInt(monthElement.value);
-            const year = parseInt(yearElement.value);
-
-            console.log('Selected values - month:', month, 'year:', year);
-
-            // Update month/year display in headers
             updateMatrixMonthYear(month, year);
 
             const periodTbodies = [
@@ -279,20 +261,25 @@
 
             periodTbodies.forEach(tbody => tbody.html(MATRIX_SELECTORS.loadingHtml));
 
-            // Make sure we're sending the correct month and year values
             const url = `{{ route('schedules.matrix-data') }}?month=${month}&year=${year}&_=${Date.now()}`;
 
-            // Use XMLHttpRequest instead of fetch for better debugging
             const xhr = new XMLHttpRequest();
             xhr.open('GET', url);
             xhr.onload = function() {
                 if (xhr.status === 200) {
                     try {
                         const data = JSON.parse(xhr.responseText);
-                        handleMatrixData(data, month, year);
-                        
-                        // Also load unassigned drivers
-                        loadUnassignedDrivers(data);
+                        if (data && data.success) {
+                            handleMatrixData(data, month, year);
+                            
+                            // Also load unassigned drivers
+                            if (data.unassignedDrivers) {
+                                loadUnassignedDrivers(data);
+                            }
+                        } else {
+                            const errorMessage = data.message || 'Invalid data format received from server';
+                            handleMatrixError(new Error(errorMessage), periodTbodies);
+                        }
                     } catch (e) {
                         handleMatrixError(e, periodTbodies);
                     }
@@ -306,15 +293,41 @@
             xhr.send();
         }
 
+        function handleMatrixError(error, periodTbodies) {
+            console.error('Matrix data error:', error);
+            
+            periodTbodies.forEach(tbody => {
+                tbody.html(`
+                    <tr>
+                        <td colspan="20" class="px-6 py-4 text-sm text-center text-red-500">
+                            <i class="mr-2 fas fa-exclamation-triangle"></i>
+                            Error loading schedule data: ${error.message || 'Unknown error'}
+                        </td>
+                    </tr>
+                `);
+            });
+        }
+        
+        function noDataHtml(period, month, year) {
+            const periodLabel = period === 1 ? '1-15' : 
+                               (period === 2 ? '16-' + new Date(year, month, 0).getDate() : 'unassigned');
+            return `
+                <tr>
+                    <td colspan="20" class="px-6 py-4 text-sm text-center text-gray-500">
+                        <i class="mr-2 fas fa-info-circle"></i>
+                         Tidak ada jadwal yang ditemukan ${periodLabel}
+                    </td>
+                </tr>
+            `;
+        }
+
         function updateMatrixMonthYear(month, year) {
             const monthSelect = $(MATRIX_SELECTORS.month);
             const yearSelect = $(MATRIX_SELECTORS.year);
             const monthText = monthSelect.find('option:selected').text();
 
-            // Update headers
             $('[id$="-month-year"]').text(`${monthText} ${year}`);
 
-            // Update period columns
             updatePeriodColumns(1, 1, 15, month, year);
             updatePeriodColumns(2, 16, new Date(year, month, 0).getDate(), month, year);
         }
@@ -328,7 +341,6 @@
                 return;
             }
 
-            // Group data by route
             const routeGroups = {};
 
             data.forEach(function(row) {
@@ -348,18 +360,15 @@
                 routeGroups[routeKey].rows.push(row);
             });
 
-            // Sort routes by route number
             const sortedRouteKeys = Object.keys(routeGroups).sort((a, b) => {
                 const numA = routeGroups[a].routeNumber || '';
                 const numB = routeGroups[b].routeNumber || '';
                 return numA.localeCompare(numB);
             });
 
-            // Process each route group
             sortedRouteKeys.forEach(function(routeKey) {
                 const routeGroup = routeGroups[routeKey];
 
-                // Add route header row
                 const routeHeaderRow = $('<tr>').addClass('bg-gray-100');
                 const routeHeaderText = routeGroup.routeNumber ?
                     `${routeGroup.routeNumber} - ${routeGroup.routeName}` :
@@ -371,18 +380,14 @@
             </td>
         `);
 
-                // Add empty cells for dates
                 const daysInPeriod = period === 1 ? 15 : (new Date(year, month, 0).getDate() - 15);
                 for (let i = 0; i < daysInPeriod; i++) {
                     routeHeaderRow.append('<td class="px-4 py-2 bg-gray-100"></td>');
                 }
 
-                // Add empty cell for total
                 routeHeaderRow.append('<td class="px-4 py-2 bg-gray-100"></td>');
 
                 tbody.append(routeHeaderRow);
-
-                // Sort rows by unit number and shift
                 routeGroup.rows.sort(function(a, b) {
                     if (a.unit?.unit_number !== b.unit?.unit_number) {
                         return (a.unit?.unit_number || '').localeCompare(b.unit?.unit_number || '');
@@ -390,7 +395,6 @@
                     return (a.shift || '').localeCompare(b.shift || '');
                 });
 
-                // Add each driver row
                 routeGroup.rows.forEach(function(row) {
                     tbody.append(createMatrixRow(row, period, month, year));
                 });
@@ -401,20 +405,14 @@
             if (data.success) {
                 $(MATRIX_SELECTORS.matrixView).data('loaded', true);
 
-                // Update the month and year selectors to match the returned data
                 if (data.month && data.year) {
-                    // Update the month dropdown to match the returned month
                     const monthElement = document.getElementById('matrix-month');
                     monthElement.value = data.month;
 
-                    // Update the year dropdown to match the returned year
                     const yearElement = document.getElementById('matrix-year');
                     yearElement.value = data.year;
 
-                    // Update the month/year display with the returned values
                     updateMatrixMonthYear(data.month, data.year);
-
-                    // Use the returned month and year for rendering
                     month = data.month;
                     year = data.year;
                 }
@@ -433,29 +431,40 @@
         }
 
         function updatePeriodColumns(period, startDay, endDay, month, year) {
-            const headerSelector = `#period-${period} thead th:not(:first-child):not(:nth-child(2)):not(:nth-child(3)):not(:last-child)`;
+            const dayCount = endDay - startDay + 1;
             const lastDayOfMonth = new Date(year, month, 0).getDate();
-
-            $(headerSelector).each(function(index) {
-                const day = startDay + index;
-                const $header = $(this);
-
+            
+            const $headerRow = $(`#period-${period} thead tr`);
+            const $headers = $headerRow.find('th');
+            
+            for (let i = 0; i < dayCount; i++) {
+                const columnIndex = i + 2; // +2 because we have 2 fixed columns before the date columns
+                const day = startDay + i;
+                const $header = $headers.eq(columnIndex);
+                
                 if (day > endDay || day > lastDayOfMonth) {
                     $header.hide();
-                    return;
+                    continue;
                 }
-
+                
                 const date = new Date(year, month - 1, day);
                 const isWeekend = date.getDay() === 0 || date.getDay() === 6; // Sunday (0) or Saturday (6)
-
-                $header
+                const dayOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()];
+                
+                $header.empty()
+                    .append(document.createTextNode(day))
+                    .append($('<div class="text-xxs"></div>').text(dayOfWeek))
                     .toggleClass('weekend', isWeekend)
                     .toggleClass('bg-orange-50', isWeekend)
-                    .show()
-                    .contents().first().replaceWith(day)
-                    .end()
-                    .find('.text-xxs').text(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()]);
-            });
+                    .show();
+            }
+            
+            for (let i = dayCount; i < 31; i++) { // Assuming max 31 days
+                const columnIndex = i + 2;
+                if (columnIndex < $headers.length - 1) { // -1 to exclude the total column
+                    $headers.eq(columnIndex).hide();
+                }
+            }
         }
 
         function createMatrixRow(row, period, month, year) {
@@ -464,31 +473,27 @@
             const tr = $('<tr>').addClass('hover:bg-gray-50');
             let totalDays = 0;
 
-            // Add unit column - only show unit number
             tr.append(`
                 <td class="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">
                     ${row.unit?.unit_number || '-'}
                 </td>
             `);
 
-            // Add driver name column
             tr.append(`
                 <td class="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">
                     <p>${row.driver?.name || '-'}</p>
-                    <p class="text-xs inline-block rounded-full px-2 py-0.5 ${row.driver?.type.toLowerCase() === 'batangan' ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'} italic text-xs">${row.driver?.type.toLowerCase() || '-'}</p>
+                    <div class="flex flex-wrap gap-1 mt-1">
+                        <span class="text-xs inline-block rounded-full px-2.5 py-0.5 ${row.driver?.type.toLowerCase() === 'batangan' ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'} italic">
+                            ${row.driver?.type.toLowerCase() || '-'}
+                        </span>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${row.shift === 'pagi' || row.shift === 'morning' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}">
+                            ${row.shift === 'pagi' || row.shift === 'morning' ? 'Pagi' : 'Siang'}
+                        </span>
+                        ${row.is_backup ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Backup</span>' : ''}
+                    </div>
                 </td>
             `);
 
-            // Add shift column with badge
-            tr.append(`
-        <td class="px-4 py-2 text-sm text-center whitespace-nowrap">
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${row.shift === 'pagi' || row.shift === 'morning' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}">
-                ${row.shift === 'pagi' || row.shift === 'morning' ? 'Pagi' : 'Siang'}
-            </span>
-        </td>
-    `);
-
-            // Count total scheduled days for this period
             if (row.schedules && row.schedules.length > 0) {
                 for (const schedule of row.schedules) {
                     if (schedule.schedule_date) {
@@ -501,78 +506,179 @@
                 }
             }
 
-            // Add day columns
             for (let day = startDay; day <= endDay; day++) {
                 const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const dateObj = new Date(year, month - 1, day);
-                const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6; // Sunday (0) or Saturday (6)
+                const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
 
                 tr.append(createDayCell(date, row, isWeekend, month, year));
             }
 
-            // Add total column
             tr.append(`
-        <td class="px-4 py-2 text-sm font-medium text-center bg-gray-100">
-            ${totalDays}
-        </td>
-    `);
+                <td class="px-4 py-2 text-sm font-medium text-center bg-gray-100">
+                    ${totalDays}
+                </td>
+            `);
 
             return tr;
         }
 
         function createDayCell(date, row, isWeekend, month, year) {
-            // Check if this date is scheduled
             let isDateScheduled = false;
+            let hasBackupDriver = false;
+            let backupDriverId = null;
+            let currentSchedule = null;
+            let isOnLeave = false;
+            
+            if (row.on_leave_dates && row.on_leave_dates.includes(date)) {
+                isOnLeave = true;
+            }
+            
+            const isBackupDriver = row.is_backup === true;
 
             if (row.schedules && row.schedules.length > 0) {
-                // Loop through schedules to find a match
                 for (const schedule of row.schedules) {
                     if (schedule.schedule_date) {
-                        // Extract just the date part (YYYY-MM-DD) from the schedule_date
                         const scheduleDatePart = schedule.schedule_date.substring(0, 10);
                         if (scheduleDatePart === date) {
                             isDateScheduled = true;
+                            currentSchedule = schedule;
+                            
+                            if (schedule.backup_driver_id) {
+                                hasBackupDriver = true;
+                                backupDriverId = schedule.backup_driver_id;
+                            }
                             break;
                         }
                     }
                 }
             }
 
-            return $(`
-        <td class="px-3 py-2 text-sm text-center ${isWeekend ? 'bg-orange-50' : ''}"
-            data-date="${date}"
-            data-driver-id="${row.driver?.id || ''}"
-            data-unit-id="${row.unit?.id || ''}"
-            data-shift="${row.shift || ''}"
-            data-route-id="${row.route?.id || ''}">
-            <input type="checkbox"
-                class="matrix-checkbox"
-                ${isDateScheduled ? 'checked' : ''}
-                data-date="${date}"
-                data-driver-id="${row.driver?.id || ''}"
-                data-unit-id="${row.unit?.id || ''}"
-                data-shift="${row.shift || ''}"
-                data-route-id="${row.route?.id || ''}"
-                onchange="handleCheckboxChange(this)">
-        </td>
-    `);
+            let cellClass = isWeekend ? 'bg-orange-50' : '';
+            if (isOnLeave) {
+                cellClass += ' bg-red-50';
+            } else if (isBackupDriver) {
+                cellClass += ' bg-blue-50';
+            }
+            
+            const cell = $(`
+                <td class="px-3 py-2 text-sm text-center ${cellClass}"
+                    data-date="${date}"
+                    data-driver-id="${row.driver?.id || ''}"
+                    data-unit-id="${row.unit?.id || ''}"
+                    data-shift="${row.shift || ''}"
+                    data-route-id="${row.route?.id || ''}">
+                    <div class="flex flex-col items-center justify-center">
+                        <input type="checkbox"
+                            class="matrix-checkbox mb-1"
+                            ${isDateScheduled && !isOnLeave ? 'checked' : ''}
+                            ${isOnLeave ? 'disabled' : ''}
+                            data-date="${date}"
+                            data-driver-id="${row.driver?.id || ''}"
+                            data-unit-id="${row.unit?.id || ''}"
+                            data-shift="${row.shift || ''}"
+                            data-route-id="${row.route?.id || ''}"
+                            onchange="handleCheckboxChange(this)">
+                    </div>
+                </td>
+            `);
+
+            if (isBackupDriver) {
+                const backupBadge = $(`
+                    <span class="ml-1 text-xs bg-blue-100 text-blue-800 font-medium px-1 py-0.5 rounded" title="Backup driver for ${row.primary_driver_id}">
+                        Backup
+                    </span>
+                `);
+                cell.find('.flex').append(backupBadge);
+            } else if (hasBackupDriver && !isOnLeave) {
+                const indicator = $(`
+                    <span class="ml-1 text-xs text-blue-600" title="This schedule has a backup driver (ID: ${backupDriverId})">
+                        <i class="fas fa-exchange-alt"></i>
+                    </span>
+                `);
+                cell.find('.flex').append(indicator);
+            }
+            
+            if (isOnLeave) {
+                const leaveIndicator = $(`
+                    <span class="ml-1 text-xs text-red-600" title="Driver is on leave on this date">
+                        <i class="fas fa-user-times"></i>
+                    </span>
+                `);
+                cell.find('.flex').append(leaveIndicator);
+            }
+
+            return cell;
+        }
+        
+        function saveIndividualSchedule(scheduleData) {
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    url: '{{ route("schedules.save-individual") }}',
+                    type: 'POST',
+                    data: scheduleData,
+                    headers: {
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                    },
+                    success: function(response) {
+                        resolve(response);
+                        toastr.success('Jadwal berhasil disimpan', 'Sukses');
+                        loadMatrixData(true);
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error saving schedule:', error);
+                        reject(error);
+                    }
+                });
+            });
         }
 
-        function noDataHtml(period, month, year) {
-            const colCount = period === 1 ? 20 : 20 + (new Date(year, month, 0).getDate() - 15);
-            return `
-        <tr>
-            <td colspan="${colCount}" class="px-6 py-4 text-sm font-medium text-center text-gray-500 whitespace-nowrap bg-yellow-50">
-                <i class="mr-2 fas fa-exclamation-circle"></i>
-                Tidak ada jadwal yang ditemukan.
-            </td>
-        </tr>
-    `;
+        function handleCheckboxChange(checkbox) {
+            const $checkbox = $(checkbox);
+            const isChecked = $checkbox.prop('checked');
+
+            const scheduleData = {
+                date: $checkbox.data('date'),
+                driver_id: $checkbox.data('driver-id'),
+                unit_id: $checkbox.data('unit-id'),
+                shift: $checkbox.data('shift'),
+                route_id: $checkbox.data('route-id'),
+                checked: isChecked
+            };
+
+            const $cell = $checkbox.closest('td');
+            const originalContent = $cell.html();
+            $cell.html('<i class="fas fa-spinner fa-spin text-blue-500"></i>');
+            saveIndividualSchedule(scheduleData)
+                .then(response => {
+                    $cell.html(originalContent);
+                    if (response.success) {
+                        $checkbox.prop('checked', response.checked);
+                        const $indicator = $('<span class="absolute top-0 right-0 text-green-500"><i class="fas fa-check-circle"></i></span>');
+                        $cell.css('position', 'relative').append($indicator);
+                        setTimeout(() => $indicator.fadeOut('fast', function() { $(this).remove(); }), 1500);
+                    } else {
+                        const $indicator = $('<span class="absolute top-0 right-0 text-red-500"><i class="fas fa-exclamation-circle"></i></span>');
+                        $cell.css('position', 'relative').append($indicator);
+                        setTimeout(() => $indicator.fadeOut('fast', function() { $(this).remove(); }), 1500);
+                        if (response.message) {
+                            console.error('Schedule update error:', response.message);
+                            alert(`Failed to update schedule: ${response.message}`);
+                        }
+                    }
+                })
+                .catch(error => {
+                    $cell.html(originalContent);
+                    const $indicator = $('<span class="absolute top-0 right-0 text-red-500"><i class="fas fa-exclamation-circle"></i></span>');
+                    $cell.css('position', 'relative').append($indicator);
+                    setTimeout(() => $indicator.fadeOut('fast', function() { $(this).remove(); }), 1500);
+
+                    console.error('Error saving schedule:', error);
+                    alert('Failed to update schedule. Please try again.');
+                });
         }
 
-        // Event handlers
         function handleFilterClick() {
-            // Force reload with the current values
             loadMatrixData(true);
         }
 
@@ -583,20 +689,16 @@
             let month = parseInt(monthElement.value);
             let year = parseInt(yearElement.value);
 
-            // Go to previous month
             month--;
 
-            // If we go before January, go to December of previous year
             if (month < 1) {
                 month = 12;
                 year--;
             }
 
-            // Update the selects
             monthElement.value = month;
             yearElement.value = year;
 
-            // Reload data
             loadMatrixData(true);
         }
 
@@ -607,20 +709,16 @@
             let month = parseInt(monthElement.value);
             let year = parseInt(yearElement.value);
 
-            // Go to next month
             month++;
 
-            // If we go past December, go to January of next year
             if (month > 12) {
                 month = 1;
                 year++;
             }
 
-            // Update the selects
             monthElement.value = month;
             yearElement.value = year;
 
-            // Reload data
             loadMatrixData(true);
         }
 
@@ -653,113 +751,102 @@
             }
         }
 
-        function handleCheckboxChange(checkbox) {
-            const $checkbox = $(checkbox);
-            const isChecked = $checkbox.prop('checked');
-
-            // Get the data from the checkbox
-            const scheduleData = {
-                date: $checkbox.data('date'),
-                driver_id: $checkbox.data('driver-id'),
-                unit_id: $checkbox.data('unit-id'),
-                shift: $checkbox.data('shift'),
-                route_id: $checkbox.data('route-id'),
-                checked: isChecked
-            };
-
-            // Show loading indicator on the cell
-            const $cell = $checkbox.closest('td');
-            const originalContent = $cell.html();
-            $cell.html('<i class="fas fa-spinner fa-spin text-blue-500"></i>');
-
-            // Save the individual schedule
-            saveIndividualSchedule(scheduleData)
-                .then(response => {
-                    // Restore the checkbox with the correct state
-                    $cell.html(originalContent);
-
-                    // If the save was successful, make sure the checkbox state matches the response
-                    if (response.success) {
-                        $checkbox.prop('checked', response.checked);
-
-                        // Show a brief success indicator
-                        const $indicator = $('<span class="absolute top-0 right-0 text-green-500"><i class="fas fa-check-circle"></i></span>');
-                        $cell.css('position', 'relative').append($indicator);
-                        setTimeout(() => $indicator.fadeOut('fast', function() { $(this).remove(); }), 1500);
-                    } else {
-                        // If there was an error, show an error indicator and restore original state
-                        const $indicator = $('<span class="absolute top-0 right-0 text-red-500"><i class="fas fa-exclamation-circle"></i></span>');
-                        $cell.css('position', 'relative').append($indicator);
-                        setTimeout(() => $indicator.fadeOut('fast', function() { $(this).remove(); }), 1500);
-
-                        // Show error message
-                        if (response.message) {
-                            console.error('Schedule update error:', response.message);
-                            alert(`Failed to update schedule: ${response.message}`);
-                        }
-                    }
-                })
-                .catch(error => {
-                    // Restore the original content
-                    $cell.html(originalContent);
-
-                    // Show error indicator
-                    const $indicator = $('<span class="absolute top-0 right-0 text-red-500"><i class="fas fa-exclamation-circle"></i></span>');
-                    $cell.css('position', 'relative').append($indicator);
-                    setTimeout(() => $indicator.fadeOut('fast', function() { $(this).remove(); }), 1500);
-
-                    console.error('Error saving schedule:', error);
-                    alert('Failed to update schedule. Please try again.');
-                });
-        }
-
-        async function saveIndividualSchedule(scheduleData) {
-            const response = await fetch('{{ route('schedules.save-individual') }}', {
-                method: 'POST',
+        function handleSaveAssignmentClick() {
+            if (pendingAssignments.length === 0) {
+                alert('Tidak ada penugasan baru untuk disimpan');
+                return;
+            }
+            
+            const $button = $(this);
+            $button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i> Menyimpan...');
+            
+            const assignments = pendingAssignments.map(a => ({
+                date: a.date,
+                shift: a.shift,
+                route_id: a.route_id,
+                unit_id: a.unit_id,
+                driver_id: a.driver_id
+            }));
+            
+            $.ajax({
+                url: '/schedules/save-individual-batch',
+                type: 'POST',
+                data: JSON.stringify({ assignments }),
+                contentType: 'application/json',
                 headers: {
-                    'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                 },
-                body: JSON.stringify(scheduleData)
+                success: function(response) {
+                    if (response.success) {
+                        const successCount = response.results.filter(r => r.success).length;
+                        alert(`Berhasil menyimpan ${successCount} penugasan baru`);
+                        
+                        pendingAssignments = [];
+                        renderPendingAssignments();
+                        
+                        loadMatrixData(true);
+                        
+                        loadUnassignedDrivers();
+                    } else {
+                        const failedResults = response.results ? response.results.filter(r => !r.success) : [];
+                        let errorMessage = 'Gagal menyimpan penugasan: ' + response.message;
+                        
+                        if (failedResults.length > 0) {
+                            errorMessage += '\n\nDetail kegagalan:';
+                            failedResults.forEach((result, index) => {
+                                const driver = pendingAssignments.find(a => a.id === result.index)?.driver?.name || 'Unknown';
+                                const date = pendingAssignments.find(a => a.id === result.index)?.date || 'Unknown';
+                                errorMessage += `\n${index + 1}. ${driver} (${date}): ${result.message}`;
+                            });
+                        }
+                        
+                        alert(errorMessage);
+                    }
+                    $button.prop('disabled', false).html('<i class="fas fa-save mr-2"></i> Simpan Penugasan');
+                },
+                error: function(error) {
+                    console.error('Error saving assignments:', error);
+                    let errorMessage = 'Gagal menyimpan penugasan. Silakan coba lagi.';
+                    
+                    if (error.responseJSON && error.responseJSON.message) {
+                        errorMessage = error.responseJSON.message;
+                        
+                        if (error.responseJSON.errors) {
+                            errorMessage += '\n\nDetail validasi:';
+                            Object.entries(error.responseJSON.errors).forEach(([field, messages]) => {
+                                errorMessage += `\n- ${field}: ${messages.join(', ')}`;
+                            });
+                        }
+                    }
+                    
+                    alert(errorMessage);
+                    $button.prop('disabled', false).html('<i class="fas fa-save mr-2"></i> Simpan Penugasan');
+                }
             });
-
-            if (!response.ok) {
-                throw new Error(`Network response was not ok: ${response.status}`);
-            }
-
-            return response.json();
         }
 
-        // Initialize on document ready
         $(document).ready(function() {
-            // Add event listeners
             $('#apply-matrix-filter').on('click', handleFilterClick);
             $('#prev-month').on('click', handlePrevMonthClick);
             $('#next-month').on('click', handleNextMonthClick);
             $('.period-tab').on('click', handlePeriodTabClick);
             $('.save-matrix').on('click', handleSaveMatrixClick);
 
-            // Also update when month or year is changed directly
             $(MATRIX_SELECTORS.month).on('change', function() {
-                // Auto-apply filter when month changes
                 loadMatrixData(true);
             });
 
             $(MATRIX_SELECTORS.year).on('change', function() {
-                // Auto-apply filter when year changes
                 loadMatrixData(true);
             });
 
-            // Load initial data
             loadMatrixData();
 
-            // Add CSS for weekend columns
             $('<style>')
                 .text('.weekend { background-color: rgba(251, 146, 60, 0.1); }')
                 .appendTo('head');
         });
 
-        // Unassigned drivers functionality
         let unassignedDrivers = [];
         let routes = [];
         let units = [];
@@ -767,7 +854,6 @@
 
         function loadUnassignedDrivers(data) {
             if (!data) {
-                // If no data provided, fetch unassigned drivers directly
                 const monthElement = document.getElementById('matrix-month');
                 const yearElement = document.getElementById('matrix-year');
                 const month = parseInt(monthElement.value);
@@ -783,7 +869,6 @@
                             unassignedDrivers = response.unassignedDrivers;
                             renderUnassignedDrivers();
                             
-                            // Also load routes for the assignment form
                             loadRoutes();
                         }
                     },
@@ -801,7 +886,6 @@
             unassignedDrivers = data.unassignedDrivers;
             renderUnassignedDrivers();
             
-            // Also load routes for the assignment form
             loadRoutes();
         }
 
@@ -830,9 +914,7 @@
                             ${driver.name}
                         </td>
                         <td class="px-4 py-2 text-sm whitespace-nowrap">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${driver.type.toLowerCase() === 'batangan' ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'}">
-                                ${driver.type}
-                            </span>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${driver.type.toLowerCase() === 'batangan' ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'} italic text-xs">${driver.type}</span>
                         </td>
                         <td class="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">
                             ${driverRoutes}
@@ -903,7 +985,6 @@
                                 $unitSelect.append(`<option value="${unit.id}">${unit.unit_number} (${unit.plate_number})</option>`);
                             });
                             
-                            // Also update the driver select based on qualified drivers
                             updateDriverSelect();
                         },
                         error: function(error) {
@@ -929,19 +1010,15 @@
             $driverSelect.find('option:not(:first)').remove();
             $driverSelect.prop('disabled', true);
             
-            // Show loading indicator
             $driverSelect.append(`<option value="" disabled>Loading drivers...</option>`);
             
-            // Fetch qualified drivers from the server
             $.ajax({
                 url: `/api/schedules/qualified-drivers/${routeId}/${unitId}`,
                 type: 'GET',
                 success: function(data) {
-                    // Remove loading indicator
                     $driverSelect.find('option[disabled]').remove();
                     $driverSelect.prop('disabled', false);
                     
-                    // Add qualified drivers with a "Qualified" label
                     if (data.qualified && data.qualified.length > 0) {
                         $driverSelect.append(`<optgroup label="Qualified Drivers">`);
                         data.qualified.forEach(driver => {
@@ -950,7 +1027,6 @@
                         $driverSelect.append(`</optgroup>`);
                     }
                     
-                    // Add partially qualified drivers with appropriate labels
                     if (data.routeOnly && data.routeOnly.length > 0) {
                         $driverSelect.append(`<optgroup label="Route Only Qualified">`);
                         data.routeOnly.forEach(driver => {
@@ -967,7 +1043,6 @@
                         $driverSelect.append(`</optgroup>`);
                     }
                     
-                    // Add unqualified drivers with an "Unqualified" label
                     if (data.unqualified && data.unqualified.length > 0) {
                         $driverSelect.append(`<optgroup label="Unqualified Drivers">`);
                         data.unqualified.forEach(driver => {
@@ -986,20 +1061,17 @@
         }
 
         function addNewAssignment() {
-            // Get form values
             const date = $('#assignment-date').val();
             const shift = $('#assignment-shift').val();
             const routeId = $('#assignment-route').val();
             const unitId = $('#assignment-unit').val();
             const driverId = $('#assignment-driver').val();
             
-            // Validate form
             if (!date || !shift || !routeId || !unitId || !driverId) {
                 alert('Silakan lengkapi semua field');
                 return;
             }
             
-            // Find the selected objects
             const route = routes.find(r => r.id == routeId);
             const unit = units.find(u => u.id == unitId);
             const driver = unassignedDrivers.find(d => d.id == driverId);
@@ -1009,7 +1081,6 @@
                 return;
             }
             
-            // Check for duplicate assignments
             const isDuplicate = pendingAssignments.some(a => 
                 a.date === date && 
                 a.shift === shift && 
@@ -1021,7 +1092,6 @@
                 return;
             }
             
-            // Check if driver is already assigned on the same date and shift
             const isDriverAssigned = pendingAssignments.some(a => 
                 a.date === date && 
                 a.shift === shift && 
@@ -1034,9 +1104,8 @@
                 }
             }
             
-            // Create the assignment object
             const assignment = {
-                id: Date.now(), // Temporary ID for frontend tracking
+                id: Date.now(),
                 date: date,
                 shift: shift,
                 route_id: routeId,
@@ -1047,15 +1116,14 @@
                 driver: driver
             };
             
-            // Add to pending assignments
             pendingAssignments.push(assignment);
             
-            // Render the pending assignments
             renderPendingAssignments();
             
-            // Reset the form
             $('#assignment-form')[0].reset();
         }
+        
+
 
         function renderPendingAssignments() {
             const $container = $('#pending-assignments-list');
@@ -1116,88 +1184,6 @@
         function removeAssignment(id) {
             pendingAssignments = pendingAssignments.filter(a => a.id !== id);
             renderPendingAssignments();
-        }
-
-        function handleSaveAssignmentClick() {
-            if (pendingAssignments.length === 0) {
-                alert('Tidak ada penugasan baru untuk disimpan');
-                return;
-            }
-            
-            const $button = $(this);
-            $button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i> Menyimpan...');
-            
-            // Prepare data for submission
-            const assignments = pendingAssignments.map(a => ({
-                date: a.date,
-                shift: a.shift,
-                route_id: a.route_id,
-                unit_id: a.unit_id,
-                driver_id: a.driver_id
-            }));
-            
-            // Submit the assignments
-            $.ajax({
-                url: '/schedules/save-individual-batch',
-                type: 'POST',
-                data: JSON.stringify({ assignments }),
-                contentType: 'application/json',
-                headers: {
-                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-                },
-                success: function(response) {
-                    if (response.success) {
-                        // Count successful assignments
-                        const successCount = response.results.filter(r => r.success).length;
-                        alert(`Berhasil menyimpan ${successCount} penugasan baru`);
-                        
-                        // Clear pending assignments
-                        pendingAssignments = [];
-                        renderPendingAssignments();
-                        
-                        // Reload the matrix data
-                        loadMatrixData(true);
-                        
-                        // Reload unassigned drivers
-                        loadUnassignedDrivers();
-                    } else {
-                        // Show detailed error message with specific failures
-                        const failedResults = response.results ? response.results.filter(r => !r.success) : [];
-                        let errorMessage = 'Gagal menyimpan penugasan: ' + response.message;
-                        
-                        if (failedResults.length > 0) {
-                            errorMessage += '\n\nDetail kegagalan:';
-                            failedResults.forEach((result, index) => {
-                                const driver = pendingAssignments.find(a => a.id === result.index)?.driver?.name || 'Unknown';
-                                const date = pendingAssignments.find(a => a.id === result.index)?.date || 'Unknown';
-                                errorMessage += `\n${index + 1}. ${driver} (${date}): ${result.message}`;
-                            });
-                        }
-                        
-                        alert(errorMessage);
-                    }
-                    $button.prop('disabled', false).html('<i class="fas fa-save mr-2"></i> Simpan Penugasan');
-                },
-                error: function(error) {
-                    console.error('Error saving assignments:', error);
-                    let errorMessage = 'Gagal menyimpan penugasan. Silakan coba lagi.';
-                    
-                    if (error.responseJSON && error.responseJSON.message) {
-                        errorMessage = error.responseJSON.message;
-                        
-                        // If there are validation errors, show them in detail
-                        if (error.responseJSON.errors) {
-                            errorMessage += '\n\nDetail validasi:';
-                            Object.entries(error.responseJSON.errors).forEach(([field, messages]) => {
-                                errorMessage += `\n- ${field}: ${messages.join(', ')}`;
-                            });
-                        }
-                    }
-                    
-                    alert(errorMessage);
-                    $button.prop('disabled', false).html('<i class="fas fa-save mr-2"></i> Simpan Penugasan');
-                }
-            });
         }
     </script>
 @endpush

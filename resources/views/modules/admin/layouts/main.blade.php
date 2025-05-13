@@ -26,6 +26,23 @@
     <!-- Flowbite JS for sidebar dropdown functionality -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/1.6.5/flowbite.min.js"></script>
     
+    <!-- Toastr CSS and JS for notifications -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    
+    <!-- Toastr Configuration -->
+    <script>
+        // Configure Toastr options
+        toastr.options = {
+            closeButton: true,
+            progressBar: true,
+            positionClass: "toast-top-right",
+            timeOut: 3000,
+            extendedTimeOut: 1000,
+            preventDuplicates: true
+        };
+    </script>
+    
     <!-- Custom Styles -->
     @stack('styles')
 </head>
