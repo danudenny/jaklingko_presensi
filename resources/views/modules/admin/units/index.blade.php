@@ -44,10 +44,16 @@
     <x-page-title>
         <x-slot name="title">List Unit</x-slot>
         <x-slot name="actions">
-            <button type="button" onclick="createUnit()" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:border-indigo-900 focus:ring ring-indigo-300 disabled:opacity-25 transition ease-in-out duration-150">
-                <i class="fas fa-plus mr-2"></i>
-                Tambahkan Unit
-            </button>
+            <div class="flex space-x-2">
+                <a href="{{ route('units.import.form') }}" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 active:bg-green-900 focus:outline-none focus:border-green-900 focus:ring ring-green-300 disabled:opacity-25 transition ease-in-out duration-150">
+                    <i class="fas fa-file-import mr-2"></i>
+                    Import
+                </a>
+                <a href="{{ route('units.create') }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:border-indigo-900 focus:ring ring-indigo-300 disabled:opacity-25 transition ease-in-out duration-150">
+                    <i class="fas fa-plus mr-2"></i>
+                    Tambahkan Unit
+                </a>
+            </div>
         </x-slot>
     </x-page-title>
 
@@ -67,7 +73,8 @@
             <!-- Advanced Filter Form -->
             <div id="filter-form" class="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200 hidden">
                 <form method="GET" action="{{ route('units.index') }}" class="space-y-4">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- First row - 4 inline filters -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div>
                             <label for="unit_number" class="block text-sm font-medium text-gray-700">No Unit</label>
                             <input type="text" name="unit_number" id="unit_number" value="{{ request('unit_number') }}" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
@@ -99,35 +106,38 @@
                                 @endforeach
                             </select>
                         </div>
-
+                    </div>
+                    
+                    <!-- Second row - Pool type and date ranges -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div>
-                            <label for="expired_stnk_from" class="block text-sm font-medium text-gray-700">Expired STNK (Dari)</label>
-                            <input type="text" name="expired_stnk_from" id="expired_stnk_from" value="{{ request('expired_stnk_from') }}" class="datepicker mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
+                            <label for="is_pool" class="block text-sm font-medium text-gray-700">Tipe Unit</label>
+                            <select name="is_pool" id="is_pool" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                <option value="">Semua Tipe</option>
+                                <option value="1" {{ request('is_pool') === '1' ? 'selected' : '' }}>Pool</option>
+                                <option value="0" {{ request('is_pool') === '0' ? 'selected' : '' }}>Non-Pool</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label for="expired_stnk_range" class="block text-sm font-medium text-gray-700">Expired STNK</label>
+                            <input type="text" name="expired_stnk_range" id="expired_stnk_range" value="{{ request('expired_stnk_from') && request('expired_stnk_to') ? request('expired_stnk_from') . ' to ' . request('expired_stnk_to') : '' }}" class="daterangepicker mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md" placeholder="Pilih rentang tanggal">
+                            <input type="hidden" name="expired_stnk_from" id="expired_stnk_from" value="{{ request('expired_stnk_from') }}">
+                            <input type="hidden" name="expired_stnk_to" id="expired_stnk_to" value="{{ request('expired_stnk_to') }}">
                         </div>
 
                         <div>
-                            <label for="expired_stnk_to" class="block text-sm font-medium text-gray-700">Expired STNK (Sampai)</label>
-                            <input type="text" name="expired_stnk_to" id="expired_stnk_to" value="{{ request('expired_stnk_to') }}" class="datepicker mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
+                            <label for="expired_kir_range" class="block text-sm font-medium text-gray-700">Expired KIR</label>
+                            <input type="text" name="expired_kir_range" id="expired_kir_range" value="{{ request('expired_kir_from') && request('expired_kir_to') ? request('expired_kir_from') . ' to ' . request('expired_kir_to') : '' }}" class="daterangepicker mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md" placeholder="Pilih rentang tanggal">
+                            <input type="hidden" name="expired_kir_from" id="expired_kir_from" value="{{ request('expired_kir_from') }}">
+                            <input type="hidden" name="expired_kir_to" id="expired_kir_to" value="{{ request('expired_kir_to') }}">
                         </div>
 
                         <div>
-                            <label for="expired_kir_from" class="block text-sm font-medium text-gray-700">Expired KIR (Dari)</label>
-                            <input type="text" name="expired_kir_from" id="expired_kir_from" value="{{ request('expired_kir_from') }}" class="datepicker mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
-                        </div>
-
-                        <div>
-                            <label for="expired_kir_to" class="block text-sm font-medium text-gray-700">Expired KIR (Sampai)</label>
-                            <input type="text" name="expired_kir_to" id="expired_kir_to" value="{{ request('expired_kir_to') }}" class="datepicker mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
-                        </div>
-
-                        <div>
-                            <label for="expired_kp_from" class="block text-sm font-medium text-gray-700">Expired KP (Dari)</label>
-                            <input type="text" name="expired_kp_from" id="expired_kp_from" value="{{ request('expired_kp_from') }}" class="datepicker mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
-                        </div>
-
-                        <div>
-                            <label for="expired_kp_to" class="block text-sm font-medium text-gray-700">Expired KP (Sampai)</label>
-                            <input type="text" name="expired_kp_to" id="expired_kp_to" value="{{ request('expired_kp_to') }}" class="datepicker mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
+                            <label for="expired_kp_range" class="block text-sm font-medium text-gray-700">Expired KP</label>
+                            <input type="text" name="expired_kp_range" id="expired_kp_range" value="{{ request('expired_kp_from') && request('expired_kp_to') ? request('expired_kp_from') . ' to ' . request('expired_kp_to') : '' }}" class="daterangepicker mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md" placeholder="Pilih rentang tanggal">
+                            <input type="hidden" name="expired_kp_from" id="expired_kp_from" value="{{ request('expired_kp_from') }}">
+                            <input type="hidden" name="expired_kp_to" id="expired_kp_to" value="{{ request('expired_kp_to') }}">
                         </div>
                     </div>
 
@@ -262,12 +272,12 @@
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200" id="units-table-body">
                         @foreach($units as $unit)
-                            <tr class="unit-row" data-status="{{ $unit->status }}" data-unit-number="{{ strtolower($unit->unit_number) }}" data-plate-number="{{ strtolower($unit->plate_number ?? '') }}">
+                            <tr class="unit-row {{ $unit->is_pool ? '' : 'bg-orange-50' }}" data-status="{{ $unit->status }}" data-unit-number="{{ strtolower($unit->unit_number) }}" data-plate-number="{{ strtolower($unit->plate_number ?? '') }}" data-is-pool="{{ $unit->is_pool ? 'true' : 'false' }}">
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    {{ $unit->unit_number }}
+                                    KWK-{{ $unit->unit_number }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    <div class="bg-yellow-300 border inline-block border-black rounded-md p-1 px-2 justify-center items-center max-w-xs shadow-md">
+                                    <div class="{{ $unit->is_pool ? 'bg-yellow-300' : 'bg-gray-200' }} border inline-block border-black rounded-md p-1 px-2 justify-center items-center max-w-xs shadow-md">
                                         <div class="text-black font-bold text-xs tracking-wider">
                                             @php
                                                 $plateNumber = $unit->plate_number;
@@ -408,9 +418,9 @@
                                         <button type="button" onclick="viewUnitDetails({{ $unit->id }})" class="text-blue-600 hover:text-blue-900">
                                             <i class="fas fa-eye"></i>
                                         </button>
-                                        <button type="button" onclick="editUnitDetails({{ $unit->id }})" class="text-indigo-600 hover:text-indigo-900">
+                                        <a href="{{ route('units.edit', $unit->id) }}" class="text-indigo-600 hover:text-indigo-900">
                                             <i class="fas fa-edit"></i>
-                                        </button>
+                                        </a>
                                         <button type="button" onclick="deleteUnitConfirm({{ $unit->id }})" class="text-red-600 hover:text-red-900">
                                             <i class="fas fa-trash"></i>
                                         </button>
@@ -698,6 +708,7 @@
 
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/rangePlugin.js"></script>
 <script>
     // Define global functions first
     window.createUnit = function() {
@@ -850,7 +861,49 @@
         flatpickr(".datepicker", {
             dateFormat: "Y-m-d",
             theme: "airbnb",
-            allowInput: true
+        });
+        
+        // Initialize daterange pickers
+        flatpickr("#expired_stnk_range", {
+            mode: "range",
+            dateFormat: "Y-m-d",
+            theme: "airbnb",
+            onChange: function(selectedDates, dateStr) {
+                if (selectedDates.length === 2) {
+                    const startDate = flatpickr.formatDate(selectedDates[0], "Y-m-d");
+                    const endDate = flatpickr.formatDate(selectedDates[1], "Y-m-d");
+                    document.getElementById('expired_stnk_from').value = startDate;
+                    document.getElementById('expired_stnk_to').value = endDate;
+                }
+            }
+        });
+        
+        flatpickr("#expired_kir_range", {
+            mode: "range",
+            dateFormat: "Y-m-d",
+            theme: "airbnb",
+            onChange: function(selectedDates, dateStr) {
+                if (selectedDates.length === 2) {
+                    const startDate = flatpickr.formatDate(selectedDates[0], "Y-m-d");
+                    const endDate = flatpickr.formatDate(selectedDates[1], "Y-m-d");
+                    document.getElementById('expired_kir_from').value = startDate;
+                    document.getElementById('expired_kir_to').value = endDate;
+                }
+            }
+        });
+        
+        flatpickr("#expired_kp_range", {
+            mode: "range",
+            dateFormat: "Y-m-d",
+            theme: "airbnb",
+            onChange: function(selectedDates, dateStr) {
+                if (selectedDates.length === 2) {
+                    const startDate = flatpickr.formatDate(selectedDates[0], "Y-m-d");
+                    const endDate = flatpickr.formatDate(selectedDates[1], "Y-m-d");
+                    document.getElementById('expired_kp_from').value = startDate;
+                    document.getElementById('expired_kp_to').value = endDate;
+                }
+            }
         });
 
         // Create Unit form submission

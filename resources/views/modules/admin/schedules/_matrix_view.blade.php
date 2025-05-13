@@ -489,7 +489,6 @@
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${row.shift === 'pagi' || row.shift === 'morning' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}">
                             ${row.shift === 'pagi' || row.shift === 'morning' ? 'Pagi' : 'Siang'}
                         </span>
-                        ${row.is_backup ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Backup</span>' : ''}
                     </div>
                 </td>
             `);
@@ -585,12 +584,12 @@
 
             if (isBackupDriver) {
                 const backupBadge = $(`
-                    <span class="ml-1 text-xs bg-blue-100 text-blue-800 font-medium px-1 py-0.5 rounded" title="Backup driver for ${row.primary_driver_id}">
+                    <span class="ml-1 text-xs bg-blue-100 text-blue-800 font-medium px-1 py-0.5 rounded" title="Backup driver">
                         Backup
                     </span>
                 `);
                 cell.find('.flex').append(backupBadge);
-            } else if (hasBackupDriver && !isOnLeave) {
+            } else if (hasBackupDriver) {
                 const indicator = $(`
                     <span class="ml-1 text-xs text-blue-600" title="This schedule has a backup driver (ID: ${backupDriverId})">
                         <i class="fas fa-exchange-alt"></i>
@@ -601,7 +600,7 @@
             
             if (isOnLeave) {
                 const leaveIndicator = $(`
-                    <span class="ml-1 text-xs text-red-600" title="Driver is on leave on this date">
+                    <span class="ml-1 text-xs text-red-600" title="Pengemudi cuti pada tanggal ini">
                         <i class="fas fa-user-times"></i>
                     </span>
                 `);

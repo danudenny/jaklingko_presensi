@@ -37,6 +37,9 @@
 <div class="container mx-auto px-4 py-6">
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold text-gray-800">Rencana Operasi Unit</h1>
+        <a href="{{ route('renops.settings') }}" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+            <i class="fas fa-cog mr-2"></i> Pengaturan
+        </a>
     </div>
 
     <div class="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -87,7 +90,18 @@
 
             <div class="mb-4">
                 <div class="flex justify-between items-center mb-2">
-                    <h2 class="text-lg font-semibold text-gray-800">Pilih Unit</h2>
+                    <div class="flex items-center">
+                        <h2 class="text-lg font-semibold text-gray-800">Pilih Unit</h2>
+                        @if(isset($settings) && $settings->isAutomatic())
+                            <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                <i class="fas fa-robot mr-1"></i> Mode Otomatis
+                            </span>
+                        @else
+                            <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                <i class="fas fa-hand-pointer mr-1"></i> Mode Manual
+                            </span>
+                        @endif
+                    </div>
                     <div class="flex items-center">
                         <span class="text-sm text-gray-600 mr-2">Terpilih: <span id="selected-count">{{ $currentCount ?? 0 }}</span> / <span>{{ $maxLimit }}</span></span>
                         <div class="progress-container">
@@ -105,9 +119,30 @@
                     </div>
                 </div>
 
-                <div id="units-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-96 overflow-y-auto">
+                @if(isset($settings) && $settings->isAutomatic())
+                    <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-robot text-blue-400"></i>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-blue-700">
+                                    <strong>Mode Otomatis Aktif:</strong> Unit dipilih secara otomatis berdasarkan pengaturan ambang batas.
+                                    Untuk mengubah pilihan unit, silakan ubah ke mode manual di halaman pengaturan.
+                                </p>
+                                <p class="text-sm text-blue-700 mt-2">
+                                    <a href="{{ route('renops.settings') }}" class="font-medium underline">Buka Pengaturan</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="units-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-96 overflow-y-auto opacity-75 pointer-events-none">
+                @else
+                    <div id="units-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-96 overflow-y-auto">
+                @endif
                     @foreach($units as $unit)
-                        <div class="unit-card border rounded-lg p-3 cursor-pointer hover:bg-gray-50 {{ in_array($unit->id, $renopsUnits ?? []) ? 'selected' : '' }}"
+                        <div class="unit-card border rounded-lg p-3 {{ isset($settings) && $settings->isAutomatic() ? '' : 'cursor-pointer hover:bg-gray-50' }} {{ in_array($unit->id, $renopsUnits ?? []) ? 'selected' : '' }}"
                              data-unit-id="{{ $unit->id }}"
                              data-unit-number="{{ $unit->unit_number }}"
                              data-plate-number="{{ $unit->plate_number }}">
@@ -158,6 +193,47 @@
         const holidayId = '{{ $holiday->id ?? "" }}';
         const maxLimit = {{ $maxLimit ?? 0 }};
         const unitCards = document.querySelectorAll('.unit-card');
+        const autoSuggestion = @json($autoSuggestion ?? null);
+        const isAutomatic = {{ isset($settings) && $settings->isAutomatic() ? 'true' : 'false' }};
+
+        // Apply automatic selection if in automatic mode and we have suggestions
+        if (isAutomatic && autoSuggestion && autoSuggestion.length > 0) {
+            // Show notification about automatic mode
+            const container = document.querySelector('.container');
+            const notification = document.createElement('div');
+            notification.className = 'bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-6';
+            notification.innerHTML = `
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-robot text-blue-500"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-blue-700">
+                            <strong>Mode Otomatis Aktif:</strong> Sistem telah memilih ${autoSuggestion.length} unit secara otomatis berdasarkan pengaturan ambang batas.
+                            Anda masih dapat mengubah pilihan unit secara manual jika diperlukan.
+                        </p>
+                    </div>
+                    <button type="button" class="ml-auto pl-3" id="close-notification">
+                        <i class="fas fa-times text-blue-500"></i>
+                    </button>
+                </div>
+            `;
+            container.insertBefore(notification, container.firstChild);
+            
+            // Add close button functionality
+            document.getElementById('close-notification').addEventListener('click', function() {
+                notification.remove();
+            });
+            
+            // Select the units automatically
+            unitCards.forEach(card => {
+                const unitId = card.getAttribute('data-unit-id');
+                if (autoSuggestion.includes(parseInt(unitId))) {
+                    // Trigger a click on the card to select it
+                    card.click();
+                }
+            });
+        }
 
         // Initialize flatpickr with Indonesian locale
         flatpickr("#date", {
@@ -217,47 +293,62 @@
             });
         });
 
-        // Toggle unit selection
-        unitCards.forEach(card => {
-            card.addEventListener('click', function() {
-                const unitId = this.getAttribute('data-unit-id');
-
-                // Toggle visual selection
-                this.classList.toggle('selected');
-
-                // Update status badge
-                const statusBadge = this.querySelector('.status-badge');
-                if (this.classList.contains('selected')) {
-                    statusBadge.textContent = 'Dipilih';
-                    statusBadge.classList.remove('bg-gray-100', 'text-gray-800');
-                    statusBadge.classList.add('bg-green-100', 'text-green-800');
-                } else {
-                    statusBadge.textContent = 'Tidak Dipilih';
-                    statusBadge.classList.remove('bg-green-100', 'text-green-800');
-                    statusBadge.classList.add('bg-gray-100', 'text-gray-800');
-                }
-
-                updateSelectedCount();
-
-                // Send AJAX request to toggle unit
-                if (date && dayType) {
-                    fetch('{{ route('renops.toggle-unit') }}', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                        },
-                        body: JSON.stringify({
-                            date: date,
-                            unit_id: unitId,
-                            day_type: dayType,
-                            holiday_id: dayType === 'holiday' ? holidayId : null
+        // Toggle unit selection - only if not in automatic mode
+        if (!isAutomatic) {
+            unitCards.forEach(card => {
+                card.addEventListener('click', function() {
+                    const unitId = this.getAttribute('data-unit-id');
+    
+                    // Toggle visual selection
+                    this.classList.toggle('selected');
+    
+                    // Update status badge
+                    const statusBadge = this.querySelector('.status-badge');
+                    if (this.classList.contains('selected')) {
+                        statusBadge.textContent = 'Dipilih';
+                        statusBadge.classList.remove('bg-gray-100', 'text-gray-800');
+                        statusBadge.classList.add('bg-green-100', 'text-green-800');
+                    } else {
+                        statusBadge.textContent = 'Tidak Dipilih';
+                        statusBadge.classList.remove('bg-green-100', 'text-green-800');
+                        statusBadge.classList.add('bg-gray-100', 'text-gray-800');
+                    }
+    
+                    updateSelectedCount();
+    
+                    // Send AJAX request to toggle unit
+                    if (date && dayType) {
+                        fetch('{{ route('renops.toggle-unit') }}', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                            },
+                            body: JSON.stringify({
+                                date: date,
+                                unit_id: unitId,
+                                day_type: dayType,
+                                holiday_id: dayType === 'holiday' ? holidayId : null
+                            })
                         })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (!data.success) {
-                            // If failed, revert the selection
+                        .then(response => response.json())
+                        .then(data => {
+                            if (!data.success) {
+                                // If failed, revert the selection
+                                this.classList.toggle('selected');
+                                statusBadge.textContent = this.classList.contains('selected') ? 'Dipilih' : 'Tidak Dipilih';
+                                statusBadge.classList.toggle('bg-green-100');
+                                statusBadge.classList.toggle('text-green-800');
+                                statusBadge.classList.toggle('bg-gray-100');
+                                statusBadge.classList.toggle('text-gray-800');
+                                updateSelectedCount();
+    
+                                alert(data.message);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            // Revert the selection on error
                             this.classList.toggle('selected');
                             statusBadge.textContent = this.classList.contains('selected') ? 'Dipilih' : 'Tidak Dipilih';
                             statusBadge.classList.toggle('bg-green-100');
@@ -265,26 +356,17 @@
                             statusBadge.classList.toggle('bg-gray-100');
                             statusBadge.classList.toggle('text-gray-800');
                             updateSelectedCount();
-
-                            alert(data.message);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        // Revert the selection on error
-                        this.classList.toggle('selected');
-                        statusBadge.textContent = this.classList.contains('selected') ? 'Dipilih' : 'Tidak Dipilih';
-                        statusBadge.classList.toggle('bg-green-100');
-                        statusBadge.classList.toggle('text-green-800');
-                        statusBadge.classList.toggle('bg-gray-100');
-                        statusBadge.classList.toggle('text-gray-800');
-                        updateSelectedCount();
-
-                        alert('Terjadi kesalahan saat mengubah status unit.');
-                    });
-                }
+    
+                            alert('Terjadi kesalahan saat mengubah status unit.');
+                        });
+                    }
+                });
             });
-        });
+        } else {
+            // In automatic mode, add a notice about automatic selection
+            const unitsContainer = document.getElementById('units-container');
+            unitsContainer.classList.add('opacity-75', 'pointer-events-none');
+        }
 
         // Save changes
         if (saveChangesBtn) {

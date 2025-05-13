@@ -28,6 +28,7 @@ class Unit extends Model
         'expired_kp',
         'status',
         'is_renops',
+        'is_pool',
         'notes',
     ];
 
@@ -41,6 +42,7 @@ class Unit extends Model
         'expired_kir' => 'date',
         'expired_kp' => 'date',
         'is_renops' => 'boolean',
+        'is_pool' => 'boolean',
     ];
 
     /**
@@ -81,6 +83,22 @@ class Unit extends Model
     public function scopeActive($query)
     {
         return $query->where('status', 'aktif');
+    }
+    
+    /**
+     * Scope a query to only include units that are in the pool (owned).
+     */
+    public function scopeInPool($query)
+    {
+        return $query->where('is_pool', true);
+    }
+    
+    /**
+     * Scope a query to only include units that are not in the pool (not owned).
+     */
+    public function scopeNotInPool($query)
+    {
+        return $query->where('is_pool', false);
     }
     
     /**

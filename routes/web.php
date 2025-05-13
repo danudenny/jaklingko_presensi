@@ -4,6 +4,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\DriverController;
 use App\Http\Controllers\UnitController;
+use App\Http\Controllers\UnitImportController;
 use App\Http\Controllers\RouteController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\LeaveRequestController;
@@ -13,6 +14,7 @@ use App\Http\Controllers\KilometerReportController;
 use App\Http\Controllers\MaintenanceLogController;
 use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\UnitRenopsController;
+use App\Http\Controllers\DriverScheduleSettingsController;
 use App\Http\Controllers\GlobalKilometerReportController;
 use Illuminate\Support\Facades\Route;
 
@@ -61,6 +63,13 @@ Route::middleware('auth')->group(function () {
 
     // Unit routes
     Route::resource('units', UnitController::class);
+
+// Unit Import Routes
+Route::get('units-import', [UnitImportController::class, 'showImportForm'])->name('units.import.form');
+Route::post('units-import/pool', [UnitImportController::class, 'importPoolUnits'])->name('units.import.pool');
+Route::post('units-import/non-pool', [UnitImportController::class, 'importNonPoolUnits'])->name('units.import.non-pool');
+Route::get('units-import/pool/template', [UnitImportController::class, 'downloadPoolTemplate'])->name('units.import.pool.template');
+Route::get('units-import/non-pool/template', [UnitImportController::class, 'downloadNonPoolTemplate'])->name('units.import.non-pool.template');
     Route::patch('/units/{unit}/toggle-renops', [UnitController::class, 'toggleRenops'])->name('units.toggle-renops');
     Route::post('/units/bulk-renops', [UnitController::class, 'bulkRenops'])->name('units.bulk-renops');
 
@@ -108,6 +117,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('renops/{date}', [UnitRenopsController::class, 'destroy'])->name('renops.destroy');
     Route::post('renops/toggle-unit', [UnitRenopsController::class, 'toggleUnit'])->name('renops.toggle-unit');
     Route::get('renops/date-range', [UnitRenopsController::class, 'getByDateRange'])->name('renops.date-range');
+    Route::get('renops/settings', [UnitRenopsController::class, 'showSettings'])->name('renops.settings');
+    Route::post('renops/settings', [UnitRenopsController::class, 'updateSettings'])->name('renops.settings.update');
 
     // Route routes
     Route::resource('routes', RouteController::class);
@@ -117,6 +128,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/schedules/calendar', [ScheduleController::class, 'calendar'])->name('schedules.calendar');
     Route::get('/schedules/generate', [ScheduleController::class, 'showGenerateForm'])->name('schedules.generate.form');
     Route::post('/schedules/generate', [ScheduleController::class, 'generateSchedules'])->name('schedules.generate');
+    Route::get('/schedules/settings', [DriverScheduleSettingsController::class, 'index'])->name('driver.schedule.settings');
+    Route::post('/schedules/settings', [DriverScheduleSettingsController::class, 'update'])->name('driver.schedule.settings.update');
     Route::get('/schedules/date/{date}', [ScheduleController::class, 'getSchedulesByDate'])->name('schedules.by.date');
     Route::get('/schedules/{schedule}/unavailable', [ScheduleController::class, 'markUnavailable'])->name('schedules.unavailable');
     Route::post('/schedules/{schedule}/backup', [ScheduleController::class, 'assignBackup'])->name('schedules.backup');

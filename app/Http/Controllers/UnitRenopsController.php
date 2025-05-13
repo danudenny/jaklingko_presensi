@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Holiday;
 use App\Models\Unit;
 use App\Models\UnitRenops;
+use App\Models\RenopsSettings;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -50,13 +52,32 @@ class UnitRenopsController extends Controller
             ]);
         }
 
-        // Get all active units
-        $units = Unit::active()->get();
+        // Get all active units with is_pool = true
+        $units = Unit::active()->where('is_pool', true)->get();
 
         // Get units already in renops for this date
         $renopsUnits = UnitRenops::where('date', $selectedDate)
             ->pluck('unit_id')
             ->toArray();
+            
+        // Get the current settings
+        $settings = RenopsSettings::getCurrentSettings();
+        $maxLimit = $this->getMaxLimit($dayType);
+        
+        // Check if we're in automatic mode and there are no renops units yet
+        $autoSuggestion = null;
+        if ($settings->isAutomatic() && empty($renopsUnits)) {
+            // Apply unit type filter for automatic selection
+            $filteredUnits = $units;
+            if ($settings->unit_type === 'pool') {
+                $filteredUnits = $units->where('is_pool', true);
+            }
+            
+            // Get random units up to the threshold limit for automatic selection
+            $autoSuggestion = $filteredUnits->random(min($maxLimit, $filteredUnits->count()))
+                ->pluck('id')
+                ->toArray();
+        }
 
         return view('modules.admin.renops.index', [
             'date' => $selectedDate,
@@ -64,8 +85,10 @@ class UnitRenopsController extends Controller
             'renopsUnits' => $renopsUnits,
             'dayType' => $dayType,
             'holiday' => $holiday,
-            'maxLimit' => $this->getMaxLimit($dayType),
-            'currentCount' => count($renopsUnits)
+            'maxLimit' => $maxLimit,
+            'currentCount' => count($renopsUnits),
+            'settings' => $settings,
+            'autoSuggestion' => $autoSuggestion
         ]);
     }
 
@@ -191,48 +214,90 @@ class UnitRenopsController extends Controller
     public function update(Request $request, string $date): JsonResponse
     {
         $validated = $request->validate([
-            'unit_ids' => 'required|array',
-            'unit_ids.*' => 'exists:units,id',
+            'units' => 'required|array',
+            'units.*' => 'exists:units,id',
             'day_type' => 'required|in:saturday,sunday,holiday',
-            'holiday_id' => 'required_if:day_type,holiday|nullable|exists:holidays,id',
+            'holiday_id' => 'nullable|exists:holidays,id',
         ]);
 
-        $parsedDate = Carbon::parse($date);
+        $selectedDate = Carbon::parse($date);
         $dayType = $validated['day_type'];
         $holidayId = $validated['holiday_id'] ?? null;
+        $unitIds = $validated['units'];
 
-        // Check if we're exceeding the maximum limit
+        // Get the settings and check if we're in automatic mode
+        $settings = RenopsSettings::getCurrentSettings();
+        
+        // Get the maximum limit for this day type
         $maxLimit = $this->getMaxLimit($dayType);
 
-        if (count($validated['unit_ids']) > $maxLimit) {
+        // If we're in automatic mode and no units were provided, automatically select units
+        if ($settings->isAutomatic() && empty($unitIds)) {
+            // Filter units by is_pool if unit_type is set to 'pool'
+            $query = Unit::active();
+            if ($settings->unit_type === 'pool') {
+                $query->where('is_pool', true);
+            }
+            $availableUnits = $query->get();
+            $unitIds = $availableUnits->random(min($maxLimit, $availableUnits->count()))
+                ->pluck('id')
+                ->toArray();
+        }
+
+        // Check if the number of units exceeds the maximum limit
+        if (count($unitIds) > $maxLimit) {
             return response()->json([
                 'success' => false,
-                'message' => "Cannot add more units. Maximum limit is {$maxLimit} units."
+                'message' => "Jumlah unit melebihi batas maksimum untuk hari ini ({$maxLimit} unit)."
             ], 422);
         }
 
-        // Begin transaction
+        // Start a database transaction
         DB::beginTransaction();
 
         try {
-            // Delete existing entries for this date
-            UnitRenops::where('date', $parsedDate)->delete();
+            // Get existing renops entries for this date
+            $existingRenops = UnitRenops::where('date', $selectedDate)->get();
+            $existingUnitIds = $existingRenops->pluck('unit_id')->toArray();
 
-            // Create new entries
-            foreach ($validated['unit_ids'] as $unitId) {
+            // Units to add (in new request but not in existing)
+            $unitsToAdd = array_diff($unitIds, $existingUnitIds);
+
+            // Units to remove (in existing but not in new request)
+            $unitsToRemove = array_diff($existingUnitIds, $unitIds);
+
+            // Log the changes
+            $logMessage = "Renops update for {$selectedDate->format('Y-m-d')} ({$dayType}):\n";
+            $logMessage .= "- Units to add: " . implode(', ', $unitsToAdd) . "\n";
+            $logMessage .= "- Units to remove: " . implode(', ', $unitsToRemove) . "\n";
+            $logMessage .= "- Mode: " . ($settings->isAutomatic() ? 'Automatic' : 'Manual');
+            
+            \Log::info($logMessage);
+
+            // Add new units to renops
+            foreach ($unitsToAdd as $unitId) {
                 UnitRenops::create([
-                    'date' => $parsedDate,
+                    'date' => $selectedDate,
                     'unit_id' => $unitId,
                     'day_type' => $dayType,
-                    'holiday_id' => $holidayId
+                    'holiday_id' => $holidayId,
                 ]);
             }
 
-            DB::commit();
+            // Remove units from renops
+            UnitRenops::where('date', $selectedDate)
+                ->whereIn('unit_id', $unitsToRemove)
+                ->delete();
 
+            DB::commit();
+            
             return response()->json([
                 'success' => true,
-                'message' => 'Renops plan updated successfully.'
+                'message' => 'Rencana operasi berhasil diperbarui.',
+                'added' => count($unitsToAdd),
+                'removed' => count($unitsToRemove),
+                'total' => count($unitIds),
+                'automatic' => $settings->isAutomatic()
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -251,14 +316,41 @@ class UnitRenopsController extends Controller
     {
         $parsedDate = Carbon::parse($date);
 
+        // Begin transaction
+        DB::beginTransaction();
+        
         try {
-            UnitRenops::where('date', $parsedDate)->delete();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Renops plan deleted successfully.'
-            ]);
+            // Get all units affected by this deletion for logging
+            $affectedUnits = UnitRenops::where('date', $parsedDate)->get();
+            $unitCount = $affectedUnits->count();
+            
+            if ($unitCount > 0) {
+                // Log the units being removed from renops
+                $unitNumbers = $affectedUnits->map(function($renops) {
+                    $unit = Unit::find($renops->unit_id);
+                    return $unit ? $unit->unit_number : "Unit #{$renops->unit_id}";
+                })->implode(', ');
+                
+                // Delete the renops entries (this will trigger the observer for each entry)
+                UnitRenops::where('date', $parsedDate)->delete();
+                
+                DB::commit();
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => "Renops plan deleted successfully. {$unitCount} units ({$unitNumbers}) are now available for scheduling on {$parsedDate->format('Y-m-d')}."
+                ]);
+            } else {
+                DB::commit();
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No renops entries found for this date.'
+                ]);
+            }
         } catch (\Exception $e) {
+            DB::rollBack();
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to delete renops plan: ' . $e->getMessage()
@@ -283,45 +375,66 @@ class UnitRenopsController extends Controller
         $dayType = $validated['day_type'];
         $holidayId = $validated['holiday_id'] ?? null;
 
-        // Check if the unit is already in renops for this date
-        $existingRenops = UnitRenops::where('date', $date)
-            ->where('unit_id', $unitId)
-            ->first();
+        // Get unit details for better logging
+        $unit = Unit::find($unitId);
+        $unitNumber = $unit ? $unit->unit_number : "Unit #{$unitId}";
 
-        if ($existingRenops) {
-            // Remove the unit from renops
-            $existingRenops->delete();
+        // Begin transaction
+        DB::beginTransaction();
+        
+        try {
+            // Check if the unit is already in renops for this date
+            $existingRenops = UnitRenops::where('date', $date)
+                ->where('unit_id', $unitId)
+                ->first();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Unit removed from renops plan.',
-                'status' => 'removed'
-            ]);
-        } else {
-            // Check if we're exceeding the maximum limit
-            $maxLimit = $this->getMaxLimit($dayType);
-            $currentCount = UnitRenops::where('date', $date)->count();
+            if ($existingRenops) {
+                // Remove the unit from renops (this will trigger the observer)
+                $existingRenops->delete();
+                
+                DB::commit();
 
-            if ($currentCount >= $maxLimit) {
                 return response()->json([
-                    'success' => false,
-                    'message' => "Cannot add more units. Maximum limit of {$maxLimit} units has been reached."
-                ], 422);
+                    'success' => true,
+                    'message' => "Unit {$unitNumber} removed from renops plan for {$date->format('Y-m-d')}. This unit is now available for scheduling.",
+                    'status' => 'removed'
+                ]);
+            } else {
+                // Check if we're exceeding the maximum limit
+                $maxLimit = $this->getMaxLimit($dayType);
+                $currentCount = UnitRenops::where('date', $date)->count();
+
+                if ($currentCount >= $maxLimit) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Cannot add more units. Maximum limit of {$maxLimit} units has been reached."
+                    ], 422);
+                }
+
+                // Add the unit to renops (this will trigger the observer to update schedules)
+                UnitRenops::create([
+                    'date' => $date,
+                    'unit_id' => $unitId,
+                    'day_type' => $dayType,
+                    'holiday_id' => $holidayId
+                ]);
+                
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => "Unit {$unitNumber} added to renops plan for {$date->format('Y-m-d')}. Any existing schedules have been updated.",
+                    'status' => 'added'
+                ]);
             }
-
-            // Add the unit to renops
-            UnitRenops::create([
-                'date' => $date,
-                'unit_id' => $unitId,
-                'day_type' => $dayType,
-                'holiday_id' => $holidayId
-            ]);
-
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
             return response()->json([
-                'success' => true,
-                'message' => 'Unit added to renops plan.',
-                'status' => 'added'
-            ]);
+                'success' => false,
+                'message' => 'Failed to toggle unit renops status: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -372,16 +485,57 @@ class UnitRenopsController extends Controller
      */
     private function getMaxLimit(string $dayType): int
     {
-        $totalUnits = Unit::active()->count();
-
-        switch ($dayType) {
-            case 'saturday':
-                return (int) ceil($totalUnits * 0.8); // 80% of total units
-            case 'sunday':
-            case 'holiday':
-                return (int) ceil($totalUnits * 0.7); // 70% of total units
-            default:
-                return 0;
+        $settings = RenopsSettings::getCurrentSettings();
+        
+        // Filter units by is_pool if unit_type is set to 'pool'
+        $query = Unit::active();
+        if ($settings->unit_type === 'pool') {
+            $query->where('is_pool', true);
         }
+        $totalUnits = $query->count();
+        
+        $threshold = $settings->getThresholdForDayType($dayType) / 100;
+        return (int) ceil($totalUnits * $threshold);
+    }
+    
+    /**
+     * Show the settings page for renops.
+     */
+    public function showSettings(): View
+    {
+        $settings = RenopsSettings::getCurrentSettings();
+        
+        // Get total units based on unit_type setting
+        $query = Unit::active();
+        if ($settings->unit_type === 'pool') {
+            $query->where('is_pool', true);
+        }
+        $totalUnits = $query->count();
+        
+        return view('modules.admin.renops.settings', [
+            'settings' => $settings,
+            'totalUnits' => $totalUnits
+        ]);
+    }
+    
+    /**
+     * Update the renops settings.
+     */
+    public function updateSettings(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'mode' => 'required|in:manual,automatic',
+            'unit_type' => 'required|in:all,pool',
+            'saturday_threshold' => 'required|numeric|min:1|max:100',
+            'sunday_threshold' => 'required|numeric|min:1|max:100',
+            'holiday_threshold' => 'required|numeric|min:1|max:100',
+            'notes' => 'nullable|string',
+        ]);
+        
+        $settings = RenopsSettings::getCurrentSettings();
+        $settings->update($validated);
+        
+        return redirect()->route('renops.settings')
+            ->with('success', 'Renops settings updated successfully.');
     }
 }

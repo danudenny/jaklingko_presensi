@@ -41,6 +41,11 @@ class UnitController extends Controller
         if ($request->has('status') && !empty($request->status) && $request->status !== 'all') {
             $query->where('status', $request->status);
         }
+        
+        // Filter by is_pool
+        if ($request->has('is_pool') && $request->is_pool !== '') {
+            $query->where('is_pool', $request->is_pool == '1');
+        }
 
         // Filter by expired STNK date range
         if ($request->has('expired_stnk_from') && !empty($request->expired_stnk_from)) {
@@ -108,19 +113,31 @@ class UnitController extends Controller
         // Debug: Log the request data to see what's being received
         Log::info('Unit store request data:', $request->all());
         
-        $validator = Validator::make($request->all(), [
+        // Define base validation rules
+        $rules = [
             'unit_number' => 'required|string|max:255|unique:units',
-            'plate_number' => 'required|nullable|string|max:255',
-            'unit_reg' => 'nullable|string|max:255',
-            'serial_number' => 'nullable|string|max:255',
-            'kir' => 'nullable|string|max:255',
-            'expired_stnk' => 'required|nullable|date',
-            'expired_kir' => 'required|nullable|date',
-            'expired_kp' => 'required|nullable|date',
-            'status' => 'required|in:aktif,nonaktif,maintenance',
-            'route_ids' => 'nullable|array',
-            'route_ids.*' => 'exists:routes,id',
-        ]);
+            'plate_number' => 'required|string|max:255',
+            'is_pool' => 'required|boolean',
+        ];
+        
+        // Add additional validation rules if the unit is in pool
+        if ($request->boolean('is_pool')) {
+            $poolRules = [
+                'unit_reg' => 'required|string|max:255',
+                'serial_number' => 'required|string|max:255',
+                'kir' => 'required|string|max:255',
+                'expired_stnk' => 'required|date',
+                'expired_kir' => 'required|date',
+                'expired_kp' => 'required|date',
+                'status' => 'required|in:aktif,nonaktif,maintenance',
+                'route_ids' => 'required|array',
+                'route_ids.*' => 'exists:routes,id',
+            ];
+            
+            $rules = array_merge($rules, $poolRules);
+        }
+        
+        $validator = Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
             if ($request->ajax() || $request->wantsJson()) {
@@ -269,19 +286,31 @@ class UnitController extends Controller
      */
     public function update(Request $request, Unit $unit): JsonResponse|RedirectResponse
     {
-        $validator = Validator::make($request->all(), [
+        // Define base validation rules
+        $rules = [
             'unit_number' => 'required|string|max:255|unique:units,unit_number,' . $unit->id,
-            'plate_number' => 'required|nullable|string|max:255',
-            'unit_reg' => 'nullable|string|max:255',
-            'serial_number' => 'nullable|string|max:255',
-            'kir' => 'nullable|string|max:255',
-            'expired_stnk' => 'required|nullable|date',
-            'expired_kir' => 'required|nullable|date',
-            'expired_kp' => 'required|nullable|date',
-            'status' => 'required|in:aktif,nonaktif,maintenance',
-            'route_ids' => 'nullable|array',
-            'route_ids.*' => 'exists:routes,id',
-        ]);
+            'plate_number' => 'required|string|max:255',
+            'is_pool' => 'required|boolean',
+        ];
+        
+        // Add additional validation rules if the unit is in pool
+        if ($request->boolean('is_pool')) {
+            $poolRules = [
+                'unit_reg' => 'required|string|max:255',
+                'serial_number' => 'required|string|max:255',
+                'kir' => 'required|string|max:255',
+                'expired_stnk' => 'required|date',
+                'expired_kir' => 'required|date',
+                'expired_kp' => 'required|date',
+                'status' => 'required|in:aktif,nonaktif,maintenance',
+                'route_ids' => 'required|array',
+                'route_ids.*' => 'exists:routes,id',
+            ];
+            
+            $rules = array_merge($rules, $poolRules);
+        }
+        
+        $validator = Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
             if ($request->ajax() || $request->wantsJson()) {
