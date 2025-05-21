@@ -63,17 +63,15 @@
                 <div>
                     <h2 class="text-lg font-medium text-gray-900">Semua Unit</h2>
                 </div>
-                <div class="flex space-x-2">
-                    <button type="button" id="toggle-filter" class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                        <i class="fas fa-filter mr-2"></i> Filter
-                    </button>
-                </div>
             </div>
-
-            <!-- Advanced Filter Form -->
-            <div id="filter-form" class="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200 hidden">
-                <form method="GET" action="{{ route('units.index') }}" class="space-y-4">
-                    <!-- First row - 4 inline filters -->
+            
+            <!-- Filter Form (Always Visible) -->
+            <div class="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <form method="GET" action="{{ route('units.index') }}">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-md font-medium text-gray-700">Filter Unit</h3>
+                    </div>
+                    <!-- 4 inputs in a row -->
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div>
                             <label for="unit_number" class="block text-sm font-medium text-gray-700">No Unit</label>
@@ -96,21 +94,6 @@
                         </div>
 
                         <div>
-                            <label for="route_id" class="block text-sm font-medium text-gray-700">Rute</label>
-                            <select name="route_id" id="route_id" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                <option value="">Semua Rute</option>
-                                @foreach($routes as $route)
-                                    <option value="{{ $route->id }}" {{ request('route_id') == $route->id ? 'selected' : '' }}>
-                                        {{ $route->route_number }} - {{ $route->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <!-- Second row - Pool type and date ranges -->
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div>
                             <label for="is_pool" class="block text-sm font-medium text-gray-700">Tipe Unit</label>
                             <select name="is_pool" id="is_pool" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                 <option value="">Semua Tipe</option>
@@ -118,30 +101,9 @@
                                 <option value="0" {{ request('is_pool') === '0' ? 'selected' : '' }}>Non-Pool</option>
                             </select>
                         </div>
-                        
-                        <div>
-                            <label for="expired_stnk_range" class="block text-sm font-medium text-gray-700">Expired STNK</label>
-                            <input type="text" name="expired_stnk_range" id="expired_stnk_range" value="{{ request('expired_stnk_from') && request('expired_stnk_to') ? request('expired_stnk_from') . ' to ' . request('expired_stnk_to') : '' }}" class="daterangepicker mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md" placeholder="Pilih rentang tanggal">
-                            <input type="hidden" name="expired_stnk_from" id="expired_stnk_from" value="{{ request('expired_stnk_from') }}">
-                            <input type="hidden" name="expired_stnk_to" id="expired_stnk_to" value="{{ request('expired_stnk_to') }}">
-                        </div>
-
-                        <div>
-                            <label for="expired_kir_range" class="block text-sm font-medium text-gray-700">Expired KIR</label>
-                            <input type="text" name="expired_kir_range" id="expired_kir_range" value="{{ request('expired_kir_from') && request('expired_kir_to') ? request('expired_kir_from') . ' to ' . request('expired_kir_to') : '' }}" class="daterangepicker mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md" placeholder="Pilih rentang tanggal">
-                            <input type="hidden" name="expired_kir_from" id="expired_kir_from" value="{{ request('expired_kir_from') }}">
-                            <input type="hidden" name="expired_kir_to" id="expired_kir_to" value="{{ request('expired_kir_to') }}">
-                        </div>
-
-                        <div>
-                            <label for="expired_kp_range" class="block text-sm font-medium text-gray-700">Expired KP</label>
-                            <input type="text" name="expired_kp_range" id="expired_kp_range" value="{{ request('expired_kp_from') && request('expired_kp_to') ? request('expired_kp_from') . ' to ' . request('expired_kp_to') : '' }}" class="daterangepicker mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md" placeholder="Pilih rentang tanggal">
-                            <input type="hidden" name="expired_kp_from" id="expired_kp_from" value="{{ request('expired_kp_from') }}">
-                            <input type="hidden" name="expired_kp_to" id="expired_kp_to" value="{{ request('expired_kp_to') }}">
-                        </div>
                     </div>
 
-                    <div class="flex justify-end space-x-3">
+                    <div class="flex justify-end space-x-3 mt-4">
                         <a href="{{ route('units.index') }}" class="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                             Reset
                         </a>
@@ -240,22 +202,7 @@
                 </div>
             @endif
 
-            <div class="flex items-center mb-4">
-                <div class="relative">
-                    <input type="text" id="unit-search" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm pl-10 pr-4 py-2 text-sm" placeholder="Cari unit...">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <i class="fas fa-search text-gray-400"></i>
-                    </div>
-                </div>
-                <div class="ml-4">
-                    <select id="status-filter" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm text-sm">
-                        <option value="all">Semua Status</option>
-                        <option value="aktif">Aktif</option>
-                        <option value="nonaktif">Non Aktif</option>
-                        <option value="maintenance">Maintenance</option>
-                    </select>
-                </div>
-            </div>
+            <hr class="my-4">
 
             <div class="overflow-x-auto bg-white rounded-lg shadow">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -264,6 +211,7 @@
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No Unit</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plat Nomor</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Driver</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STNK</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">KIR</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">KP</th>
@@ -301,6 +249,20 @@
                                             Non Aktif
                                         </span>
                                     @endif
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    @php
+                                        $batanganCount = $unit->drivers->where('type', 'batangan')->count();
+                                        $cadanganCount = $unit->drivers->where('type', 'cadangan')->count();
+                                    @endphp
+                                    <div class="flex space-x-2">
+                                        <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800" title="Driver Batangan (Fixed)">
+                                            <i class="fas fa-user-tie mr-1"></i> {{ $batanganCount }}
+                                        </span>
+                                        <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800" title="Driver Cadangan (Non-Fixed)">
+                                            <i class="fas fa-user mr-1"></i> {{ $cadanganCount }}
+                                        </span>
+                                    </div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     @if($unit->expired_stnk)
@@ -413,16 +375,16 @@
                                         N/A
                                     @endif
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <div class="flex space-x-2">
-                                        <button type="button" onclick="viewUnitDetails({{ $unit->id }})" class="text-blue-600 hover:text-blue-900">
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <div class="flex justify-end space-x-2">
+                                        <a href="{{ route('units.show', $unit->id) }}" class="text-indigo-600 hover:text-indigo-900">
                                             <i class="fas fa-eye"></i>
-                                        </button>
-                                        <a href="{{ route('units.edit', $unit->id) }}" class="text-indigo-600 hover:text-indigo-900">
+                                        </a>
+                                        <a href="{{ route('units.edit', $unit->id) }}" class="text-blue-600 hover:text-blue-900">
                                             <i class="fas fa-edit"></i>
                                         </a>
-                                        <button type="button" onclick="deleteUnitConfirm({{ $unit->id }})" class="text-red-600 hover:text-red-900">
-                                            <i class="fas fa-trash"></i>
+                                        <button onclick="deleteUnitConfirm({{ $unit->id }})" class="text-red-600 hover:text-red-900">
+                                            <i class="fas fa-trash-alt"></i>
                                         </button>
                                     </div>
                                 </td>
@@ -672,37 +634,7 @@
         </div>
     </div>
 
-    <!-- View Unit Modal -->
-    <div id="view-unit-modal" class="fixed inset-0 z-50 overflow-y-auto hidden">
-        <div class="flex items-end justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 transition-opacity">
-                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
-            </div>
-
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen"></span>&#8203;
-            <div class="inline-block w-full max-w-5xl px-4 pt-5 pb-4 overflow-hidden text-left align-bottom transition-all transform bg-white rounded-lg shadow-xl sm:my-8 sm:align-middle sm:p-6">
-                <div id="view-unit-modal-content">
-                    <!-- Content will be loaded here -->
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Edit Unit Modal -->
-    <div id="edit-unit-modal" class="fixed inset-0 z-50 overflow-y-auto hidden">
-        <div class="flex items-end justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 transition-opacity">
-                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
-            </div>
-
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen"></span>&#8203;
-            <div class="inline-block w-full max-w-5xl px-4 pt-5 pb-4 overflow-hidden text-left align-bottom transition-all transform bg-white rounded-lg shadow-xl sm:my-8 sm:align-middle sm:p-6">
-                <div id="edit-unit-modal-content">
-                    <!-- Content will be loaded here -->
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- Modals removed - using separate pages for show and edit -->
 </div>
 @endsection
 
@@ -726,109 +658,7 @@
         document.getElementById('create-unit-modal').classList.add('hidden');
     };
 
-    window.viewUnitDetails = function(unitId) {
-        fetch(`/units/${unitId}?mode=view`, {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                document.getElementById('view-unit-modal-content').innerHTML = data.html;
-                document.getElementById('view-unit-modal').classList.remove('hidden');
-
-                // Add event listener to close button
-                const closeButtons = document.querySelectorAll('#close-view-unit');
-                closeButtons.forEach(button => {
-                    button.addEventListener('click', closeViewModal);
-                });
-            } else {
-                alert('Failed to load unit details');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Failed to load unit details');
-        });
-    };
-
-    window.closeViewModal = function() {
-        document.getElementById('view-unit-modal').classList.add('hidden');
-    };
-
-    window.editUnitDetails = function(unitId) {
-        fetch(`/units/${unitId}?mode=edit`, {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                document.getElementById('edit-unit-modal-content').innerHTML = data.html;
-                document.getElementById('edit-unit-modal').classList.remove('hidden');
-
-                // Initialize Flatpickr for date inputs in the edit modal
-                flatpickr("#edit-unit-modal .datepicker", {
-                    dateFormat: "Y-m-d",
-                    theme: "airbnb",
-                    allowInput: true
-                });
-
-                // Add event listener to close button
-                const closeButtons = document.querySelectorAll('#cancel-edit-unit');
-                closeButtons.forEach(button => {
-                    button.addEventListener('click', closeEditModal);
-                });
-
-                // Setup form submission
-                const editForm = document.getElementById('edit-unit-form');
-                if (editForm) {
-                    editForm.addEventListener('submit', function(e) {
-                        e.preventDefault();
-                        const formData = new FormData(this);
-
-                        fetch(this.action, {
-                            method: 'POST',
-                            headers: {
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                                'X-Requested-With': 'XMLHttpRequest',
-                                'Accept': 'application/json'
-                            },
-                            body: formData
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                alert('Unit updated successfully');
-                                window.location.reload();
-                            } else {
-                                alert('Failed to update unit');
-                                console.error(data.errors);
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error:', error);
-                            alert('An error occurred while updating the unit');
-                        });
-                    });
-                }
-            } else {
-                alert('Failed to load unit edit form');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Failed to load unit edit form');
-        });
-    };
-
-    window.closeEditModal = function() {
-        document.getElementById('edit-unit-modal').classList.add('hidden');
-    };
+    // View and edit functions removed - using separate pages instead
 
     window.deleteUnitConfirm = function(unitId) {
         if (confirm('Are you sure you want to delete this unit?')) {

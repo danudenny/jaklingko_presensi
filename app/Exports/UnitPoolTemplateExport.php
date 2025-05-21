@@ -26,7 +26,7 @@ class UnitPoolTemplateExport implements FromArray, WithHeadings, WithStyles
                 'expired_kir' => '2025-12-31',
                 'expired_kp' => '2025-12-31',
                 'status' => 'aktif',
-                'route_codes' => 'R1,R2,R3',
+                'route_codes' => 'JAK01,JAK02',
             ],
             [
                 'unit_number' => '002',
@@ -38,7 +38,7 @@ class UnitPoolTemplateExport implements FromArray, WithHeadings, WithStyles
                 'expired_kir' => '2025-11-20',
                 'expired_kp' => '2025-09-30',
                 'status' => 'aktif',
-                'route_codes' => 'R1,R4',
+                'route_codes' => 'JAK01,JAK03',
             ],
         ];
     }

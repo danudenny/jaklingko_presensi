@@ -18,6 +18,7 @@ class UnitRenops extends Model
     protected $fillable = [
         'date',
         'unit_id',
+        'route_id',
         'day_type',
         'holiday_id',
     ];
@@ -45,6 +46,14 @@ class UnitRenops extends Model
     public function holiday(): BelongsTo
     {
         return $this->belongsTo(Holiday::class);
+    }
+
+    /**
+     * Get the route associated with this renops plan.
+     */
+    public function route(): BelongsTo
+    {
+        return $this->belongsTo(Route::class);
     }
 
     /**

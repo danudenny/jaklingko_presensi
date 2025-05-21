@@ -52,8 +52,8 @@ class UnitRenopsController extends Controller
             ]);
         }
 
-        // Get all active units with is_pool = true
-        $units = Unit::active()->where('is_pool', true)->get();
+        // Get all active units (both pool and non-pool)
+        $units = Unit::active()->with('routes')->get();
 
         // Get units already in renops for this date
         $renopsUnits = UnitRenops::where('date', $selectedDate)
@@ -64,20 +64,9 @@ class UnitRenopsController extends Controller
         $settings = RenopsSettings::getCurrentSettings();
         $maxLimit = $this->getMaxLimit($dayType);
         
-        // Check if we're in automatic mode and there are no renops units yet
+        // We'll no longer auto-generate suggestions on page load
+        // This will prevent automatic generation when navigating to the page
         $autoSuggestion = null;
-        if ($settings->isAutomatic() && empty($renopsUnits)) {
-            // Apply unit type filter for automatic selection
-            $filteredUnits = $units;
-            if ($settings->unit_type === 'pool') {
-                $filteredUnits = $units->where('is_pool', true);
-            }
-            
-            // Get random units up to the threshold limit for automatic selection
-            $autoSuggestion = $filteredUnits->random(min($maxLimit, $filteredUnits->count()))
-                ->pluck('id')
-                ->toArray();
-        }
 
         return view('modules.admin.renops.index', [
             'date' => $selectedDate,
@@ -366,12 +355,14 @@ class UnitRenopsController extends Controller
         $validated = $request->validate([
             'date' => 'required|date',
             'unit_id' => 'required|exists:units,id',
+            'route_id' => 'nullable|exists:routes,id',
             'day_type' => 'required|in:saturday,sunday,holiday',
             'holiday_id' => 'required_if:day_type,holiday|nullable|exists:holidays,id',
         ]);
 
         $date = Carbon::parse($validated['date']);
         $unitId = $validated['unit_id'];
+        $routeId = $validated['route_id'] ?? null;
         $dayType = $validated['day_type'];
         $holidayId = $validated['holiday_id'] ?? null;
 
@@ -401,8 +392,15 @@ class UnitRenopsController extends Controller
                 ]);
             } else {
                 // Check if we're exceeding the maximum limit
-                $maxLimit = $this->getMaxLimit($dayType);
-                $currentCount = UnitRenops::where('date', $date)->count();
+                $maxLimit = $this->getMaxLimit($dayType, $routeId);
+                $currentCount = UnitRenops::where('date', $date);
+                
+                // If route is specified, count only units for that route
+                if ($routeId) {
+                    $currentCount->where('route_id', $routeId);
+                }
+                
+                $currentCount = $currentCount->count();
 
                 if ($currentCount >= $maxLimit) {
                     DB::rollBack();
@@ -416,6 +414,7 @@ class UnitRenopsController extends Controller
                 UnitRenops::create([
                     'date' => $date,
                     'unit_id' => $unitId,
+                    'route_id' => $routeId,
                     'day_type' => $dayType,
                     'holiday_id' => $holidayId
                 ]);
@@ -481,21 +480,43 @@ class UnitRenopsController extends Controller
     }
 
     /**
-     * Get the maximum limit of units for a specific day type.
+     * Get the maximum limit of units that can be unavailable for a specific day type.
+     * 
+     * @param string $dayType The day type (saturday, sunday, holiday)
+     * @param int|null $routeId Optional route ID to filter units by route
+     * @return int The maximum number of units that can be unavailable
      */
-    private function getMaxLimit(string $dayType): int
+    private function getMaxLimit(string $dayType, ?int $routeId = null): int
     {
         $settings = RenopsSettings::getCurrentSettings();
         
-        // Filter units by is_pool if unit_type is set to 'pool'
+        // Start with active units query
         $query = Unit::active();
-        if ($settings->unit_type === 'pool') {
-            $query->where('is_pool', true);
+        
+        // If route is specified, filter units by that route
+        if ($routeId) {
+            $query->whereHas('routes', function($q) use ($routeId) {
+                $q->where('routes.id', $routeId);
+            });
         }
+        
+        // Count all units (both pool and non-pool) for the threshold calculation
+        // This ensures we consider all units for a route, regardless of ownership
         $totalUnits = $query->count();
         
+        // Apply the threshold based on day type to get units that should be operating
         $threshold = $settings->getThresholdForDayType($dayType) / 100;
-        return (int) ceil($totalUnits * $threshold);
+        $unitsToOperate = (int) ceil($totalUnits * $threshold);
+        
+        // Calculate units that can be unavailable (total - operating)
+        $unitsCanBeUnavailable = $totalUnits - $unitsToOperate;
+        
+        // Ensure at least one unit per route is operational
+        if ($routeId && $unitsCanBeUnavailable >= $totalUnits) {
+            $unitsCanBeUnavailable = $totalUnits - 1;
+        }
+        
+        return max(0, $unitsCanBeUnavailable);
     }
     
     /**
@@ -537,5 +558,181 @@ class UnitRenopsController extends Controller
         
         return redirect()->route('renops.settings')
             ->with('success', 'Renops settings updated successfully.');
+    }
+
+    /**
+     * Generate automatic renops plan based on settings for a date range.
+     */
+    public function generateAutomatic(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+            'period' => 'required|in:first,second,full',
+        ]);
+
+        $startDate = Carbon::parse($validated['start_date']);
+        $endDate = Carbon::parse($validated['end_date']);
+        $period = $validated['period'];
+        
+        // Adjust date range based on period
+        if ($period === 'first') {
+            // First period: 1-15
+            $startDay = 1;
+            $endDay = 15;
+            $startDate = $startDate->startOfMonth()->setDay($startDay);
+            $endDate = $startDate->copy()->setDay($endDay);
+        } elseif ($period === 'second') {
+            // Second period: 16-end of month
+            $startDay = 16;
+            $startDate = $startDate->startOfMonth()->setDay($startDay);
+            $endDate = $startDate->copy()->endOfMonth();
+        } else {
+            // Full month
+            $startDate = $startDate->startOfMonth();
+            $endDate = $startDate->copy()->endOfMonth();
+        }
+        
+        // Get the settings
+        $settings = RenopsSettings::getCurrentSettings();
+        
+        // Check if we're in automatic mode
+        if (!$settings->isAutomatic()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pengaturan renops tidak dalam mode otomatis.'
+            ], 422);
+        }
+
+        // Start a database transaction
+        DB::beginTransaction();
+        
+        $results = [
+            'success' => true,
+            'processed' => 0,
+            'skipped' => 0,
+            'created' => 0,
+            'details' => []
+        ];
+        
+        try {
+            // Process each day in the date range
+            $currentDate = $startDate->copy();
+            
+            while ($currentDate->lte($endDate)) {
+                $dateStr = $currentDate->format('Y-m-d');
+                $dayOfWeek = $currentDate->dayOfWeek;
+                $dayType = null;
+                $holidayId = null;
+                
+                // Check if the current date is a weekend or holiday
+                if ($dayOfWeek == Carbon::SATURDAY) {
+                    $dayType = 'saturday';
+                } elseif ($dayOfWeek == Carbon::SUNDAY) {
+                    $dayType = 'sunday';
+                } else {
+                    // Check if it's a holiday
+                    $holiday = Holiday::whereDate('date', $currentDate)->first();
+                    if ($holiday) {
+                        $dayType = 'holiday';
+                        $holidayId = $holiday->id;
+                    }
+                }
+                
+                // If it's a weekend or holiday, generate renops
+                if ($dayType) {
+                    // Get all active routes
+                    $routes = \App\Models\Route::active()->get();
+                    $selectedUnitIds = [];
+                    
+                    // Process each route separately
+                    foreach ($routes as $route) {
+                        // Get the maximum limit for this day type and route
+                        $maxLimit = $this->getMaxLimit($dayType, $route->id);
+                        
+                        // Get all units for this route (both pool and non-pool) for threshold calculation
+                        $allRouteUnits = Unit::active()
+                            ->whereHas('routes', function($query) use ($route) {
+                                $query->where('routes.id', $route->id);
+                            })
+                            ->get();
+                        
+                        // Get only pool units (our own units) for this route
+                        $poolRouteUnits = Unit::active()
+                            ->where('is_pool', true)
+                            ->whereHas('routes', function($query) use ($route) {
+                                $query->where('routes.id', $route->id);
+                            })
+                            ->get();
+                            
+                        if ($poolRouteUnits->count() > 0) {
+                            // Get the maximum number of units that can be unavailable
+                            $maxUnavailable = $this->getMaxLimit($dayType, $route->id);
+                            
+                            // Ensure we don't mark all pool units as unavailable
+                            $maxUnavailable = min($maxUnavailable, $poolRouteUnits->count() - 1);
+                            
+                            if ($maxUnavailable > 0) {
+                                // Randomly select units to mark as unavailable
+                                $unitsToMarkUnavailable = $poolRouteUnits->random($maxUnavailable);
+                                
+                                // Add selected units to the overall list with their route ID
+                                foreach ($unitsToMarkUnavailable as $unit) {
+                                    $selectedUnitIds[] = [
+                                        'unit_id' => $unit->id,
+                                        'route_id' => $route->id
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Clear existing renops entries for this date
+                    UnitRenops::where('date', $dateStr)->delete();
+
+                    // Create new renops entries for each selected unit with its route
+                    foreach ($selectedUnitIds as $selectedUnit) {
+                        UnitRenops::create([
+                            'date' => $dateStr,
+                            'unit_id' => $selectedUnit['unit_id'],
+                            'route_id' => $selectedUnit['route_id'],
+                            'day_type' => $dayType,
+                            'holiday_id' => $holidayId,
+                        ]);
+                    }
+                    
+                    $results['processed']++;
+                    $results['created']++;
+                    $results['details'][] = [
+                        'date' => $dateStr,
+                        'day_type' => $dayType,
+                        'units_count' => count($selectedUnitIds),
+                        'routes_count' => $routes->count(),
+                    ];
+                } else {
+                    $results['skipped']++;
+                }
+                
+                $currentDate->addDay();
+            }
+
+            DB::commit();
+            
+            $periodText = $period === 'first' ? 'periode pertama (1-15)' : 
+                         ($period === 'second' ? 'periode kedua (16-akhir bulan)' : 'bulan penuh');
+            
+            return response()->json([
+                'success' => true,
+                'message' => "Rencana operasi otomatis untuk {$periodText} berhasil dibuat. {$results['created']} hari diproses, {$results['skipped']} hari dilewati.",
+                'results' => $results
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal membuat rencana operasi otomatis: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

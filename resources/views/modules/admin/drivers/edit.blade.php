@@ -135,6 +135,15 @@
                                 <input type="text" x-model="unitSearch" placeholder="Cari unit..." class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                             </div>
 
+                            <div x-show="!loadingUnits && availableUnits.length > 0" class="flex justify-between mb-2">
+                                <button type="button" @click="selectAllUnits" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+                                    <i class="fas fa-check-square mr-1"></i> Pilih Semua
+                                </button>
+                                <button type="button" @click="unselectAllUnits" class="text-xs text-gray-600 hover:text-gray-800 font-medium">
+                                    <i class="fas fa-square mr-1"></i> Batalkan Semua
+                                </button>
+                            </div>
+
                             <div x-show="!loadingUnits && availableUnits.length > 0" class="grid grid-cols-1 gap-2">
                                 <template x-for="unit in filteredUnits" :key="unit.id">
                                     <div class="flex items-center p-2 hover:bg-gray-50 rounded border border-gray-100">
@@ -265,6 +274,27 @@
                 } else {
                     this.selectedUnits = this.selectedUnits.filter(id => id !== unitId);
                 }
+            },
+
+            selectAllUnits() {
+                this.selectedUnits = this.filteredUnits.map(unit => unit.id.toString());
+                
+                // Update checkbox states in the DOM
+                this.filteredUnits.forEach(unit => {
+                    const checkbox = document.getElementById('unit_' + unit.id);
+                    if (checkbox) {
+                        checkbox.checked = true;
+                    }
+                });
+            },
+
+            unselectAllUnits() {
+                this.selectedUnits = [];
+                
+                // Update checkbox states in the DOM
+                document.querySelectorAll('.unit-checkbox').forEach(checkbox => {
+                    checkbox.checked = false;
+                });
             },
 
             get filteredUnits() {

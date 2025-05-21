@@ -25,6 +25,7 @@
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No Rute</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama Rute</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                         <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
@@ -44,6 +45,11 @@
                                 </div>
                             </div>
                         </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                                {{ $route->units->count() }} Unit
+                            </span>
+                        </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             @php
                                 $statusColors = [
@@ -60,22 +66,12 @@
                             </span>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button
-                                type="button"
-                                class="text-blue-600 hover:text-blue-900 mr-2"
-                                x-data="{}"
-                                @click="$dispatch('open-drawer', { id: 'view-route-drawer', title: 'View Route Details', routeId: {{ $route->id }} })"
-                            >
+                            <a href="{{ route('routes.show', $route->id) }}" class="text-blue-600 hover:text-blue-900 mr-2">
                                 <i class="fas fa-eye"></i>
-                            </button>
-                            <button
-                                type="button"
-                                class="text-indigo-600 hover:text-indigo-900 mr-2"
-                                x-data="{}"
-                                @click="$dispatch('open-drawer', { id: 'edit-route-drawer', title: 'Edit Route', routeId: {{ $route->id }} })"
-                            >
+                            </a>
+                            <a href="{{ route('routes.edit', $route->id) }}" class="text-indigo-600 hover:text-indigo-900 mr-2">
                                 <i class="fas fa-edit"></i>
-                            </button>
+                            </a>
                             <form class="inline-block delete-route-form" method="POST" action="{{ route('routes.destroy', $route) }}" data-route-id="{{ $route->id }}">
                                 @csrf
                                 @method('DELETE')
@@ -132,25 +128,7 @@
     </form>
 </x-drawer>
 
-<!-- Edit Route Drawer -->
-<x-drawer id="edit-route-drawer" max-width="md">
-    <div id="edit-route-content" class="space-y-4">
-        <div class="text-center py-10">
-            <i class="fas fa-spinner fa-spin"></i>
-            <p class="mt-2 text-sm text-gray-500">Loading route data...</p>
-        </div>
-    </div>
-</x-drawer>
-
-<!-- View Route Drawer -->
-<x-drawer id="view-route-drawer" max-width="md">
-    <div id="view-route-content" class="space-y-4">
-        <div class="text-center py-10">
-            <i class="fas fa-spinner fa-spin"></i>
-            <p class="mt-2 text-sm text-gray-500">Loading route details...</p>
-        </div>
-    </div>
-</x-drawer>
+<!-- Edit and View drawers removed - using separate pages instead -->
 
 @push('scripts')
 <script>
@@ -205,91 +183,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Error:', error);
                 showFlashMessage('error', 'An error occurred while processing your request');
             });
-        });
-    }
-
-    // Handle view route drawer open
-    window.addEventListener('open-drawer', function(e) {
-        if (e.detail.id === 'view-route-drawer' && e.detail.routeId) {
-            loadRouteDetails(e.detail.routeId, 'view');
-        } else if (e.detail.id === 'edit-route-drawer' && e.detail.routeId) {
-            loadRouteDetails(e.detail.routeId, 'edit');
-        }
-    });
-
-    // Load route details for view or edit
-    function loadRouteDetails(routeId, mode) {
-        fetch(`/routes/${routeId}?mode=${mode}`, {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                if (mode === 'view') {
-                    document.getElementById('view-route-content').innerHTML = data.html;
-                } else if (mode === 'edit') {
-                    document.getElementById('edit-route-content').innerHTML = data.html;
-
-                    // Initialize edit form submission
-                    const editForm = document.getElementById('edit-route-form');
-                    if (editForm) {
-                        editForm.addEventListener('submit', function(e) {
-                            e.preventDefault();
-
-                            const formData = new FormData(this);
-
-                            fetch(this.action, {
-                                method: 'POST',
-                                body: formData,
-                                headers: {
-                                    'X-Requested-With': 'XMLHttpRequest',
-                                    'Accept': 'application/json'
-                                }
-                            })
-                            .then(response => response.json())
-                            .then(data => {
-                                if (data.success) {
-                                    // Close drawer
-                                    window.dispatchEvent(new CustomEvent('close-drawer', {
-                                        detail: { id: 'edit-route-drawer' }
-                                    }));
-
-                                    // Show success message
-                                    showFlashMessage('success', data.message || 'Route updated successfully');
-
-                                    // Refresh the table
-                                    refreshRoutesTable();
-                                } else {
-                                    // Show validation errors
-                                    if (data.errors) {
-                                        Object.keys(data.errors).forEach(field => {
-                                            const errorElement = document.getElementById(`edit_${field}_error`);
-                                            if (errorElement) {
-                                                errorElement.textContent = data.errors[field][0];
-                                            }
-                                        });
-                                    } else {
-                                        showFlashMessage('error', data.message || 'An error occurred');
-                                    }
-                                }
-                            })
-                            .catch(error => {
-                                console.error('Error:', error);
-                                showFlashMessage('error', 'An error occurred while processing your request');
-                            });
-                        });
-                    }
-                }
-            } else {
-                showFlashMessage('error', data.message || 'Failed to load route details');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showFlashMessage('error', 'An error occurred while loading route details');
         });
     }
 

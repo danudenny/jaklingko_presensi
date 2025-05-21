@@ -73,7 +73,7 @@ class UnitPoolImport extends DefaultValueBinder implements ToModel, WithHeadingR
             // Handle route associations if route_codes column exists
             if (isset($row['route_codes']) && !empty($row['route_codes'])) {
                 $routeCodes = explode(',', $row['route_codes']);
-                $routeIds = Route::whereIn('code', $routeCodes)->pluck('id')->toArray();
+                $routeIds = Route::whereIn('route_number', $routeCodes)->pluck('id')->toArray();
                 
                 if (!empty($routeIds)) {
                     $unit->routes()->sync($routeIds);

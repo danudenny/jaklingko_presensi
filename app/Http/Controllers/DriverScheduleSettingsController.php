@@ -55,7 +55,7 @@ class DriverScheduleSettingsController extends Controller
             ]);
         }
         
-        return redirect()->route('driver.schedule.settings')
+        return redirect()->route('drivers.index')
             ->with('success', 'Pengaturan jadwal pengemudi berhasil diperbarui.');
     }
 }

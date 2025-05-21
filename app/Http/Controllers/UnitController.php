@@ -25,7 +25,9 @@ class UnitController extends Controller
      */
     public function index(Request $request): Factory|View|Application|JsonResponse
     {
-        $query = Unit::with(['drivers', 'routes']);
+        $query = Unit::with(['drivers' => function($query) {
+            $query->select('drivers.id', 'drivers.name', 'drivers.type');
+        }, 'routes']);
 
         // Filter by unit number
         if ($request->has('unit_number') && !empty($request->unit_number)) {
@@ -239,23 +241,6 @@ class UnitController extends Controller
     public function show(Request $request, Unit $unit)
     {
         $unit->load(['drivers', 'schedules', 'routes']);
-
-        if ($request->has('mode') && $request->mode === 'view') {
-            $html = view('modules.admin.units.partials.view', compact('unit'))->render();
-            return response()->json([
-                'success' => true,
-                'html' => $html
-            ]);
-        }
-
-        if ($request->has('mode') && $request->mode === 'edit') {
-            $routes = Route::active()->get();
-            $html = view('modules.admin.units.partials.edit', compact('unit', 'routes'))->render();
-            return response()->json([
-                'success' => true,
-                'html' => $html
-            ]);
-        }
 
         if ($request->ajax() || $request->has('format') && $request->format === 'json') {
             return response()->json($unit);

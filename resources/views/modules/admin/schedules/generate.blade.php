@@ -57,36 +57,31 @@
     </x-page-title>
 
     <x-flash-message />
-
-    <x-card>
-        <div class="mb-6">
-            <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-info-circle text-blue-400 text-xl"></i>
-                    </div>
-                    <div class="ml-3">
-                        <h3 class="text-sm font-medium text-blue-800">
-                            Kriteria Pembuatan Jadwal Otomatis
-                        </h3>
-                        <div class="mt-2 text-sm text-blue-700">
-                            <ul class="list-disc pl-5 space-y-1">
-                                <li>Prioritas diberikan kepada pengemudi dengan tipe 'batangan'. Jika tidak ada, maka akan ditugaskan pengemudi 'cadangan'.</li>
-                                <li>Kendala shift: Jika pengemudi mendapatkan shift 'siang', maka tidak dapat diberi shift 'pagi' pada hari berikutnya.</li>
-                                <li>Jika pengemudi sebelumnya berstatus 'cuti' atau 'nonaktif', jadwal berikutnya dapat berupa 'pagi' atau 'siang'.</li>
-                                <li>Jika pengemudi sebelumnya mendapat shift 'pagi', dapat ditugaskan 'pagi' atau 'siang' pada hari berikutnya.</li>
-                                <li>Pengemudi dapat ditugaskan dengan unit yang sama untuk backup.</li>
-                                <li>Jika pengemudi 'batangan' sedang cuti, sistem akan mencari pengemudi 'batangan' backup dengan unit yang sama.</li>
-                                <li>Pengemudi dengan jumlah jadwal terendah dalam bulan berjalan akan diprioritaskan.</li>
-                                <li>Untuk hari kerja (Senin–Jumat), semua pengemudi akan dijadwalkan. Untuk akhir pekan, hanya 80% pengemudi 'batangan' yang dijadwalkan.</li>
-                                <li>Pengemudi 'cadangan' selalu menjadi opsi terakhir.</li>
-                                <li>Dalam satu hari, pengemudi hanya dapat ditugaskan dalam satu sesi atau shift (pagi atau siang).</li>
-                            </ul>
-                        </div>
+    
+    @if ($errors->any())
+        <div class="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-exclamation-circle text-red-400 text-xl"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">
+                        Error dalam Pembuatan Jadwal
+                    </h3>
+                    <div class="mt-2 text-sm text-red-700">
+                        <ul class="list-disc pl-5 space-y-1">
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
                     </div>
                 </div>
             </div>
+        </div>
+    @endif
 
+    <x-card>
+        <div class="mb-6">  
             @if (session('generation_results'))
                 <div class="mb-6">
                     <div class="bg-green-50 border-l-4 border-green-400 p-4">
@@ -99,12 +94,15 @@
                                     Hasil Pembuatan Jadwal
                                 </h3>
                                 <div class="mt-2 text-sm text-green-700">
-                                    <p>Berhasil membuat {{ session('generation_results.success') }} jadwal.</p>
+                                    <p>Berhasil membuat {{ session('generation_results.created') }} jadwal.</p>
+                                    @if (session('generation_results.skipped') > 0)
+                                        <p class="text-yellow-700">{{ session('generation_results.skipped') }} jadwal dilewati karena tidak tersedia pengemudi.</p>
+                                    @endif
                                     @if (session('generation_results.failed') > 0)
                                         <p class="text-yellow-700">Gagal membuat {{ session('generation_results.failed') }} jadwal.</p>
                                     @endif
                                     
-                                    @if (count(session('generation_results.messages')) > 0)
+                                    @if (session('generation_results.messages') && count(session('generation_results.messages')) > 0)
                                         <div class="mt-3">
                                             <p class="font-medium">Detail:</p>
                                             <div class="mt-1 max-h-40 overflow-y-auto bg-white p-2 rounded border border-gray-200">
@@ -192,23 +190,26 @@
                         </div>
                         <div class="ml-3">
                             <h3 class="text-sm font-medium text-yellow-800">
-                                Pemberitahuan Penting
+                                Perhatian
                             </h3>
                             <div class="mt-2 text-sm text-yellow-700">
-                                <p>
-                                    Ini akan membuat jadwal untuk semua unit dan shift dalam rentang tanggal yang dipilih.
-                                    <strong>Jadwal yang sudah ada tidak akan ditimpa</strong>, melainkan jadwal baru akan dibuat untuk slot yang belum terjadwal.
-                                </p>
-                                <p class="mt-2">
-                                    Sistem akan otomatis membuat catatan riwayat pengemudi (Driver History) untuk setiap jadwal yang dibuat.
-                                </p>
+                                <p>Pembuatan jadwal otomatis akan mengikuti aturan berikut:</p>
+                                <ul class="list-disc pl-5 mt-1">
+                                    <li>Jadwal akan dibuat berdasarkan prioritas: pengemudi tetap (batangan) untuk unit tertentu, pengemudi tetap untuk rute, lalu pengemudi cadangan.</li>
+                                    <li>Pengemudi tidak akan dijadwalkan untuk kedua shift (pagi dan siang) pada hari yang sama.</li>
+                                    <li>Jadwal akan mempertimbangkan unit yang tidak beroperasi (renops).</li>
+                                    <li>Jadwal akan mempertimbangkan pengemudi yang sedang cuti.</li>
+                                    <li>Jadwal akan mempertimbangkan batas minimum dan maksimum hari kerja per pengemudi.</li>
+                                    <li>Jadwal akan mempertimbangkan kualifikasi pengemudi untuk rute dan unit tertentu.</li>
+                                </ul>
+                                <p class="mt-2">Proses ini mungkin memerlukan waktu beberapa saat tergantung pada jumlah hari yang dipilih.</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="flex justify-end">
-                    <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    <button type="submit" id="submit-button" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                         <i class="fas fa-calendar-plus mr-2"></i>
                         Buat Jadwal
                     </button>
@@ -224,6 +225,28 @@
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
     $(document).ready(function() {
+        // Add form submission handler
+        $('#generate-form').on('submit', function(e) {
+            // Validate dates
+            const startDate = $('#start_date').val();
+            const endDate = $('#end_date').val();
+            
+            if (!startDate || !endDate) {
+                alert('Silakan pilih tanggal mulai dan tanggal akhir terlebih dahulu.');
+                e.preventDefault();
+                return false;
+            }
+            
+            // Log form submission for debugging
+            console.log('Form submitted with dates:', {
+                start_date: startDate,
+                end_date: endDate
+            });
+            
+            // Allow form to submit normally - this will redirect to the date selection page
+            return true;
+        });
+        
         // Format date to YYYY-MM-DD for hidden inputs
         function formatDate(date) {
             const year = date.getFullYear();
@@ -260,14 +283,14 @@
                     
                     // Calculate the difference in days
                     const diffTime = Math.abs(endDate - startDate);
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;  // +1 to include start day
                     
-                    // If the range is more than 30 days, adjust the end date
-                    if (diffDays > 30) {
+                    // If the range is more than 15 days (service limitation), adjust the end date
+                    if (diffDays > 15) {
                         const maxDate = new Date(startDate);
-                        maxDate.setDate(maxDate.getDate() + 30);
+                        maxDate.setDate(maxDate.getDate() + 14);  // +14 since we're including start date
                         instance.setDate([startDate, maxDate]);
-                        alert("Maksimal rentang waktu adalah 30 hari. Tanggal akhir telah disesuaikan.");
+                        alert("Maksimal rentang waktu adalah 15 hari untuk pembuatan jadwal. Tanggal akhir telah disesuaikan.");
                         return;
                     }
                     

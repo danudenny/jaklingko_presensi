@@ -16,6 +16,7 @@ use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\UnitRenopsController;
 use App\Http\Controllers\DriverScheduleSettingsController;
 use App\Http\Controllers\GlobalKilometerReportController;
+use App\Http\Controllers\GlobalSearchController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -60,16 +61,18 @@ Route::middleware('auth')->group(function () {
     Route::post('/drivers/import', [DriverController::class, 'import'])->name('drivers.import.process');
     Route::get('/drivers/get-units-for-route', [DriverController::class, 'getUnitsForRoute'])->name('drivers.get-units-for-route');
     Route::resource('drivers', DriverController::class);
+    Route::get('/driver/schedule/settings', [DriverScheduleSettingsController::class, 'index'])->name('driver.schedule.settings');
+    Route::post('/driver/schedule/settings/update', [DriverScheduleSettingsController::class, 'update'])->name('driver.schedule.settings.update');
 
     // Unit routes
     Route::resource('units', UnitController::class);
 
-// Unit Import Routes
-Route::get('units-import', [UnitImportController::class, 'showImportForm'])->name('units.import.form');
-Route::post('units-import/pool', [UnitImportController::class, 'importPoolUnits'])->name('units.import.pool');
-Route::post('units-import/non-pool', [UnitImportController::class, 'importNonPoolUnits'])->name('units.import.non-pool');
-Route::get('units-import/pool/template', [UnitImportController::class, 'downloadPoolTemplate'])->name('units.import.pool.template');
-Route::get('units-import/non-pool/template', [UnitImportController::class, 'downloadNonPoolTemplate'])->name('units.import.non-pool.template');
+    // Unit Import Routes
+    Route::get('units-import', [UnitImportController::class, 'showImportForm'])->name('units.import.form');
+    Route::post('units-import/pool', [UnitImportController::class, 'importPoolUnits'])->name('units.import.pool');
+    Route::post('units-import/non-pool', [UnitImportController::class, 'importNonPoolUnits'])->name('units.import.non-pool');
+    Route::get('units-import/pool/template', [UnitImportController::class, 'downloadPoolTemplate'])->name('units.import.pool.template');
+    Route::get('units-import/non-pool/template', [UnitImportController::class, 'downloadNonPoolTemplate'])->name('units.import.non-pool.template');
     Route::patch('/units/{unit}/toggle-renops', [UnitController::class, 'toggleRenops'])->name('units.toggle-renops');
     Route::post('/units/bulk-renops', [UnitController::class, 'bulkRenops'])->name('units.bulk-renops');
 
@@ -119,38 +122,22 @@ Route::get('units-import/non-pool/template', [UnitImportController::class, 'down
     Route::get('renops/date-range', [UnitRenopsController::class, 'getByDateRange'])->name('renops.date-range');
     Route::get('renops/settings', [UnitRenopsController::class, 'showSettings'])->name('renops.settings');
     Route::post('renops/settings', [UnitRenopsController::class, 'updateSettings'])->name('renops.settings.update');
+    Route::post('renops/generate-automatic', [UnitRenopsController::class, 'generateAutomatic'])->name('renops.generate-automatic');
 
     // Route routes
     Route::resource('routes', RouteController::class);
+    Route::post('/routes/{route}/units', [RouteController::class, 'addUnit'])->name('routes.units.add');
+    Route::delete('/routes/{route}/units/{unit}', [RouteController::class, 'removeUnit'])->name('routes.units.remove');
 
     // Schedule routes
-    Route::get('/schedules/weekly', [ScheduleController::class, 'weekly'])->name('schedules.weekly');
-    Route::get('/schedules/calendar', [ScheduleController::class, 'calendar'])->name('schedules.calendar');
-    Route::get('/schedules/generate', [ScheduleController::class, 'showGenerateForm'])->name('schedules.generate.form');
-    Route::post('/schedules/generate', [ScheduleController::class, 'generateSchedules'])->name('schedules.generate');
-    Route::get('/schedules/settings', [DriverScheduleSettingsController::class, 'index'])->name('driver.schedule.settings');
-    Route::post('/schedules/settings', [DriverScheduleSettingsController::class, 'update'])->name('driver.schedule.settings.update');
-    Route::get('/schedules/date/{date}', [ScheduleController::class, 'getSchedulesByDate'])->name('schedules.by.date');
-    Route::get('/schedules/{schedule}/unavailable', [ScheduleController::class, 'markUnavailable'])->name('schedules.unavailable');
-    Route::post('/schedules/{schedule}/backup', [ScheduleController::class, 'assignBackup'])->name('schedules.backup');
-    Route::get('/schedules/export/excel', [ScheduleController::class, 'exportExcel'])->name('schedules.export.excel');
-    Route::get('/schedules/export/pdf', [ScheduleController::class, 'exportPdf'])->name('schedules.export.pdf');
-    Route::get('/schedules/export/matrix-pdf', [ScheduleController::class, 'exportMatrixPdf'])->name('schedules.export.matrix-pdf');
-    Route::get('/schedules/matrix-data', [ScheduleController::class, 'getMatrixData'])->name('schedules.matrix-data');
-    Route::post('/schedules/save-matrix', [ScheduleController::class, 'saveMatrix'])->name('schedules.save-matrix');
-    Route::post('/schedules/save-individual', [ScheduleController::class, 'saveIndividualSchedule'])->name('schedules.save-individual');
-    Route::post('/schedules/save-individual-batch', [ScheduleController::class, 'saveIndividualBatch'])->name('schedules.save-individual-batch');
-    Route::post('/schedules/update-status', [ScheduleController::class, 'updateStatus'])->name('schedules.update-status');
-    Route::post('/schedules/store-schedule', [ScheduleController::class, 'storeSchedule'])->name('schedule.store');
-    Route::get('/api/schedules/routes/{route}/units', [ScheduleController::class, 'getUnitsByRoute'])->name('api.routes.units');
-    Route::get('/api/schedules/units/{unit}/drivers', [ScheduleController::class, 'getDriversByUnit'])->name('api.units.drivers');
-    Route::get('/api/schedules/available-drivers', [ScheduleController::class, 'getAvailableDrivers'])->name('api.available-drivers');
-    Route::get('/api/schedules/driver/{driver}/schedule-check', [ScheduleController::class, 'checkDriverSchedule'])->name('api.driver.schedule-check');
-    Route::get('/api/schedules/qualified-drivers/{route}/{unit}', [ScheduleController::class, 'getQualifiedDrivers'])->name('api.qualified-drivers');
-    Route::get('/api/units/list', [ScheduleController::class, 'getUnitsList'])->name('units.list');
-    Route::get('/api/drivers/list', [ScheduleController::class, 'getDriversList'])->name('drivers.list');
-    Route::get('/api/routes/list', [ScheduleController::class, 'getRoutesList'])->name('routes.list');
-    Route::resource('schedules', ScheduleController::class);
+    Route::prefix('schedules')->name('schedules.')->group(function () {
+        Route::get('/', [ScheduleController::class, 'index'])->name('index');
+        Route::get('/export/excel', [ScheduleController::class, 'exportExcel'])->name('export.excel');
+        Route::get('/export/pdf', [ScheduleController::class, 'exportPdf'])->name('export.pdf');
+        Route::get('/export/matrix-pdf', [ScheduleController::class, 'exportMatrixPdf'])->name('export.matrix-pdf');
+        Route::get('/generate', [ScheduleController::class, 'generateForm'])->name('generate.form');
+        Route::post('/generate', [ScheduleController::class, 'generate'])->name('generate');
+    });
 
     // Leave Request routes
     Route::resource('leave-requests', LeaveRequestController::class);
@@ -163,6 +150,9 @@ Route::get('units-import/non-pool/template', [UnitImportController::class, 'down
     Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
     Route::get('/reports/generate', [ReportController::class, 'generate'])->name('reports.generate');
     Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
+    
+    // Global Search
+    Route::get('/global-search', [GlobalSearchController::class, 'search'])->name('global.search');
 });
 
 require __DIR__.'/auth.php';

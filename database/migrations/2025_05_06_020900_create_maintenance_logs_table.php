@@ -26,7 +26,7 @@ return new class extends Migration
             $table->json('costs')->nullable();
             $table->enum('status', ['pending', 'in_progress', 'completed'])->default('pending');
             $table->boolean('on_schedule')->default(false);
-            $table->foreignId('schedule_history_id')->nullable()->constrained('driver_schedule_histories')->nullOnDelete();
+            $table->foreignId('schedule_history_id')->nullable()->constrained('driver_schedule_history')->nullOnDelete();
             $table->timestamps();
         });
     }

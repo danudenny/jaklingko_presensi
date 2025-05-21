@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Route;
+use App\Models\Unit;
 use Illuminate\Http\Request;
 
 class RouteController extends Controller
@@ -12,7 +13,7 @@ class RouteController extends Controller
      */
     public function index(Request $request)
     {
-        $routes = Route::all();
+        $routes = Route::with('units')->get();
 
         if ($request->ajax()) {
             if ($request->header('X-Requested-With') === 'XMLHttpRequest') {
@@ -66,25 +67,27 @@ class RouteController extends Controller
      */
     public function show(Request $request, Route $route)
     {
-        $route->load(['schedules']);
+        // Load units relationship
+        $route->load(['units']);
+        
+        // Paginate schedules - 10 per page
+        $schedules = $route->schedules()->orderBy('schedule_date', 'desc')->paginate(10);
 
         if ($request->ajax()) {
-            $mode = $request->query('mode', 'view');
-
-            if ($mode === 'view') {
-                $html = view('modules.admin.routes.partials.view', compact('route'))->render();
-            } else {
-                $html = view('modules.admin.routes.partials.edit', compact('route'))->render();
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'data' => $route
+                ]);
             }
-
-            return response()->json([
-                'success' => true,
-                'html' => $html,
-                'data' => $route
-            ]);
+            
+            // For AJAX pagination requests
+            if ($request->has('page')) {
+                return view('modules.admin.routes.partials.schedules-table', compact('schedules', 'route'))->render();
+            }
         }
 
-        return view('modules.admin.routes.show', compact('route'));
+        return view('modules.admin.routes.show', compact('route', 'schedules'));
     }
 
     /**
@@ -136,5 +139,34 @@ class RouteController extends Controller
 
         return redirect()->route('routes.index')
             ->with('success', 'Route deleted successfully.');
+    }
+    
+    /**
+     * Add a unit to a route.
+     */
+    public function addUnit(Request $request, Route $route)
+    {
+        $validated = $request->validate([
+            'unit_id' => 'required|exists:units,id'
+        ]);
+        
+        $unit = Unit::findOrFail($validated['unit_id']);
+        
+        // Check if the unit is already associated with this route
+        if (!$route->units()->where('unit_id', $unit->id)->exists()) {
+            $route->units()->attach($unit->id);
+            return redirect()->back()->with('success', 'Unit berhasil ditambahkan ke rute.');
+        }
+        
+        return redirect()->back()->with('error', 'Unit sudah terkait dengan rute ini.');
+    }
+    
+    /**
+     * Remove a unit from a route.
+     */
+    public function removeUnit(Route $route, Unit $unit)
+    {
+        $route->units()->detach($unit->id);
+        return redirect()->back()->with('success', 'Unit berhasil dihapus dari rute.');
     }
 }

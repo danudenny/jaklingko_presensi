@@ -1,3 +1,5 @@
+# Jaklingko Presensi - Driver Scheduling System
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">
@@ -6,6 +8,92 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
+
+## Driver Scheduling System
+
+The Jaklingko Presensi application includes a sophisticated driver scheduling system designed to efficiently allocate drivers to units while adhering to specific business rules and constraints. This document outlines the scheduling process flow and key components.
+
+### Scheduling Process Flow Diagram
+
+```mermaid
+graph TD
+    A[Start Scheduling Process] --> B[Load Data: Units, Drivers, Routes]
+    B --> C[Pre-cache Data for Performance]
+    C --> D[Process Each Day in Date Range]
+    D --> E{Is Day a Weekend or Holiday?}
+    E -- Yes --> F[Apply Resource Percentage Reduction]
+    E -- No --> G[Use 100% Resource Allocation]
+    F --> H[Determine Available Units]
+    G --> H
+    H --> I{Renops Mode?}
+    I -- Manual --> J[Use Manually Selected Unavailable Units]
+    I -- Automatic --> K[Randomly Select Units Based on Thresholds]
+    J --> L[Generate Morning Shift Schedules]
+    K --> L
+    L --> M[Generate Evening Shift Schedules]
+    M --> N{More Days to Process?}
+    N -- Yes --> D
+    N -- No --> O[Balance Schedules in Period]
+    O --> P[End Process]
+    
+    subgraph "Driver Selection Process"
+    AA[Find Suitable Driver] --> BB[Check Driver Availability]
+    BB --> CC[Apply Shift Sequence Rules]
+    CC --> DD[Check Driver Type Constraints]
+    DD --> EE[Check Schedule Count Limits]
+    EE --> FF[Check Unit/Route Qualification]
+    FF --> GG[Select Driver with Fewest Assignments]
+    end
+```
+
+### Key Components
+
+#### 1. Period-Based Scheduling
+Schedules are generated with separate thresholds for two periods in each month:
+- **First Period**: Days 1-15
+- **Second Period**: Days 16-end of the month
+
+#### 2. Driver Types and Thresholds
+- **Batangan (Fixed) Drivers**:
+  - Minimum 13, Maximum 14 schedules per period
+  - Assigned to specific units or routes
+
+- **Cadangan (Non-Fixed) Drivers**:
+  - Minimum 11, Maximum 12 schedules per period
+  - Can be assigned to any unit they're qualified for
+
+#### 3. Renops Settings
+Controls which units operate on weekends and holidays:
+- **Manual Mode**: Administrators select which units will not operate
+- **Automatic Mode**: System randomly selects units based on thresholds
+
+#### 4. Resource Allocation by Day Type
+- **Weekdays**: 100% of units
+- **Saturday**: 80% of units
+- **Sunday**: 70% of units
+- **Holidays**: 70% of units
+
+#### 5. Shift Sequence Rules
+- If today is 'Pagi' (morning), the next day can be 'Pagi' or 'Siang' (afternoon)
+- If today is 'Siang', tomorrow can only be 'Siang'
+- If today is 'Siang' and tomorrow is off, the day after can be either 'Pagi' or 'Siang'
+
+### Performance Optimizations
+
+The scheduling system implements several optimizations to handle large date ranges efficiently:
+
+1. **Data Pre-caching**: Unit assignments, route assignments, existing schedules, and leave requests are pre-loaded
+2. **Batch Processing**: Schedules are processed and committed in batches to prevent memory issues
+3. **Static Caching**: Repeated database queries are eliminated using static caches
+4. **Transaction Management**: Database transactions ensure data integrity during the process
+
+### Usage
+
+The scheduling system can be triggered through the admin interface or via the Schedule model's `autoGenerate` method:
+
+```php
+$results = Schedule::autoGenerate('2025-05-01', '2025-05-15');
+```
 
 ## About Laravel
 
