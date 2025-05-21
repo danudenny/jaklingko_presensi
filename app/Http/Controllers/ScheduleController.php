@@ -57,10 +57,36 @@ class ScheduleController extends Controller
         }
         
         // Get holidays in the date range
-        $holidays = Holiday::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-            ->get()
-            ->pluck('name', 'date')
-            ->toArray();
+        $holidaysCollection = Holiday::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->get();
+            
+        // Format the dates properly for use in the view
+        $holidays = [];
+        foreach ($holidaysCollection as $holiday) {
+            $formattedDate = $holiday->date->format('Y-m-d');
+            $holidays[$formattedDate] = $holiday->name;
+        }
+        
+        // Log the holidays for debugging
+        \Illuminate\Support\Facades\Log::info('Holidays loaded for schedule display:', $holidays);
+        
+        // Get units in renops (not operating) for the date range
+        $unitRenopsCollection = UnitRenops::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->get();
+            
+        // Format the unit renops data for easy lookup in the view
+        // Structure: [date][unit_id] = true
+        $unitRenops = [];
+        foreach ($unitRenopsCollection as $renop) {
+            $formattedDate = $renop->date->format('Y-m-d');
+            if (!isset($unitRenops[$formattedDate])) {
+                $unitRenops[$formattedDate] = [];
+            }
+            $unitRenops[$formattedDate][$renop->unit_id] = true;
+        }
+        
+        // Log the unit renops for debugging
+        \Illuminate\Support\Facades\Log::info('Unit renops loaded for schedule display:', ['count' => count($unitRenopsCollection)]);
 
         // Get all routes, drivers and units to build the dropdown filters
         $routes = Route::orderBy('route_number')->get();
@@ -126,6 +152,7 @@ class ScheduleController extends Controller
             'uniqueDriversCount' => $uniqueDriversCount,
             'uniqueUnitsCount' => $uniqueUnitsCount,
             'holidays' => $holidays,
+            'unitRenops' => $unitRenops,
         ]);
     }
     
@@ -335,6 +362,40 @@ class ScheduleController extends Controller
     public function generateForm()
     {
         return view('modules.admin.schedules.generate');
+    }
+
+    /**
+     * Delete a schedule
+     *
+     * @param int $id
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function destroy($id)
+    {
+        $schedule = Schedule::findOrFail($id);
+        $schedule->delete();
+
+        return redirect()->route('schedules.index')->with('success', 'Jadwal berhasil dihapus');
+    }
+
+    /**
+     * Reset all schedule data (only in local environment)
+     *
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function resetAll()
+    {
+        // Only allow this in local environment
+        if (app()->environment('local')) {
+            // Delete all records from the schedules table
+            Schedule::truncate();
+            
+            return redirect()->route('schedules.index')
+                ->with('success', 'Semua data jadwal berhasil direset');
+        }
+        
+        return redirect()->route('schedules.index')
+            ->with('error', 'Reset data jadwal hanya diperbolehkan di lingkungan local');
     }
 
     /**

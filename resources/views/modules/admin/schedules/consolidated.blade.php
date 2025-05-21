@@ -52,6 +52,50 @@
     .highlight-holiday:hover {
         box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.4);
     }
+    
+    /* Highlighted days */
+    .highlight-saturday, .highlight-sunday {
+        background-color: #fefce8 !important; /* yellow-50 - lighter yellow */
+    }
+    
+    .highlight-holiday {
+        background-color: #fef2f2 !important; /* red-50 - lighter red */
+    }
+    
+    /* Cadangan driver checkmark */
+    .cadangan-checkmark {
+        background-color: #e9d5ff !important; /* purple-200 */
+        color: #7e22ce !important; /* purple-700 */
+    }
+    
+    /* Renops indicator */
+    .renops-indicator {
+        background-color: #1e40af !important; /* blue-800 */
+        color: #ffffff !important; /* white */
+        border: 2px solid #93c5fd !important; /* blue-300 */
+    }
+    
+    /* Collapsible sections */
+    .route-header, .unit-header {
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .route-header:hover, .unit-header:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+    
+    .route-content, .unit-content {
+        transition: all 0.3s ease-in-out;
+    }
+    
+    .route-header .toggle-icon, .unit-header .toggle-icon {
+        transition: transform 0.3s ease;
+    }
+    
+    .route-header.collapsed .toggle-icon, .unit-header.collapsed .toggle-icon {
+        transform: rotate(-90deg);
+    }
 </style>
 @endpush
 
@@ -103,6 +147,49 @@
                 if (!dropdown.contains(event.target) && !menu.classList.contains('hidden')) {
                     menu.classList.add('hidden');
                 }
+            });
+        });
+        
+        // Initialize collapsible sections
+        // By default, keep all route and unit sections expanded
+        window.toggleRouteContent = function(routeId) {
+            const header = document.querySelector(`.route-header[data-route-id="${routeId}"]`);
+            const content = document.querySelector(`.route-content[data-route-content="${routeId}"]`);
+            
+            // Check if the click was on a toggle icon or the header itself
+            event.stopPropagation();
+            
+            // Toggle the content visibility
+            if (content.style.display === 'none') {
+                content.style.display = 'table-row-group';
+                header.classList.remove('collapsed');
+            } else {
+                content.style.display = 'none';
+                header.classList.add('collapsed');
+            }
+        };
+        
+        window.toggleUnitContent = function(unitId) {
+            const header = document.querySelector(`.unit-header[data-unit-id="${unitId}"]`);
+            const content = document.querySelector(`.unit-content[data-unit-content="${unitId}"]`);
+            
+            // Check if the click was on a toggle icon or the header itself
+            event.stopPropagation();
+            
+            // Toggle the content visibility
+            if (content.style.display === 'none') {
+                content.style.display = 'table-row-group';
+                header.classList.remove('collapsed');
+            } else {
+                content.style.display = 'none';
+                header.classList.add('collapsed');
+            }
+        };
+        
+        // Add click event listeners to prevent event propagation when clicking on links inside headers
+        document.querySelectorAll('.route-header a, .unit-header a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.stopPropagation();
             });
         });
         
@@ -461,19 +548,29 @@
                         Export
                         <i class="ml-2 text-xs fas fa-chevron-down"></i>
                     </button>
-                    <div class="absolute right-0 z-50 hidden w-40 p-2 mt-2 space-y-1 bg-white rounded-md shadow-lg dropdown-menu ring-1 ring-black ring-opacity-5">
-                        <a href="{{ route('schedules.export.excel', request()->query()) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
+                    <div class="absolute right-0 z-50 hidden w-48 p-2 mt-2 space-y-1 bg-white rounded-md shadow-lg dropdown-menu ring-1 ring-black ring-opacity-5">
+                        <a href="{{ route('schedules.export.excel', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver' => $selectedDriver, 'unit' => $selectedUnit]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
                             <i class="mr-2 text-green-500 fas fa-file-excel"></i>
                             Excel
                         </a>
-                        <a href="{{ route('schedules.export.pdf', request()->query()) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
+                        <a href="{{ route('schedules.export.pdf', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver' => $selectedDriver, 'unit' => $selectedUnit]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
                             <i class="mr-2 text-red-500 fas fa-file-pdf"></i>
                             PDF
                         </a>
-                        <a href="{{ route('schedules.export.matrix-pdf', request()->query()) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
+                        <a href="{{ route('schedules.export.matrix-pdf', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver' => $selectedDriver, 'unit' => $selectedUnit]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
                             <i class="mr-2 text-purple-500 fas fa-table"></i>
                             Matrix PDF
                         </a>
+                        @if(app()->environment('local'))
+                        <div class="border-t border-gray-100 my-1"></div>
+                        <form action="{{ route('schedules.reset-all') }}" method="POST" onsubmit="return confirm('PERINGATAN: Semua data jadwal akan dihapus. Apakah Anda yakin?');">
+                            @csrf
+                            <button type="submit" class="w-full text-left px-4 py-2 text-xs font-medium text-red-600 rounded-md hover:bg-red-50 hover:text-red-800">
+                                <i class="mr-2 fas fa-trash-alt"></i>
+                                Reset Data Jadwal
+                            </button>
+                        </form>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -606,11 +703,21 @@
                     <div class="relative" 
                          x-data="{ 
                             open: false, 
-                            search: '{{ $selectedDriver ? $drivers->firstWhere('id', $selectedDriver)->name : '-- Semua Pengemudi --' }}', 
+                            search: '{{ $selectedDriver ? ($drivers->firstWhere('id', $selectedDriver)->name) : '-- Semua Pengemudi --' }}', 
                             selectedOption: '{{ $selectedDriver }}',
-                            defaultSearch: '{{ $selectedDriver ? $drivers->firstWhere('id', $selectedDriver)->name : '-- Semua Pengemudi --' }}',
+                            defaultSearch: '{{ $selectedDriver ? ($drivers->firstWhere('id', $selectedDriver)->name) : '-- Semua Pengemudi --' }}',
+                            isFirstInput: true,
                             filterDrivers(term) {
-                                if (!term || term === this.defaultSearch) return;
+                                // Clear default text on first input
+                                if (this.isFirstInput && term === this.defaultSearch) {
+                                    this.search = '';
+                                    this.isFirstInput = false;
+                                    return;
+                                }
+                                
+                                // Skip filtering if empty or default text
+                                if (!term) return;
+                                
                                 document.querySelectorAll('[data-driver-item]').forEach(el => {
                                     const driverName = el.getAttribute('data-driver-name').toLowerCase();
                                     el.style.display = driverName.includes(term.toLowerCase()) ? '' : 'none';
@@ -724,8 +831,18 @@
                             search: '{{ $selectedUnit ? ($units->firstWhere('id', $selectedUnit)->unit_number . ($units->firstWhere('id', $selectedUnit)->plate_number ? ' ('.$units->firstWhere('id', $selectedUnit)->plate_number.')' : '')) : '-- Semua Unit --' }}', 
                             selectedOption: '{{ $selectedUnit }}',
                             defaultSearch: '{{ $selectedUnit ? ($units->firstWhere('id', $selectedUnit)->unit_number . ($units->firstWhere('id', $selectedUnit)->plate_number ? ' ('.$units->firstWhere('id', $selectedUnit)->plate_number.')' : '')) : '-- Semua Unit --' }}',
+                            isFirstInput: true,
                             filterUnits(term) {
-                                if (!term || term === this.defaultSearch) return;
+                                // Clear default text on first input
+                                if (this.isFirstInput && term === this.defaultSearch) {
+                                    this.search = '';
+                                    this.isFirstInput = false;
+                                    return;
+                                }
+                                
+                                // Skip filtering if empty
+                                if (!term) return;
+                                
                                 document.querySelectorAll('[data-unit-item]').forEach(el => {
                                     const unitInfo = el.getAttribute('data-unit-info').toLowerCase();
                                     el.style.display = unitInfo.includes(term.toLowerCase()) ? '' : 'none';
@@ -881,26 +998,42 @@
                             </th>
                             @foreach($dateRange as $date)
                                 @php
-                                    $day = Carbon\Carbon::parse($date)->format('D');
-                                    $isWeekend = in_array($day, ['Sat', 'Sun']);
+                                    $date = $date;
+                                    $dayName = Carbon\Carbon::parse($date)->format('l');
+                                    $day = substr($dayName, 0, 3);
                                     $isHoliday = isset($holidays[$date]);
+                                    $holidayName = $isHoliday ? $holidays[$date] : '';
                                     
-                                    if ($isHoliday) {
-                                        $bgClass = 'bg-red-50 highlight-holiday';
+                                    // Set classes based on day of week
+                                    if ($dayName === 'Sunday') {
+                                        $bgClass = 'bg-red-50';
                                         $textClass = 'text-red-700';
-                                        $subTextClass = 'text-red-500';
-                                        $holidayName = $holidays[$date];
-                                    } elseif ($isWeekend) {
-                                        $bgClass = 'bg-amber-50';
-                                        $textClass = 'text-amber-700';
-                                        $subTextClass = 'text-amber-500';
+                                        $subTextClass = 'text-red-600';
+                                    } elseif ($dayName === 'Saturday') {
+                                        $bgClass = 'bg-orange-50';
+                                        $textClass = 'text-orange-700';
+                                        $subTextClass = 'text-orange-600';
                                     } else {
-                                        $bgClass = '';
+                                        $bgClass = 'bg-gray-50';
                                         $textClass = 'text-gray-700';
-                                        $subTextClass = 'text-gray-400';
+                                        $subTextClass = 'text-gray-500';
+                                    }
+                                    
+                                    // Format the date for comparison with the holidays array
+                                    $formattedDate = \Carbon\Carbon::parse($date)->format('Y-m-d');
+                                    
+                                    // Add highlight classes for specific days
+                                    $highlightClass = '';
+                                    if ($dayName === 'Saturday' || $dayName === 'Sunday') {
+                                        $highlightClass = 'highlight-saturday';
+                                    }
+                                    
+                                    // Add holiday highlight class - takes precedence
+                                    if ($isHoliday) {
+                                        $highlightClass = 'highlight-holiday';
                                     }
                                 @endphp
-                                <th scope="col" class="w-8 px-1 py-3 text-xs font-medium tracking-wider text-center {{ $textClass }} uppercase {{ $bgClass }} relative" 
+                                <th scope="col" class="w-8 px-1 py-3 text-xs font-medium tracking-wider text-center {{ $textClass }} uppercase {{ $bgClass }} {{ $highlightClass }} relative" 
                                     @if($isHoliday) title="{{ $holidayName }}" data-tooltip="{{ $holidayName }}" @endif>
                                     {{ Carbon\Carbon::parse($date)->format('d') }}
                                     <div class="{{ $subTextClass }} text-xxs">
@@ -933,34 +1066,48 @@
                             </tr>
                         @else
                             @foreach($routeUnitDrivers as $routeGroup)
-                                <tr class="bg-indigo-50">
+                                <tr class="bg-indigo-50 route-header" data-route-id="{{ $routeGroup['route']->id }}" onclick="toggleRouteContent({{ $routeGroup['route']->id }})">
                                     <td colspan="{{ 4 + count($dateRange) + 1 }}" class="px-3 py-3 font-medium text-indigo-900 border-b border-indigo-100">
-                                        <div class="flex items-center">
-                                            <div class="flex items-center justify-center w-6 h-6 mr-2 text-white bg-indigo-600 rounded-full">
-                                                <i class="text-xs fas fa-route"></i>
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex items-center">
+                                                <div class="flex items-center justify-center w-6 h-6 mr-2 text-white bg-indigo-600 rounded-full">
+                                                    <i class="text-xs fas fa-route"></i>
+                                                </div>
+                                                <span class="font-semibold">Rute {{ $routeGroup['route']->route_number }}</span>
+                                                <span class="mx-2">-</span>
+                                                <span>{{ $routeGroup['route']->name }}</span>
                                             </div>
-                                            <span class="font-semibold">Rute {{ $routeGroup['route']->route_number }}</span>
-                                            <span class="mx-2">-</span>
-                                            <span>{{ $routeGroup['route']->name }}</span>
+                                            <div class="toggle-icon">
+                                                <i class="fas fa-chevron-down text-indigo-500"></i>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
+                                <tbody class="route-content" data-route-content="{{ $routeGroup['route']->id }}">
+
 
                                 @foreach($routeGroup['units'] as $unitGroup)
-                                    <tr class="bg-blue-50">
+                                    <tr class="bg-blue-50 unit-header" data-unit-id="{{ $unitGroup['unit']->id }}" onclick="toggleUnitContent({{ $unitGroup['unit']->id }})">
                                         <td class="px-3 py-2 text-right"></td>
                                         <td colspan="{{ 3 + count($dateRange) + 1 }}" class="px-3 py-2 font-medium text-blue-800 border-b border-blue-100">
-                                            <div class="flex items-center">
-                                                <div class="flex items-center justify-center w-5 h-5 mr-2 text-white bg-blue-500 rounded-full">
-                                                    <i class="text-xs fas fa-bus"></i>
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center">
+                                                    <div class="flex items-center justify-center w-5 h-5 mr-2 text-white bg-blue-500 rounded-full">
+                                                        <i class="text-xs fas fa-bus"></i>
+                                                    </div>
+                                                    Unit {{ $unitGroup['unit']->unit_number }} 
+                                                    @if($unitGroup['unit']->plate_number)
+                                                        <span class="text-xs text-blue-600 ml-1 bg-blue-100 px-2 py-0.5 rounded-full">({{ $unitGroup['unit']->plate_number }})</span>
+                                                    @endif
                                                 </div>
-                                                Unit {{ $unitGroup['unit']->unit_number }} 
-                                                @if($unitGroup['unit']->plate_number)
-                                                    <span class="text-xs text-blue-600 ml-1 bg-blue-100 px-2 py-0.5 rounded-full">({{ $unitGroup['unit']->plate_number }})</span>
-                                                @endif
+                                                <div class="toggle-icon">
+                                                    <i class="fas fa-chevron-down text-blue-500"></i>
+                                                </div>
                                             </div>
                                         </td>
                                     </tr>
+                                    <tbody class="unit-content" data-unit-content="{{ $unitGroup['unit']->id }}">
+
 
                                     @foreach($unitGroup['drivers'] as $driverInfo)
                                         @foreach(['pagi', 'siang'] as $shift)
@@ -976,7 +1123,7 @@
                                                                 </span>
                                                             </div>
                                                             <div class="ml-3">
-                                                                <p class="font-medium text-gray-800">{{ $driverInfo['driver']->name }}</p>
+                                                                <a href="{{ route('drivers.show', $driverInfo['driver']->id) }}" class="font-medium text-gray-800 hover:text-indigo-600 hover:underline">{{ $driverInfo['driver']->name }}</a>
                                                                 <p class="text-xs {{ $driverInfo['driver']->type == 'batangan' ? 'text-emerald-600' : 'text-gray-500' }}">
                                                                     <span class="inline-flex items-center px-2 py-0.5 rounded-full {{ $driverInfo['driver']->type == 'batangan' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-800' }} text-xxs font-medium">
                                                                         {{ ucfirst($driverInfo['driver']->type) }}
@@ -1003,10 +1150,39 @@
                                                         @php
                                                             $isAssigned = in_array($date, $driverInfo['shifts'][$shift]['dates']);
                                                             $isBackup = in_array($date, $driverInfo['shifts'][$shift]['backup_dates']);
+                                                            
+                                                            // Determine day type for highlighting
+                                                            $dayName = \Carbon\Carbon::parse($date)->format('l');
+                                                            
+                                                            // Format the date for comparison with the holidays array
+                                                            $formattedDate = \Carbon\Carbon::parse($date)->format('Y-m-d');
+                                                            
+                                                            // Check if this date is a holiday using the holidays array from the controller
+                                                            $isHoliday = isset($holidays[$formattedDate]);
+                                                            
+                                                            // Set highlight class based on day type
+                                                            $cellHighlightClass = '';
+                                                            if ($dayName === 'Saturday' || $dayName === 'Sunday') {
+                                                                $cellHighlightClass = 'highlight-saturday';
+                                                            }
+                                                            
+                                                            // Holiday takes precedence over weekend
+                                                            if ($isHoliday) {
+                                                                $cellHighlightClass = 'highlight-holiday';
+                                                            }
                                                         @endphp
-                                                        <td class="px-1 py-2 text-center">
-                                                            @if($isAssigned)
-                                                                <span class="inline-flex items-center justify-center w-6 h-6 text-green-800 transition-all bg-green-100 rounded-full hover:bg-green-200" title="Pengemudi Dijadwalkan">
+                                                        <td class="px-1 py-2 text-center {{ $cellHighlightClass }}">
+                                                            @php
+                                                                // Check if this unit is in renops for this date
+                                                                $isUnitInRenops = isset($unitRenops[$formattedDate]) && isset($unitRenops[$formattedDate][$unitGroup['unit']->id]);
+                                                            @endphp
+                                                            
+                                                            @if($isUnitInRenops)
+                                                                <span class="inline-flex items-center justify-center w-6 h-6 transition-all rounded-full renops-indicator" title="Unit Tidak Beroperasi (Renops)">
+                                                                    <i class="text-sm fas fa-exclamation"></i>
+                                                                </span>
+                                                            @elseif($isAssigned)
+                                                                <span class="inline-flex items-center justify-center w-6 h-6 transition-all rounded-full hover:bg-green-200 {{ $driverInfo['driver']->type == 'batangan' ? 'bg-green-100 text-green-800' : 'cadangan-checkmark' }}" title="Pengemudi Dijadwalkan">
                                                                     <i class="text-sm fas fa-check"></i>
                                                                 </span>
                                                             @elseif($isBackup)
@@ -1036,7 +1212,9 @@
                                             @endif
                                         @endforeach
                                     @endforeach
+                                </tbody> <!-- Close unit-content -->
                                 @endforeach
+                                </tbody> <!-- Close route-content -->
                                 
                                 <!-- Spacer row between route groups -->
                                 <tr class="h-4">
@@ -1059,13 +1237,25 @@
                     <span class="inline-flex items-center justify-center w-6 h-6 mr-2 text-green-800 bg-green-100 rounded-full">
                         <i class="text-sm fas fa-check"></i>
                     </span>
-                    <span class="text-sm text-gray-700">Pengemudi Dijadwalkan</span>
+                    <span class="text-sm text-gray-700">Pengemudi Batangan</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="inline-flex items-center justify-center w-6 h-6 mr-2 rounded-full cadangan-checkmark">
+                        <i class="text-sm fas fa-check"></i>
+                    </span>
+                    <span class="text-sm text-gray-700">Pengemudi Cadangan</span>
                 </div>
                 <div class="flex items-center">
                     <span class="inline-flex items-center justify-center w-6 h-6 mr-2 rounded-full bg-amber-100 text-amber-800">
                         <i class="text-sm fas fa-question"></i>
                     </span>
-                    <span class="text-sm text-gray-700">Pengemudi Cadangan</span>
+                    <span class="text-sm text-gray-700">Pengemudi Backup</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="inline-flex items-center justify-center w-6 h-6 mr-2 rounded-full renops-indicator">
+                        <i class="text-sm fas fa-exclamation"></i>
+                    </span>
+                    <span class="text-sm text-gray-700">Unit Tidak Beroperasi (Renops)</span>
                 </div>
                 <div class="flex items-center">
                     <span class="inline-flex items-center justify-center px-2 py-1 mr-2 text-xs font-medium text-blue-600 bg-blue-100 rounded">

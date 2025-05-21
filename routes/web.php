@@ -137,6 +137,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/export/matrix-pdf', [ScheduleController::class, 'exportMatrixPdf'])->name('export.matrix-pdf');
         Route::get('/generate', [ScheduleController::class, 'generateForm'])->name('generate.form');
         Route::post('/generate', [ScheduleController::class, 'generate'])->name('generate');
+        Route::post('/reset-all', [ScheduleController::class, 'resetAll'])->name('reset-all');
     });
 
     // Leave Request routes

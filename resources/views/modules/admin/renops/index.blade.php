@@ -307,6 +307,58 @@
     </div>
 </div>
 
+<!-- Notification Modal -->
+<div id="notification-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50" x-data="{ show: false, type: 'success', title: '', message: '', confirmCallback: null, cancelCallback: null, showCancel: false }" x-show="show" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @click.away="show = false">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <div class="flex justify-between items-center pb-3">
+                <h3 class="text-lg font-medium" :class="{
+                    'text-green-700': type === 'success',
+                    'text-red-700': type === 'error',
+                    'text-blue-700': type === 'info',
+                    'text-yellow-700': type === 'warning',
+                }" x-text="title"></h3>
+                <button type="button" @click="show = false" class="text-gray-400 hover:text-gray-500">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="mt-2 px-7 py-3">
+                <div class="flex items-center justify-center">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full mb-4" :class="{
+                        'bg-green-100': type === 'success',
+                        'bg-red-100': type === 'error',
+                        'bg-blue-100': type === 'info',
+                        'bg-yellow-100': type === 'warning',
+                    }">
+                        <i class="fas text-2xl" :class="{
+                            'fa-check text-green-600': type === 'success',
+                            'fa-times text-red-600': type === 'error',
+                            'fa-info-circle text-blue-600': type === 'info',
+                            'fa-exclamation-triangle text-yellow-600': type === 'warning',
+                        }"></i>
+                    </div>
+                </div>
+                <p class="text-sm text-center text-gray-700" x-text="message"></p>
+            </div>
+            <div class="flex justify-end px-7 py-3 border-t">
+                <template x-if="showCancel">
+                    <button type="button" @click="cancelCallback ? cancelCallback() : (show = false)" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded mr-2">
+                        Batal
+                    </button>
+                </template>
+                <button type="button" @click="confirmCallback ? confirmCallback() : (show = false)" class="px-4 py-2 font-bold text-white rounded" :class="{
+                    'bg-green-600 hover:bg-green-700': type === 'success',
+                    'bg-red-600 hover:bg-red-700': type === 'error',
+                    'bg-blue-600 hover:bg-blue-700': type === 'info',
+                    'bg-yellow-600 hover:bg-yellow-700': type === 'warning',
+                }">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal for date range selection -->
 <div id="period-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
     <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
@@ -388,6 +440,72 @@ document.addEventListener('DOMContentLoaded', function() {
             isAutomatic: {{ isset($settings) && $settings->isAutomatic() ? 'true' : 'false' }}
         },
         
+        // Notification modal helper
+        notification: {
+            modal: null,
+            alpine: null,
+            
+            // Initialize notification modal
+            init: function() {
+                this.modal = document.getElementById('notification-modal');
+                if (this.modal) {
+                    this.alpine = this.modal.__x;
+                }
+            },
+            
+            // Show success notification
+            success: function(title, message, callback = null) {
+                if (this.alpine) {
+                    this.alpine.$data.type = 'success';
+                    this.alpine.$data.title = title;
+                    this.alpine.$data.message = message;
+                    this.alpine.$data.confirmCallback = callback;
+                    this.alpine.$data.showCancel = false;
+                    this.alpine.$data.show = true;
+                    this.modal.classList.remove('hidden');
+                } else {
+                    alert(message);
+                    if (callback) callback();
+                }
+            },
+            
+            // Show error notification
+            error: function(title, message, callback = null) {
+                if (this.alpine) {
+                    this.alpine.$data.type = 'error';
+                    this.alpine.$data.title = title;
+                    this.alpine.$data.message = message;
+                    this.alpine.$data.confirmCallback = callback;
+                    this.alpine.$data.showCancel = false;
+                    this.alpine.$data.show = true;
+                    this.modal.classList.remove('hidden');
+                } else {
+                    alert(message);
+                    if (callback) callback();
+                }
+            },
+            
+            // Show confirmation dialog
+            confirm: function(title, message, confirmCallback, cancelCallback = null) {
+                if (this.alpine) {
+                    this.alpine.$data.type = 'warning';
+                    this.alpine.$data.title = title;
+                    this.alpine.$data.message = message;
+                    this.alpine.$data.confirmCallback = confirmCallback;
+                    this.alpine.$data.cancelCallback = cancelCallback;
+                    this.alpine.$data.showCancel = true;
+                    this.alpine.$data.show = true;
+                    this.modal.classList.remove('hidden');
+                } else {
+                    if (confirm(message)) {
+                        if (confirmCallback) confirmCallback();
+                    } else {
+                        if (cancelCallback) cancelCallback();
+                    }
+                }
+            }
+        },
+        
         // Initialize the application
         init: function() {
             this.initializeFlatpickr();
@@ -395,6 +513,7 @@ document.addEventListener('DOMContentLoaded', function() {
             this.initializeAutoSuggestion();
             this.initializeMonthPicker();
             this.updateSelectedCount();
+            this.notification.init();
         },
         
         // Initialize flatpickr calendar
@@ -632,13 +751,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.error('Error:', data.message);
                         // Revert the visual change if there was an error
                         this.revertCardSelection(card);
-                        alert(data.message || 'Terjadi kesalahan saat mengubah status unit.');
+                        this.notification.error('Gagal', data.message || 'Terjadi kesalahan saat mengubah status unit.');
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
                     this.revertCardSelection(card);
-                    alert('Terjadi kesalahan saat mengubah status unit.');
+                    this.notification.error('Gagal', 'Terjadi kesalahan saat mengubah status unit.');
                 });
             }
         },
@@ -689,7 +808,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 .map(card => card.getAttribute('data-unit-id'));
             
             if (selectedUnits.length > this.config.maxLimit) {
-                alert(`Tidak dapat menyimpan perubahan. Batas maksimum adalah ${this.config.maxLimit} unit.`);
+                this.notification.error('Batas Maksimum Terlampaui', `Tidak dapat menyimpan perubahan. Batas maksimum adalah ${this.config.maxLimit} unit.`);
                 return;
             }
             
@@ -711,17 +830,18 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Rencana operasi unit berhasil diperbarui.');
-                    window.location.reload();
+                    this.notification.success('Berhasil', 'Rencana operasi unit berhasil diperbarui.', function() {
+                        window.location.reload();
+                    });
                 } else {
-                    alert(data.message || 'Gagal memperbarui rencana operasi unit.');
+                    this.notification.error('Gagal', data.message || 'Gagal memperbarui rencana operasi unit.');
                     button.disabled = false;
                     button.innerHTML = '<i class="fas fa-save mr-2"></i> Simpan Perubahan';
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Terjadi kesalahan saat memperbarui rencana operasi unit.');
+                this.notification.error('Terjadi Kesalahan', 'Terjadi kesalahan saat memperbarui rencana operasi unit.');
                 button.disabled = false;
                 button.innerHTML = '<i class="fas fa-save mr-2"></i> Simpan Perubahan';
             });
@@ -729,11 +849,13 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Delete the operational plan
         deletePlan: function(button) {
-            if (confirm('Apakah Anda yakin ingin menghapus rencana operasi ini?')) {
+            const self = this;
+            
+            this.notification.confirm('Konfirmasi Hapus', 'Apakah Anda yakin ingin menghapus rencana operasi ini?', function() {
                 button.disabled = true;
                 button.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Menghapus...';
                 
-                fetch(`/renops/${this.config.date}`, {
+                fetch(`/renops/${self.config.date}`, {
                     method: 'DELETE',
                     headers: {
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
@@ -742,21 +864,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        alert('Rencana operasi unit berhasil dihapus.');
-                        window.location.href = '{{ route('renops.index') }}';
+                        self.notification.success('Berhasil', 'Rencana operasi unit berhasil dihapus.', function() {
+                            window.location.href = '{{ route('renops.index') }}';
+                        });
                     } else {
-                        alert(data.message || 'Gagal menghapus rencana operasi unit.');
+                        self.notification.error('Gagal', data.message || 'Gagal menghapus rencana operasi unit.');
                         button.disabled = false;
                         button.innerHTML = '<i class="fas fa-trash-alt mr-2"></i> Hapus Rencana';
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    alert('Terjadi kesalahan saat menghapus rencana operasi unit.');
+                    self.notification.error('Terjadi Kesalahan', 'Terjadi kesalahan saat menghapus rencana operasi unit.');
                     button.disabled = false;
                     button.innerHTML = '<i class="fas fa-trash-alt mr-2"></i> Hapus Rencana';
                 });
-            }
+            });
         },
         
         // Generate automatic operation plan
@@ -764,7 +887,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Get selected period
             const selectedPeriodElement = document.querySelector('input[name="period"]:checked');
             if (!selectedPeriodElement) {
-                alert('Silakan pilih periode terlebih dahulu.');
+                this.notification.error('Input Diperlukan', 'Silakan pilih periode terlebih dahulu.');
                 return;
             }
             
@@ -772,7 +895,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const selectedMonth = this.elements.monthPicker.value;
             
             if (!selectedMonth) {
-                alert('Silakan pilih bulan terlebih dahulu.');
+                this.notification.error('Input Diperlukan', 'Silakan pilih bulan terlebih dahulu.');
                 return;
             }
             
@@ -803,52 +926,62 @@ document.addEventListener('DOMContentLoaded', function() {
             // Confirm before proceeding
             const periodText = selectedPeriod === 'first' ? 'periode pertama (1-15)' : 
                             (selectedPeriod === 'second' ? 'periode kedua (16-akhir bulan)' : 'bulan penuh');
-                            
-            if (confirm(`Apakah Anda yakin ingin membuat rencana operasi otomatis untuk ${periodText}? Ini akan menggantikan rencana yang sudah ada.`)) {
-                // Disable button and show loading state
-                button.disabled = true;
-                button.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Memproses...';
-                
-                // Close the modal
-                this.elements.periodModal.classList.add('hidden');
-                
-                // Make API request
-                fetch('{{ route("renops.generate-automatic") }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                    },
-                    body: JSON.stringify({
-                        start_date: startDate,
-                        end_date: endDate,
-                        period: selectedPeriod
+            
+            const self = this;
+            this.notification.confirm(
+                'Konfirmasi Generasi', 
+                `Apakah Anda yakin ingin membuat rencana operasi otomatis untuk ${periodText}? Ini akan menggantikan rencana yang sudah ada.`,
+                function() {
+                    // Disable button and show loading state
+                    button.disabled = true;
+                    button.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Memproses...';
+                    
+                    // Close the modal
+                    self.elements.periodModal.classList.add('hidden');
+                    
+                    // Make API request
+                    fetch('{{ route("renops.generate-automatic") }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        },
+                        body: JSON.stringify({
+                            start_date: startDate,
+                            end_date: endDate,
+                            period: selectedPeriod
+                        })
                     })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert(data.message || 'Rencana operasi otomatis berhasil dibuat.');
-                        // Reload page if we're viewing a date that was just processed
-                        const currentViewDate = '{{ $date->format("Y-m-d") }}';
-                        const processedDates = data.results?.details?.map(detail => detail.date) || [];
-                        
-                        if (processedDates.includes(currentViewDate)) {
-                            window.location.reload();
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            self.notification.success(
+                                'Berhasil', 
+                                data.message || 'Rencana operasi otomatis berhasil dibuat.',
+                                function() {
+                                    // Reload page if we're viewing a date that was just processed
+                                    const currentViewDate = '{{ $date->format("Y-m-d") }}';
+                                    const processedDates = data.results?.details?.map(detail => detail.date) || [];
+                                    
+                                    if (processedDates.includes(currentViewDate)) {
+                                        window.location.reload();
+                                    }
+                                }
+                            );
+                        } else {
+                            self.notification.error('Gagal', data.message || 'Gagal membuat rencana operasi otomatis.');
                         }
-                    } else {
-                        alert(data.message || 'Gagal membuat rencana operasi otomatis.');
-                    }
-                    button.disabled = false;
-                    button.innerHTML = '<i class="fas fa-check mr-2"></i> Generate';
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Terjadi kesalahan saat membuat rencana operasi otomatis.');
-                    button.disabled = false;
-                    button.innerHTML = '<i class="fas fa-check mr-2"></i> Generate';
-                });
-            }
+                        button.disabled = false;
+                        button.innerHTML = '<i class="fas fa-check mr-2"></i> Generate';
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        self.notification.error('Terjadi Kesalahan', 'Terjadi kesalahan saat membuat rencana operasi otomatis.');
+                        button.disabled = false;
+                        button.innerHTML = '<i class="fas fa-check mr-2"></i> Generate';
+                    });
+                }
+            );
         }
     };
     

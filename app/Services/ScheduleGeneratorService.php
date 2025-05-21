@@ -486,7 +486,7 @@ class ScheduleGeneratorService
     ): ?Driver {
         // Get the route for this unit
         if ($unit->routes->isEmpty()) {
-            $this->messages[] = "Unit {$unit->name} has no routes assigned, skipping.";
+            $this->messages[] = "Unit {$unit->unit_number} has no routes assigned, skipping.";
             return null;
         }
 
@@ -498,8 +498,16 @@ class ScheduleGeneratorService
             Log::info("Route ID for this unit: {$routeId}");
         }
 
-        // First priority: Try to find a batangan driver specifically assigned to this unit
+        // Check if this unit is in unit_renops (unavailable) for this date
+        if (isset($this->unitDayOffs[$dateStr]) && in_array($unit->id, $this->unitDayOffs[$dateStr])) {
+            $this->messages[] = "Unit {$unit->unit_number} is marked as unavailable in unit_renops for {$dateStr}, skipping.";
+            Log::info("Unit {$unit->unit_number} (ID: {$unit->id}) is marked as unavailable in unit_renops for {$dateStr}");
+            return null;
+        }
+
+        // First priority: Try to find a batangan driver specifically assigned to this unit in driver_units table
         $unitBatanganDrivers = $this->fixedDrivers->filter(function($driver) use ($unit) {
+            // Check if this driver is assigned to this unit in the driver_units table
             return isset($this->unitAssignmentsCache[$unit->id]) && 
                    isset($this->unitAssignmentsCache[$unit->id][$driver->id]);
         });
@@ -525,13 +533,14 @@ class ScheduleGeneratorService
             );
 
             if ($driver) {
-                $this->messages[] = "Assigned batangan driver {$driver->name} to unit {$unit->name} for {$dateStr} {$shift} (unit-specific assignment)";
+                $this->messages[] = "Assigned batangan driver {$driver->name} to unit {$unit->unit_number} for {$dateStr} {$shift} (unit-specific assignment)";
                 return $driver;
             }
         }
 
-        // Second priority: Try to find a cadangan driver specifically assigned to this unit
+        // Second priority: Try to find a cadangan driver specifically assigned to this unit in driver_units table
         $unitCadanganDrivers = $this->nonFixedDrivers->filter(function($driver) use ($unit) {
+            // Check if this driver is assigned to this unit in the driver_units table
             return isset($this->unitAssignmentsCache[$unit->id]) && 
                    isset($this->unitAssignmentsCache[$unit->id][$driver->id]);
         });
@@ -557,15 +566,28 @@ class ScheduleGeneratorService
             );
 
             if ($driver) {
-                $this->messages[] = "Assigned cadangan driver {$driver->name} to unit {$unit->name} for {$dateStr} {$shift} (unit-specific assignment)";
+                $this->messages[] = "Assigned cadangan driver {$driver->name} to unit {$unit->unit_number} for {$dateStr} {$shift} (unit-specific assignment)";
                 return $driver;
             }
         }
 
         // Third priority: Try to find any cadangan driver qualified for this route
-        $routeQualifiedDrivers = $this->nonFixedDrivers->filter(function($driver) use ($routeId) {
-            return isset($this->routeAssignmentsCache[$routeId]) && 
-                   isset($this->routeAssignmentsCache[$routeId][$driver->id]);
+        // Only use drivers that are assigned to at least one unit on this route
+        $routeQualifiedDrivers = $this->nonFixedDrivers->filter(function($driver) use ($routeId, $unit) {
+            // First check if driver is qualified for this route
+            $routeQualified = isset($this->routeAssignmentsCache[$routeId]) && 
+                             isset($this->routeAssignmentsCache[$routeId][$driver->id]);
+            
+            // Then check if driver has any unit assignments at all
+            $hasUnitAssignments = false;
+            foreach ($this->unitAssignmentsCache as $unitDrivers) {
+                if (isset($unitDrivers[$driver->id])) {
+                    $hasUnitAssignments = true;
+                    break;
+                }
+            }
+            
+            return $routeQualified && $hasUnitAssignments;
         });
 
         if ($unit->id == 466) {
@@ -634,10 +656,32 @@ class ScheduleGeneratorService
             return null;
         }
 
+        // Get the current date to determine which period we're in
+        $currentDate = Carbon::parse($date);
+        $dayOfMonth = $currentDate->day;
+        $isFirstPeriod = $dayOfMonth <= 15;
+        
+        // Log period information
+        Log::info("Current date: {$date}, Day of month: {$dayOfMonth}, Period: " . ($isFirstPeriod ? 'First (1-15)' : 'Second (16-end)'));
+        
         // Filter out drivers that have reached their maximum schedules for the period
-        $availableDrivers = $availableDrivers->filter(function ($driver) use ($driverScheduleCounts, $driverSettings) {
+        $availableDrivers = $availableDrivers->filter(function ($driver) use ($driverScheduleCounts, $isFirstPeriod, $currentDate) {
+            // Get the current count of schedules for this driver in this period
             $currentCount = $driverScheduleCounts[$driver->id] ?? 0;
-            return $currentCount < $driverSettings['max_schedules'];
+            
+            // Get driver-specific settings from the database
+            $settings = DriverScheduleSettings::getSettingsForType($driver->type);
+            
+            if (!$settings) {
+                Log::warning("No settings found for driver type: {$driver->type}. Using default max schedules.");
+                $maxSchedules = $driver->type === 'batangan' ? 13 : 11;
+            } else {
+                $maxSchedules = $settings->max_schedules;
+                Log::info("Driver {$driver->name} (ID: {$driver->id}) type: {$driver->type}, max schedules: {$maxSchedules}");
+            }
+            
+            // Check if driver has reached their maximum schedules for this period
+            return $currentCount < $maxSchedules;
         });
 
         if ($availableDrivers->isEmpty()) {
@@ -652,11 +696,18 @@ class ScheduleGeneratorService
             // Check if driver had a schedule two days ago
             $hadTwoDaysAgoSchedule = isset($twoDaysAgoSchedules[$driver->id]);
             
-            // If driver had a schedule yesterday with the same shift, don't assign them again
-            if ($hadYesterdaySchedule && $previousDaySchedules[$driver->id]['shift'] === $shift) {
-                return false;
+            // If driver had a schedule yesterday, apply shift sequence rules
+            if ($hadYesterdaySchedule) {
+                $yesterdayShift = $previousDaySchedules[$driver->id]['shift'];
+                
+                // Rule 1: If today 'Pagi', next day can be 'Pagi' or 'Siang'
+                // Rule 2: If today 'Siang', tomorrow should be 'Siang', cannot assign 'Pagi' shift
+                if ($yesterdayShift === 'siang' && $shift === 'pagi') {
+                    return false; // Cannot assign morning shift after evening shift
+                }
             }
             
+            // Rule 3: If today 'Siang', tomorrow no schedule, after tomorrow can be assigned either 'Pagi' or 'Siang'
             // If driver had schedules both yesterday and two days ago, give them a break
             if ($hadYesterdaySchedule && $hadTwoDaysAgoSchedule) {
                 return false;
@@ -675,14 +726,27 @@ class ScheduleGeneratorService
             // Get the current count of schedules for this driver
             $currentCount = $driverScheduleCounts[$driver->id] ?? 0;
             
+            // Get driver-specific settings from the database
+            $settings = DriverScheduleSettings::getSettingsForType($driver->type);
+            
+            if (!$settings) {
+                $minSchedules = $driver->type === 'batangan' ? 13 : 11;
+            } else {
+                $minSchedules = $settings->min_schedules;
+            }
+            
+            // Calculate how far this driver is from meeting their minimum requirement
+            $distanceFromMin = $minSchedules - $currentCount;
+            
             // For unit-specific sorting, check if this driver has been assigned to this specific unit before
             $unitSpecificCount = Schedule::where('driver_id', $driver->id)
                 ->where('unit_id', $unit->id)
                 ->count();
                 
             // Prioritize drivers with fewer schedules for this specific unit
-            // This creates a rotation system for drivers assigned to the same unit
-            return [$unitSpecificCount, $currentCount];
+            // AND prioritize drivers who are further from meeting their minimum requirements
+            // This creates a fair distribution system for drivers assigned to the same unit
+            return [$unitSpecificCount, -$distanceFromMin, $currentCount];
         });
 
         // Return the first available driver after all filtering and sorting
@@ -972,28 +1036,54 @@ class ScheduleGeneratorService
     {
         // Get settings for batangan (fixed) drivers
         $batanganSettings = DriverScheduleSettings::getSettingsForType('batangan');
-        $this->driverScheduleSettings['batangan'] = [
-            'min_schedules' => $batanganSettings->min_schedules,
-            'max_schedules' => $batanganSettings->max_schedules,
-            'period_days' => $batanganSettings->period_days
-        ];
+        
+        // If settings don't exist, use default values based on the memory
+        if (!$batanganSettings) {
+            Log::warning("No settings found for driver type 'batangan' in the database. Using default values.");
+            $this->driverScheduleSettings['batangan'] = [
+                'min_schedules' => 13, // Default based on memory
+                'max_schedules' => 14, // Default based on memory
+                'period_days' => 15    // Default based on memory
+            ];
+            $this->messages[] = "Using default settings for batangan drivers: min 13, max 14, period 15 days";
+        } else {
+            $this->driverScheduleSettings['batangan'] = [
+                'min_schedules' => $batanganSettings->min_schedules,
+                'max_schedules' => $batanganSettings->max_schedules,
+                'period_days' => $batanganSettings->period_days
+            ];
+            $this->messages[] = "Loaded batangan driver settings from database: min {$batanganSettings->min_schedules}, max {$batanganSettings->max_schedules}, period {$batanganSettings->period_days} days";
+        }
         
         // Set the class property for direct access
         $this->batanganSettings = $this->driverScheduleSettings['batangan'];
 
         // Get settings for cadangan (non-fixed) drivers
         $cadanganSettings = DriverScheduleSettings::getSettingsForType('cadangan');
-        $this->driverScheduleSettings['cadangan'] = [
-            'min_schedules' => $cadanganSettings->min_schedules,
-            'max_schedules' => $cadanganSettings->max_schedules,
-            'period_days' => $cadanganSettings->period_days
-        ];
+        
+        // If settings don't exist, use default values based on the memory
+        if (!$cadanganSettings) {
+            Log::warning("No settings found for driver type 'cadangan' in the database. Using default values.");
+            $this->driverScheduleSettings['cadangan'] = [
+                'min_schedules' => 11, // Default based on memory
+                'max_schedules' => 12, // Default based on memory
+                'period_days' => 15    // Default based on memory
+            ];
+            $this->messages[] = "Using default settings for cadangan drivers: min 11, max 12, period 15 days";
+        } else {
+            $this->driverScheduleSettings['cadangan'] = [
+                'min_schedules' => $cadanganSettings->min_schedules,
+                'max_schedules' => $cadanganSettings->max_schedules,
+                'period_days' => $cadanganSettings->period_days
+            ];
+            $this->messages[] = "Loaded cadangan driver settings from database: min {$cadanganSettings->min_schedules}, max {$cadanganSettings->max_schedules}, period {$cadanganSettings->period_days} days";
+        }
         
         // Set the class property for direct access
         $this->cadanganSettings = $this->driverScheduleSettings['cadangan'];
 
-        $this->messages[] = "Loaded driver schedule settings - Batangan: min {$batanganSettings->min_schedules}, max {$batanganSettings->max_schedules}; " .
-                           "Cadangan: min {$cadanganSettings->min_schedules}, max {$cadanganSettings->max_schedules}";
+        // Log the final settings
+        Log::info("Driver schedule settings loaded - Batangan: min {$this->batanganSettings['min_schedules']}, max {$this->batanganSettings['max_schedules']}; Cadangan: min {$this->cadanganSettings['min_schedules']}, max {$this->cadanganSettings['max_schedules']}");
     }
 
     /**

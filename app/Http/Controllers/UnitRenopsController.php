@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Holiday;
 use App\Models\Unit;
+use App\Models\Route;
 use App\Models\UnitRenops;
 use App\Models\RenopsSettings;
 use Carbon\Carbon;
@@ -642,7 +643,7 @@ class UnitRenopsController extends Controller
                 // If it's a weekend or holiday, generate renops
                 if ($dayType) {
                     // Get all active routes
-                    $routes = \App\Models\Route::active()->get();
+                    $routes = Route::active()->get();
                     $selectedUnitIds = [];
                     
                     // Process each route separately
@@ -672,9 +673,16 @@ class UnitRenopsController extends Controller
                             // Ensure we don't mark all pool units as unavailable
                             $maxUnavailable = min($maxUnavailable, $poolRouteUnits->count() - 1);
                             
-                            if ($maxUnavailable > 0) {
+                            // Always ensure at least 1 unit is marked as unavailable per route
+                            $minUnavailable = 1;
+                            $actualUnavailable = max($minUnavailable, $maxUnavailable);
+                            
+                            // Make sure we don't try to select more units than available
+                            $actualUnavailable = min($actualUnavailable, $poolRouteUnits->count());
+                            
+                            if ($actualUnavailable > 0) {
                                 // Randomly select units to mark as unavailable
-                                $unitsToMarkUnavailable = $poolRouteUnits->random($maxUnavailable);
+                                $unitsToMarkUnavailable = $poolRouteUnits->random($actualUnavailable);
                                 
                                 // Add selected units to the overall list with their route ID
                                 foreach ($unitsToMarkUnavailable as $unit) {

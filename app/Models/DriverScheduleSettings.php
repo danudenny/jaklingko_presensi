@@ -32,24 +32,6 @@ class DriverScheduleSettings extends Model
     {
         $settings = self::where('driver_type', $driverType)->first();
         
-        if (!$settings) {
-            // Create default settings based on driver type
-            $defaults = [
-                'driver_type' => $driverType,
-                'period_days' => 15,
-            ];
-            
-            if ($driverType === 'batangan') {
-                $defaults['min_schedules'] = 13;
-                $defaults['max_schedules'] = 14;
-            } else { // cadangan
-                $defaults['min_schedules'] = 11;
-                $defaults['max_schedules'] = 12;
-            }
-            
-            $settings = self::create($defaults);
-        }
-        
         return $settings;
     }
     
@@ -61,25 +43,6 @@ class DriverScheduleSettings extends Model
     public static function getAllSettings()
     {
         $settings = self::all();
-        
-        if ($settings->isEmpty()) {
-            // Create default settings for both driver types
-            self::create([
-                'driver_type' => 'batangan',
-                'min_schedules' => 13,
-                'max_schedules' => 14,
-                'period_days' => 15,
-            ]);
-            
-            self::create([
-                'driver_type' => 'cadangan',
-                'min_schedules' => 11,
-                'max_schedules' => 12,
-                'period_days' => 15,
-            ]);
-            
-            $settings = self::all();
-        }
         
         return $settings;
     }
