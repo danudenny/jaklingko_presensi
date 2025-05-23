@@ -37,6 +37,7 @@ class ScheduleController extends Controller
         $selectedRoute = $request->query('route', null);
         $selectedDriver = $request->query('driver', null);
         $selectedUnit = $request->query('unit', null);
+        $selectedShift = $request->query('shift', null);
         
         // Calculate date range for the selected period
         if ($period == 1) {
@@ -120,6 +121,10 @@ class ScheduleController extends Controller
         if ($selectedUnit) {
             $query->where('unit_id', $selectedUnit);
         }
+        
+        if ($selectedShift) {
+            $query->where('shift', $selectedShift);
+        }
             
         // Get schedules
         $schedules = $query->get();
@@ -144,6 +149,7 @@ class ScheduleController extends Controller
             'selectedRoute' => $selectedRoute,
             'selectedDriver' => $selectedDriver,
             'selectedUnit' => $selectedUnit,
+            'selectedShift' => $selectedShift,
             'routeUnitDrivers' => $routeUnitDrivers,
             'monthName' => Carbon::createFromDate($year, $month, 1)->format('F'),
             'startDate' => $startDate->format('Y-m-d'),
@@ -264,6 +270,9 @@ class ScheduleController extends Controller
         $year = $request->query('year', Carbon::now()->year);
         $period = $request->query('period', 1); // Default to first period (1-15)
         $selectedRoute = $request->query('route', null);
+        $selectedDriver = $request->query('driver', null);
+        $selectedUnit = $request->query('unit', null);
+        $selectedShift = $request->query('shift', null);
         
         // Calculate date range for the selected period
         if ($period == 1) {
@@ -284,6 +293,18 @@ class ScheduleController extends Controller
         // Apply route filter if selected
         if ($selectedRoute) {
             $query->where('route_id', $selectedRoute);
+        }
+        if ($selectedDriver) {
+            $query->where(function($query) use ($selectedDriver) {
+                $query->where('driver_id', $selectedDriver)
+                      ->orWhere('backup_driver_id', $selectedDriver);
+            });
+        }
+        if ($selectedUnit) {
+            $query->where('unit_id', $selectedUnit);
+        }
+        if ($selectedShift) {
+            $query->where('shift', $selectedShift);
         }
             
         // Get schedules
@@ -308,6 +329,9 @@ class ScheduleController extends Controller
         $year = $request->query('year', Carbon::now()->year);
         $period = $request->query('period', 1); // Default to first period (1-15)
         $selectedRoute = $request->query('route', null);
+        $selectedDriver = $request->query('driver', null);
+        $selectedUnit = $request->query('unit', null);
+        $selectedShift = $request->query('shift', null);
         
         // Calculate date range for the selected period
         if ($period == 1) {
@@ -329,6 +353,18 @@ class ScheduleController extends Controller
         if ($selectedRoute) {
             $query->where('route_id', $selectedRoute);
         }
+        if ($selectedDriver) {
+            $query->where(function($query) use ($selectedDriver) {
+                $query->where('driver_id', $selectedDriver)
+                      ->orWhere('backup_driver_id', $selectedDriver);
+            });
+        }
+        if ($selectedUnit) {
+            $query->where('unit_id', $selectedUnit);
+        }
+        if ($selectedShift) {
+            $query->where('shift', $selectedShift);
+        }
             
         // Get schedules
         $schedules = $query->get();
@@ -349,8 +385,47 @@ class ScheduleController extends Controller
         $month = $request->query('month', Carbon::now()->month);
         $year = $request->query('year', Carbon::now()->year);
         $period = $request->query('period', 1); // Default to first period (1-15)
+        $selectedRoute = $request->query('route', null);
+        $selectedDriver = $request->query('driver', null);
+        $selectedUnit = $request->query('unit', null);
+        $selectedShift = $request->query('shift', null);
         
-        $export = new SchedulesMatrixPdfExport($month, $year, $period);
+        // Calculate date range for the selected period
+        if ($period == 1) {
+            $startDate = Carbon::createFromDate($year, $month, 1);
+            $endDate = Carbon::createFromDate($year, $month, 15);
+        } else {
+            $startDate = Carbon::createFromDate($year, $month, 16);
+            $endDate = Carbon::createFromDate($year, $month)->endOfMonth();
+        }
+        
+        // Build query for schedules based on filters
+        $query = Schedule::with(['driver', 'backupDriver', 'route', 'unit'])
+            ->whereBetween('schedule_date', [
+                $startDate->format('Y-m-d'),
+                $endDate->format('Y-m-d')
+            ]);
+        // Apply route filter if selected
+        if ($selectedRoute) {
+            $query->where('route_id', $selectedRoute);
+        }
+        if ($selectedDriver) {
+            $query->where(function($query) use ($selectedDriver) {
+                $query->where('driver_id', $selectedDriver)
+                      ->orWhere('backup_driver_id', $selectedDriver);
+            });
+        }
+        if ($selectedUnit) {
+            $query->where('unit_id', $selectedUnit);
+        }
+        if ($selectedShift) {
+            $query->where('shift', $selectedShift);
+        }
+            
+        // Get schedules
+        $schedules = $query->get();
+        
+        $export = new SchedulesMatrixPdfExport($schedules);
         return $export->download();
     }
 
@@ -426,26 +501,37 @@ class ScheduleController extends Controller
         }
         
         try {
+            Log::info("Starting schedule generation for period: {$startDate} to {$endDate}");
+            
             // Use the built-in auto-generation method from the Schedule model
             $result = Schedule::autoGenerate($startDate, $endDate);
+            
+            // Log the full result for debugging
+            Log::info("Schedule generation completed with result: " . json_encode($result));
+            
+            // Verify schedules were actually created
+            $createdCount = Schedule::whereBetween('schedule_date', [$startDate, $endDate])->count();
+            Log::info("Actual schedules found in database for period: {$createdCount}");
             
             // Check if there were any error messages
             if (!isset($result['success']) || $result['success'] === false) {
                 $errorMessage = $result['message'] ?? 'Failed to generate schedules. Please check the logs for details.';
+                Log::error("Schedule generation failed: {$errorMessage}");
                 return back()->withErrors(['generation' => $errorMessage]);
             }
             
             // Process any warnings or info messages
             $generationResults = [
                 'success' => $result['success'] ?? false,
-                'created' => $result['data']['created'] ?? 0,
-                'skipped' => $result['data']['skipped'] ?? 0,
+                'created' => $result['success'] ?? 0,
+                'skipped' => $result['failed'] ?? 0,
                 'messages' => $result['messages'] ?? [],
-                'failed' => 0
+                'failed' => $result['failed'] ?? 0,
+                'actual_in_db' => $createdCount // Add the actual count from database
             ];
             
             return back()->with('generation_results', $generationResults)
-                         ->with('success_message', 'Successfully generated ' . $generationResults['created'] . ' schedules.');
+                         ->with('success_message', "Successfully generated {$generationResults['created']} schedules. Actual records in database: {$createdCount}");
         } catch (\Exception $e) {
             Log::error('Schedule generation error: ' . $e->getMessage());
             Log::error($e->getTraceAsString());

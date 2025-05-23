@@ -42,11 +42,27 @@ class DriverController extends Controller
             $query->where('status', $request->status);
         }
 
+        // Filter by unit
+        if ($request->has('unit') && !empty($request->unit)) {
+            $query->whereHas('units', function ($q) use ($request) {
+                $q->where('units.id', $request->unit);
+            });
+        }
+
+        // Filter by route
+        if ($request->has('route') && !empty($request->route)) {
+            $query->whereHas('routes', function ($q) use ($request) {
+                $q->where('routes.id', $request->route);
+            });
+        }
+
         $drivers = $query->paginate(10)->withQueryString();
+        $units = \App\Models\Unit::orderBy('unit_number')->get();
+        $routes = \App\Models\Route::orderBy('route_number')->get();
 
         if ($request->ajax()) {
             if ($request->header('X-Requested-With') === 'XMLHttpRequest') {
-                return view('modules.admin.drivers.index', compact('drivers'))->render();
+                return view('modules.admin.drivers.index', compact('drivers', 'units', 'routes'))->render();
             }
 
             return response()->json([
@@ -55,7 +71,7 @@ class DriverController extends Controller
             ]);
         }
 
-        return view('modules.admin.drivers.index', compact('drivers'));
+        return view('modules.admin.drivers.index', compact('drivers', 'units', 'routes'));
     }
 
     /**

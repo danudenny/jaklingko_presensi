@@ -7,7 +7,7 @@
     .tooltip-holiday {
         position: absolute;
         transform: translateX(-50%);
-        z-index: 100;
+        z-index: 1000;
         padding: 6px 10px;
         background-color: #dc2626;
         color: white;
@@ -16,6 +16,7 @@
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         max-width: 250px;
         text-align: center;
+        pointer-events: none;
     }
     
     .tooltip-holiday:before {
@@ -31,13 +32,13 @@
     
     /* Holiday indicator triangle in the corner */
     .highlight-holiday {
-        position: relative;
+        position: relative !important;
         transition: all 0.2s;
     }
     
     .highlight-holiday:after {
         content: '';
-        position: absolute;
+        position: absolute !important;
         top: 0;
         right: 0;
         width: 0;
@@ -47,6 +48,7 @@
         border-color: transparent #ef4444 transparent transparent;
         z-index: 10;
         box-shadow: -1px 1px 3px rgba(239, 68, 68, 0.4);
+        pointer-events: none;
     }
     
     .highlight-holiday:hover {
@@ -112,13 +114,13 @@
                 document.querySelectorAll('.tooltip-holiday').forEach(el => el.remove());
                 
                 const tooltip = document.createElement('div');
-                tooltip.className = 'tooltip-holiday fixed z-50 px-3 py-2 text-sm text-white bg-red-600 rounded-md shadow-lg';
+                tooltip.className = 'tooltip-holiday';
                 tooltip.innerHTML = this.getAttribute('data-tooltip');
                 
                 // Position tooltip
                 const rect = this.getBoundingClientRect();
-                tooltip.style.top = (rect.top - 40) + 'px';
-                tooltip.style.left = (rect.left + (rect.width/2)) + 'px';
+                tooltip.style.top = (window.scrollY + rect.top - 40) + 'px';
+                tooltip.style.left = (window.scrollX + rect.left + (rect.width/2)) + 'px';
                 
                 document.body.appendChild(tooltip);
             });
@@ -152,12 +154,12 @@
         
         // Initialize collapsible sections
         // By default, keep all route and unit sections expanded
-        window.toggleRouteContent = function(routeId) {
+        window.toggleRouteContent = function(routeId, event) {
             const header = document.querySelector(`.route-header[data-route-id="${routeId}"]`);
             const content = document.querySelector(`.route-content[data-route-content="${routeId}"]`);
             
             // Check if the click was on a toggle icon or the header itself
-            event.stopPropagation();
+            if (event) event.stopPropagation();
             
             // Toggle the content visibility
             if (content.style.display === 'none') {
@@ -169,12 +171,12 @@
             }
         };
         
-        window.toggleUnitContent = function(unitId) {
+        window.toggleUnitContent = function(unitId, event) {
             const header = document.querySelector(`.unit-header[data-unit-id="${unitId}"]`);
             const content = document.querySelector(`.unit-content[data-unit-content="${unitId}"]`);
             
             // Check if the click was on a toggle icon or the header itself
-            event.stopPropagation();
+            if (event) event.stopPropagation();
             
             // Toggle the content visibility
             if (content.style.display === 'none') {
@@ -495,7 +497,7 @@
                     <div class="ml-3">
                         <p class="text-sm font-medium">${message}</p>
                     </div>
-                    <div class="ml-auto pl-3">
+                    <div class="pl-3 ml-auto">
                         <button class="inline-flex text-amber-500 focus:outline-none focus:text-amber-700">
                             <i class="fas fa-times"></i>
                         </button>
@@ -549,23 +551,23 @@
                         <i class="ml-2 text-xs fas fa-chevron-down"></i>
                     </button>
                     <div class="absolute right-0 z-50 hidden w-48 p-2 mt-2 space-y-1 bg-white rounded-md shadow-lg dropdown-menu ring-1 ring-black ring-opacity-5">
-                        <a href="{{ route('schedules.export.excel', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver' => $selectedDriver, 'unit' => $selectedUnit]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
+                        <a href="{{ route('schedules.export.excel', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver' => $selectedDriver, 'unit' => $selectedUnit, 'shift' => $selectedShift]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
                             <i class="mr-2 text-green-500 fas fa-file-excel"></i>
                             Excel
                         </a>
-                        <a href="{{ route('schedules.export.pdf', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver' => $selectedDriver, 'unit' => $selectedUnit]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
+                        <a href="{{ route('schedules.export.pdf', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver' => $selectedDriver, 'unit' => $selectedUnit, 'shift' => $selectedShift]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
                             <i class="mr-2 text-red-500 fas fa-file-pdf"></i>
                             PDF
                         </a>
-                        <a href="{{ route('schedules.export.matrix-pdf', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver' => $selectedDriver, 'unit' => $selectedUnit]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
+                        <a href="{{ route('schedules.export.matrix-pdf', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver' => $selectedDriver, 'unit' => $selectedUnit, 'shift' => $selectedShift]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
                             <i class="mr-2 text-purple-500 fas fa-table"></i>
                             Matrix PDF
                         </a>
                         @if(app()->environment('local'))
-                        <div class="border-t border-gray-100 my-1"></div>
+                        <div class="my-1 border-t border-gray-100"></div>
                         <form action="{{ route('schedules.reset-all') }}" method="POST" onsubmit="return confirm('PERINGATAN: Semua data jadwal akan dihapus. Apakah Anda yakin?');">
                             @csrf
-                            <button type="submit" class="w-full text-left px-4 py-2 text-xs font-medium text-red-600 rounded-md hover:bg-red-50 hover:text-red-800">
+                            <button type="submit" class="w-full px-4 py-2 text-xs font-medium text-left text-red-600 rounded-md hover:bg-red-50 hover:text-red-800">
                                 <i class="mr-2 fas fa-trash-alt"></i>
                                 Reset Data Jadwal
                             </button>
@@ -650,7 +652,7 @@
                 <i class="mr-2 text-indigo-500 fas fa-filter"></i>Filter Jadwal
             </h3>
             
-            <form id="filter-form" method="GET" class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
+            <form id="filter-form" method="GET" class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-6">
                 <div>
                     <x-input-label for="month" value="Bulan" class="font-medium text-gray-700" />
                     <div class="relative">
@@ -677,6 +679,20 @@
                         </select>
                         <div class="absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 pointer-events-none">
                             <i class="fas fa-calendar-year"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <x-input-label for="shift" value="Shift" class="font-medium text-gray-700" />
+                    <div class="relative">
+                        <select id="shift" name="shift" class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                            <option value="">-- Semua Shift --</option>
+                            <option value="pagi" {{ $selectedShift == 'pagi' ? 'selected' : '' }}>Pagi</option>
+                            <option value="siang" {{ $selectedShift == 'siang' ? 'selected' : '' }}>Siang</option>
+                        </select>
+                        <div class="absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 pointer-events-none">
+                            <i class="fas fa-clock"></i>
                         </div>
                     </div>
                 </div>
@@ -747,7 +763,7 @@
                         </div>
                         
                         <div 
-                            x-show="open" 
+                        x-show="open"
                             x-on:click.away="open = false"
                             class="absolute z-40 w-full mt-1 overflow-auto bg-white rounded-md shadow-lg max-h-60"
                             style="display: none;"
@@ -773,6 +789,7 @@
                                      x-show="search !== defaultSearch && !Array.from(document.querySelectorAll('[data-driver-item]')).some(el => el.style.display !== 'none')"
                                      style="display: none;">
                                     <i class="mb-2 text-2xl text-gray-300 fas fa-search"></i>
+                                    <p class="text-sm text-gray-500">Tidak ditemukan hasil.</p>
                                     <p class="text-sm text-gray-500">Tidak ditemukan pengemudi yang cocok</p>
                                 </div>
                                 
@@ -787,7 +804,7 @@
                                     </div>
                                     @foreach($drivers->where('type', 'batangan') as $driver)
                                         <div class="text-sm cursor-pointer hover:bg-gray-50" 
-                                             x-on:click="selectedOption = '{{ $driver->id }}'; open = false; search = '{{ $driver->name }}'"
+                                             x-on:click="selectedOption = '{{ $driver->id }}'; open = false; search = `{{ addslashes($driver->name) }}`"
                                              data-driver-item
                                              data-driver-name="{{ $driver->name }}"
                                         >
@@ -808,7 +825,7 @@
                                     </div>
                                     @foreach($drivers->where('type', 'cadangan') as $driver)
                                         <div class="text-sm cursor-pointer hover:bg-gray-50" 
-                                             x-on:click="selectedOption = '{{ $driver->id }}'; open = false; search = '{{ $driver->name }}'"
+                                             x-on:click="selectedOption = '{{ $driver->id }}'; open = false; search = `{{ addslashes($driver->name) }}`"
                                              data-driver-item
                                              data-driver-name="{{ $driver->name }}"
                                         >
@@ -826,7 +843,7 @@
                 <div>
                     <x-input-label for="unit" value="Unit" class="font-medium text-gray-700" />
                     <div class="relative" 
-                         x-data="{ 
+                         x-data="{
                             open: false, 
                             search: '{{ $selectedUnit ? ($units->firstWhere('id', $selectedUnit)->unit_number . ($units->firstWhere('id', $selectedUnit)->plate_number ? ' ('.$units->firstWhere('id', $selectedUnit)->plate_number.')' : '')) : '-- Semua Unit --' }}', 
                             selectedOption: '{{ $selectedUnit }}',
@@ -916,7 +933,7 @@
                                             $unitSearchValue = strtolower($unit->unit_number . ' ' . $unit->plate_number);
                                         @endphp
                                         <div class="text-sm cursor-pointer hover:bg-gray-50" 
-                                             x-on:click="selectedOption = '{{ $unit->id }}'; open = false; search = '{{ $unitDisplay }}'"
+                                             x-on:click="selectedOption = '{{ $unit->id }}'; open = false; search = `{{ addslashes($unitDisplay) }}`"
                                              data-unit-item
                                              data-unit-info="{{ $unitSearchValue }}"
                                         >
@@ -934,7 +951,7 @@
                     </div>
                 </div>
                 
-                <div class="flex flex-wrap items-center pt-2 space-x-4 md:col-span-2 lg:col-span-5">
+                <div class="flex flex-wrap items-center pt-2 space-x-4 md:col-span-2 lg:col-span-6">
                     <button type="submit" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow-sm bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 focus:outline-none focus:border-indigo-700 focus:ring focus:ring-indigo-200 active:from-indigo-700 active:to-indigo-800">
                         <i class="mr-2 fas fa-search"></i>Terapkan Filter
                     </button>
@@ -998,7 +1015,7 @@
                             </th>
                             @foreach($dateRange as $date)
                                 @php
-                                    $date = $date;
+                                    // $date is already defined from the foreach
                                     $dayName = Carbon\Carbon::parse($date)->format('l');
                                     $day = substr($dayName, 0, 3);
                                     $isHoliday = isset($holidays[$date]);
@@ -1066,7 +1083,7 @@
                             </tr>
                         @else
                             @foreach($routeUnitDrivers as $routeGroup)
-                                <tr class="bg-indigo-50 route-header" data-route-id="{{ $routeGroup['route']->id }}" onclick="toggleRouteContent({{ $routeGroup['route']->id }})">
+                                <tr class="bg-indigo-50 route-header" data-route-id="{{ $routeGroup['route']->id }}" onclick="toggleRouteContent({{ $routeGroup['route']->id }}, event)">
                                     <td colspan="{{ 4 + count($dateRange) + 1 }}" class="px-3 py-3 font-medium text-indigo-900 border-b border-indigo-100">
                                         <div class="flex items-center justify-between">
                                             <div class="flex items-center">
@@ -1078,7 +1095,7 @@
                                                 <span>{{ $routeGroup['route']->name }}</span>
                                             </div>
                                             <div class="toggle-icon">
-                                                <i class="fas fa-chevron-down text-indigo-500"></i>
+                                                <i class="text-indigo-500 fas fa-chevron-down"></i>
                                             </div>
                                         </div>
                                     </td>
@@ -1087,7 +1104,7 @@
 
 
                                 @foreach($routeGroup['units'] as $unitGroup)
-                                    <tr class="bg-blue-50 unit-header" data-unit-id="{{ $unitGroup['unit']->id }}" onclick="toggleUnitContent({{ $unitGroup['unit']->id }})">
+                                    <tr class="bg-blue-50 unit-header" data-unit-id="{{ $unitGroup['unit']->id }}" onclick="toggleUnitContent({{ $unitGroup['unit']->id }}, event)">
                                         <td class="px-3 py-2 text-right"></td>
                                         <td colspan="{{ 3 + count($dateRange) + 1 }}" class="px-3 py-2 font-medium text-blue-800 border-b border-blue-100">
                                             <div class="flex items-center justify-between">
@@ -1101,7 +1118,7 @@
                                                     @endif
                                                 </div>
                                                 <div class="toggle-icon">
-                                                    <i class="fas fa-chevron-down text-blue-500"></i>
+                                                    <i class="text-blue-500 fas fa-chevron-down"></i>
                                                 </div>
                                             </div>
                                         </td>
@@ -1215,6 +1232,7 @@
                                 </tbody> <!-- Close unit-content -->
                                 @endforeach
                                 </tbody> <!-- Close route-content -->
+                            </tbody>
                                 
                                 <!-- Spacer row between route groups -->
                                 <tr class="h-4">
@@ -1304,5 +1322,6 @@
             </div>
         </div>
                 
-    </div>
+    </div> <!-- Close .p-6 bg-white rounded-lg shadow-md -->
+</div> <!-- Close .w-full px-4 container-fluid -->
 @endsection

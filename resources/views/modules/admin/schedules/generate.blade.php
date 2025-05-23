@@ -24,6 +24,25 @@
             background-color: #DBEAFE;
             border-color: #93C5FD;
         }
+
+        .period-preset {
+            display: inline-flex;
+            align-items: center;
+            background-color: #F0FDF4;
+            border: 1px solid #BBFAD3;
+            border-radius: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #15803D;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .period-preset:hover {
+            background-color: #DCFCE7;
+            border-color: #86EFAC;
+        }
         
         .flatpickr-calendar.inline {
             box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
@@ -41,16 +60,28 @@
             border-radius: 0.375rem;
             border: 1px solid #E5E7EB;
         }
+
+        .period-selector {
+            margin-top: 1rem;
+            padding: 1rem;
+            border: 1px dashed #D1D5DB;
+            border-radius: 0.5rem;
+            background-color: #F9FAFB;
+        }
+
+        .month-selector {
+            max-width: 200px;
+        }
     </style>
 @endpush
 
 @section('content')
-<div class="container mx-auto py-6">
+<div class="container py-6 mx-auto">
     <x-page-title>
         <x-slot name="title">Pembuatan Jadwal Otomatis</x-slot>
         <x-slot name="actions">
-            <a href="{{ route('schedules.index') }}" class="inline-flex items-center px-4 py-2 bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-500 active:bg-gray-700 focus:outline-none focus:border-gray-700 focus:ring ring-gray-300 disabled:opacity-25 transition ease-in-out duration-150">
-                <i class="fas fa-arrow-left mr-2"></i>
+            <a href="{{ route('schedules.index') }}" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out bg-gray-600 border border-transparent rounded-md hover:bg-gray-500 active:bg-gray-700 focus:outline-none focus:border-gray-700 focus:ring ring-gray-300 disabled:opacity-25">
+                <i class="mr-2 fas fa-arrow-left"></i>
                 Kembali
             </a>
         </x-slot>
@@ -59,17 +90,17 @@
     <x-flash-message />
     
     @if ($errors->any())
-        <div class="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
+        <div class="p-4 mb-6 border-l-4 border-red-400 bg-red-50">
             <div class="flex">
                 <div class="flex-shrink-0">
-                    <i class="fas fa-exclamation-circle text-red-400 text-xl"></i>
+                    <i class="text-xl text-red-400 fas fa-exclamation-circle"></i>
                 </div>
                 <div class="ml-3">
                     <h3 class="text-sm font-medium text-red-800">
                         Error dalam Pembuatan Jadwal
                     </h3>
                     <div class="mt-2 text-sm text-red-700">
-                        <ul class="list-disc pl-5 space-y-1">
+                        <ul class="pl-5 space-y-1 list-disc">
                             @foreach ($errors->all() as $error)
                                 <li>{{ $error }}</li>
                             @endforeach
@@ -84,10 +115,10 @@
         <div class="mb-6">  
             @if (session('generation_results'))
                 <div class="mb-6">
-                    <div class="bg-green-50 border-l-4 border-green-400 p-4">
+                    <div class="p-4 border-l-4 border-green-400 bg-green-50">
                         <div class="flex">
                             <div class="flex-shrink-0">
-                                <i class="fas fa-check-circle text-green-400 text-xl"></i>
+                                <i class="text-xl text-green-400 fas fa-check-circle"></i>
                             </div>
                             <div class="ml-3">
                                 <h3 class="text-sm font-medium text-green-800">
@@ -105,8 +136,8 @@
                                     @if (session('generation_results.messages') && count(session('generation_results.messages')) > 0)
                                         <div class="mt-3">
                                             <p class="font-medium">Detail:</p>
-                                            <div class="mt-1 max-h-40 overflow-y-auto bg-white p-2 rounded border border-gray-200">
-                                                <ul class="list-disc pl-5 space-y-1 text-xs">
+                                            <div class="p-2 mt-1 overflow-y-auto bg-white border border-gray-200 rounded max-h-40">
+                                                <ul class="pl-5 space-y-1 text-xs list-disc">
                                                     @foreach (session('generation_results.messages') as $message)
                                                         <li>{{ $message }}</li>
                                                     @endforeach
@@ -123,21 +154,21 @@
 
             <form action="{{ route('schedules.generate') }}" method="POST" id="generate-form">
                 @csrf
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="grid grid-cols-1 gap-6 mb-6 md:grid-cols-2">
                     <div class="md:col-span-2">
-                        <label for="date-range" class="block text-sm font-medium text-gray-700 mb-1">Periode Jadwal</label>
+                        <label for="date-range" class="block mb-1 text-sm font-medium text-gray-700">Periode Jadwal</label>
                         <div class="relative rounded-md shadow-sm">
                             <input type="text" id="date-range" name="date_range" placeholder="Pilih tanggal"
                                 class="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 sm:text-sm border-gray-300 rounded-md @error('start_date') border-red-500 @enderror @error('end_date') border-red-500 @enderror"
                                 value="{{ old('start_date') && old('end_date') ? old('start_date') . ' to ' . old('end_date') : '' }}">
                             <input type="hidden" id="start_date" name="start_date" value="{{ old('start_date', now()->format('Y-m-d')) }}">
                             <input type="hidden" id="end_date" name="end_date" value="{{ old('end_date', now()->addDays(7)->format('Y-m-d')) }}">
-                            <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                <i class="fas fa-calendar text-gray-400"></i>
+                            <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                <i class="text-gray-400 fas fa-calendar"></i>
                             </div>
                         </div>
                         
-                        <div class="date-preview mt-2">
+                        <div class="mt-2 date-preview">
                             <div>
                                 <span class="text-sm text-gray-500">Dari:</span>
                                 <span id="start-date-display" class="ml-1 text-sm font-medium">{{ now()->format('d M Y') }}</span>
@@ -149,29 +180,88 @@
                             </div>
                             <div class="ml-auto">
                                 <span class="days-count">
-                                    <i class="fas fa-calendar-day mr-1"></i>
+                                    <i class="mr-1 fas fa-calendar-day"></i>
                                     <span id="days-count">8</span> hari
                                 </span>
                             </div>
                         </div>
                         
-                        <div class="mt-3 flex flex-wrap gap-2">
+                        <div class="flex flex-wrap gap-2 mt-3">
                             <button type="button" data-days="0" class="date-preset">
-                                <i class="fas fa-calendar-day mr-1"></i>
+                                <i class="mr-1 fas fa-calendar-day"></i>
                                 Hari Ini
                             </button>
                             <button type="button" data-days="7" class="date-preset">
-                                <i class="fas fa-calendar-week mr-1"></i>
+                                <i class="mr-1 fas fa-calendar-week"></i>
                                 7 Hari Kedepan
                             </button>
                             <button type="button" data-days="15" class="date-preset">
-                                <i class="fas fa-calendar-alt mr-1"></i>
+                                <i class="mr-1 fas fa-calendar-alt"></i>
                                 15 Hari Kedepan
                             </button>
                             <button type="button" data-days="30" class="date-preset">
-                                <i class="fas fa-calendar mr-1"></i>
+                                <i class="mr-1 fas fa-calendar"></i>
                                 30 Hari Kedepan
                             </button>
+                        </div>
+
+                        <div class="period-selector">
+                            <h4 class="mb-3 text-sm font-medium text-gray-700">
+                                <i class="mr-1 fas fa-calendar-alt text-emerald-500"></i>
+                                Jadwal per Periode
+                            </h4>
+                            
+                            <div class="flex flex-wrap items-end gap-4">
+                                <div>
+                                    <label for="period-month" class="block mb-1 text-xs font-medium text-gray-500">Pilih Bulan</label>
+                                    <select id="period-month" class="block w-full border-gray-300 rounded-md month-selector focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
+                                        @php
+                                            $currentMonth = now()->month;
+                                            $currentYear = now()->year;
+                                        @endphp
+                                        @for ($i = 0; $i < 6; $i++)
+                                            @php
+                                                $date = now()->addMonths($i);
+                                                $monthNum = $date->format('n');
+                                                $monthName = $date->format('F');
+                                                $year = $date->format('Y');
+                                                $value = $date->format('Y-m');
+                                            @endphp
+                                            <option value="{{ $value }}" {{ $i == 0 ? 'selected' : '' }}>{{ $monthName }} {{ $year }}</option>
+                                        @endfor
+                                    </select>
+                                </div>
+                                
+                                <div class="flex gap-2">
+                                    <button type="button" id="first-period-btn" class="period-preset">
+                                        <i class="mr-1 fas fa-calendar-day"></i>
+                                        Periode 1 (1-15)
+                                    </button>
+                                    <button type="button" id="second-period-btn" class="period-preset">
+                                        <i class="mr-1 fas fa-calendar-week"></i>
+                                        Periode 2 (16-akhir bulan)
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center mt-2 text-xs text-gray-500">
+                                <i class="mr-1 fas fa-info-circle text-emerald-500"></i>
+                                Pilih bulan dan periode untuk membuat jadwal otomatis sesuai periode tersebut
+                            </div>
+                        </div>
+
+                        <div class="period-selector">
+                            <span class="block mb-2 text-sm font-medium text-gray-700">Aturan Periode</span>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="button" data-period="mingguan" class="period-preset">
+                                    <i class="mr-1 fas fa-calendar-week"></i>
+                                    Mingguan
+                                </button>
+                                <button type="button" data-period="bulanan" class="period-preset">
+                                    <i class="mr-1 fas fa-calendar-alt"></i>
+                                    Bulanan
+                                </button>
+                            </div>
                         </div>
                         
                         @error('start_date')
@@ -183,10 +273,10 @@
                     </div>
                 </div>
 
-                <div class="rounded-md bg-yellow-50 p-4 mb-6">
+                <div class="p-4 mb-6 rounded-md bg-yellow-50">
                     <div class="flex">
                         <div class="flex-shrink-0">
-                            <i class="fas fa-exclamation-triangle text-yellow-400"></i>
+                            <i class="text-yellow-400 fas fa-exclamation-triangle"></i>
                         </div>
                         <div class="ml-3">
                             <h3 class="text-sm font-medium text-yellow-800">
@@ -194,7 +284,7 @@
                             </h3>
                             <div class="mt-2 text-sm text-yellow-700">
                                 <p>Pembuatan jadwal otomatis akan mengikuti aturan berikut:</p>
-                                <ul class="list-disc pl-5 mt-1">
+                                <ul class="pl-5 mt-1 list-disc">
                                     <li>Jadwal akan dibuat berdasarkan prioritas: pengemudi tetap (batangan) untuk unit tertentu, pengemudi tetap untuk rute, lalu pengemudi cadangan.</li>
                                     <li>Pengemudi tidak akan dijadwalkan untuk kedua shift (pagi dan siang) pada hari yang sama.</li>
                                     <li>Jadwal akan mempertimbangkan unit yang tidak beroperasi (renops).</li>
@@ -209,11 +299,11 @@
                 </div>
 
                 <div class="flex justify-end">
-                    <button type="submit" id="submit-button" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                        <i class="fas fa-calendar-plus mr-2" id="button-icon"></i>
+                    <button type="submit" id="submit-button" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        <i class="mr-2 fas fa-calendar-plus" id="button-icon"></i>
                         <span id="button-text">Buat Jadwal</span>
                         <span id="loading-spinner" class="hidden ml-2">
-                            <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <svg class="w-5 h-5 text-white animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
@@ -363,6 +453,160 @@
             
             // Calculate days
             const daysCount = calculateDays(today, endDate);
+            $("#days-count").text(daysCount);
+        });
+        
+        // Get days in a month (considering leap years)
+        function getDaysInMonth(year, month) {
+            // JavaScript months are 0-indexed (January = 0, December = 11)
+            return new Date(year, month, 0).getDate();
+        }
+        
+        // Handle period buttons (1st or 2nd half of month)
+        $('#first-period-btn').on('click', function() {
+            // Update active states
+            $('.period-preset').removeClass('active');
+            $(this).addClass('active');
+            $(this).css({
+                'background-color': '#DCFCE7', 
+                'border-color': '#86EFAC', 
+                'box-shadow': '0 0 0 3px rgba(134, 239, 172, 0.3)'
+            });
+            $('#second-period-btn').css({
+                'background-color': '#F0FDF4', 
+                'border-color': '#BBFAD3',
+                'box-shadow': 'none'
+            });
+            
+            // Get selected month and year
+            const selectedMonth = $('#period-month').val(); // Format: YYYY-MM
+            const [year, month] = selectedMonth.split('-');
+            
+            // Create start date (1st day of month)
+            const startDate = new Date(year, month - 1, 1);
+            
+            // Create end date (15th day of month)
+            const endDate = new Date(year, month - 1, 15);
+            
+            // Update flatpickr
+            fp.setDate([startDate, endDate]);
+            
+            // Update hidden inputs
+            $("#start_date").val(formatDate(startDate));
+            $("#end_date").val(formatDate(endDate));
+            
+            // Update display
+            $("#start-date-display").text(formatDisplayDate(startDate));
+            $("#end-date-display").text(formatDisplayDate(endDate));
+            
+            // Calculate days
+            const daysCount = calculateDays(startDate, endDate);
+            $("#days-count").text(daysCount);
+        });
+        
+        $('#second-period-btn').on('click', function() {
+            // Update active states
+            $('.period-preset').removeClass('active');
+            $(this).addClass('active');
+            $(this).css({
+                'background-color': '#DCFCE7', 
+                'border-color': '#86EFAC',
+                'box-shadow': '0 0 0 3px rgba(134, 239, 172, 0.3)'
+            });
+            $('#first-period-btn').css({
+                'background-color': '#F0FDF4', 
+                'border-color': '#BBFAD3',
+                'box-shadow': 'none'
+            });
+            // Get selected month and year
+            const selectedMonth = $('#period-month').val(); // Format: YYYY-MM
+            const [year, month] = selectedMonth.split('-');
+            
+            // Create start date (16th day of month)
+            const startDate = new Date(year, month - 1, 16);
+            
+            // Create end date (last day of month)
+            const lastDay = getDaysInMonth(year, month);
+            const endDate = new Date(year, month - 1, lastDay);
+            
+            // Update flatpickr
+            fp.setDate([startDate, endDate]);
+            
+            // Update hidden inputs
+            $("#start_date").val(formatDate(startDate));
+            $("#end_date").val(formatDate(endDate));
+            
+            // Update display
+            $("#start-date-display").text(formatDisplayDate(startDate));
+            $("#end-date-display").text(formatDisplayDate(endDate));
+            
+            // Calculate days
+            const daysCount = calculateDays(startDate, endDate);
+            $("#days-count").text(daysCount);
+        });
+        
+        // Re-trigger period buttons when month changes
+        $('#period-month').change(function() {
+            // If there was a period button previously clicked, trigger it again with the new month
+            if ($('#first-period-btn').hasClass('active')) {
+                $('#first-period-btn').trigger('click');
+            } else if ($('#second-period-btn').hasClass('active')) {
+                $('#second-period-btn').trigger('click');
+            }
+        });
+        
+        // Reset period button styling when date presets or calendar is used
+        $('.date-preset').on('click', function() {
+            resetPeriodButtons();
+        });
+        
+        // Add event listener to the flatpickr instance to reset period buttons
+        fp.config.onChange.push(function(selectedDates, dateStr, instance) {
+            if (selectedDates.length === 2) {
+                resetPeriodButtons();
+            }
+        });
+        
+        // Function to reset period button styling
+        function resetPeriodButtons() {
+            $('.period-preset').removeClass('active');
+            $('.period-preset').css({
+                'background-color': '#F0FDF4', 
+                'border-color': '#BBFAD3',
+                'box-shadow': 'none'
+            });
+        }
+        
+        // Handle period preset buttons
+        $('.period-preset').on('click', function() {
+            const period = $(this).data('period');
+            const startDate = new Date();
+            let endDate;
+            
+            if (period === 'mingguan') {
+                // Set to next week
+                endDate = new Date(startDate);
+                endDate.setDate(startDate.getDate() + 6);
+            } else if (period === 'bulanan') {
+                // Set to next month
+                endDate = new Date(startDate);
+                endDate.setMonth(startDate.getMonth() + 1);
+                endDate.setDate(0); // Last day of the month
+            }
+            
+            // Update the flatpickr instance
+            fp.setDate([startDate, endDate]);
+            
+            // Update hidden inputs
+            $("#start_date").val(formatDate(startDate));
+            $("#end_date").val(formatDate(endDate));
+            
+            // Update display
+            $("#start-date-display").text(formatDisplayDate(startDate));
+            $("#end-date-display").text(formatDisplayDate(endDate));
+            
+            // Calculate days
+            const daysCount = calculateDays(startDate, endDate);
             $("#days-count").text(daysCount);
         });
         

@@ -44,7 +44,7 @@
             <!-- Advanced Filter Form -->
             <div id="filter-form" class="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200 hidden">
                 <form method="GET" action="{{ route('drivers.index') }}" class="space-y-4">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div>
                             <label for="name" class="block text-sm font-medium text-gray-700">Nama</label>
                             <input type="text" name="name" id="name" value="{{ request('name') }}" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
@@ -73,6 +73,53 @@
                                 <option value="cuti" {{ request('status') == 'cuti' ? 'selected' : '' }}>Cuti</option>
                             </select>
                         </div>
+
+                        <div>
+                            <label for="route" class="block text-sm font-medium text-gray-700">Rute</label>
+                            <select name="route" id="route" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                <option value="">Semua Rute</option>
+                                @foreach($routes as $route)
+                                    <option value="{{ $route->id }}" {{ request('route') == $route->id ? 'selected' : '' }}>
+                                        {{ $route->route_number }} - {{ $route->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div x-data="{ open: false, search: '', selected: '{{ request('unit') }}' }" class="relative">
+                            <label for="unit" class="block text-sm font-medium text-gray-700">Unit</label>
+                            <input
+                                type="text"
+                                placeholder="Cari unit..."
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white"
+                                x-model="search"
+                                x-on:focus="open = true"
+                                x-on:input="open = true"
+                                autocomplete="off"
+                                :value="selected ? ($refs.unitList.querySelector('[data-value=\'' + selected + '\']') ? $refs.unitList.querySelector('[data-value=\'' + selected + '\']').textContent : search) : search"
+                            >
+                            <input type="hidden" name="unit" :value="selected">
+                            <div
+                                x-show="open"
+                                x-on:click.away="open = false"
+                                class="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-auto"
+                            >
+                                <ul x-ref="unitList">
+                                    <li
+                                        x-show="search === ''"
+                                        class="px-4 py-2 text-gray-400 italic"
+                                    >Pilih unit</li>
+                                    @foreach($units as $unit)
+                                        <li
+                                            x-show="search === '' || '{{ strtolower($unit->unit_number . ' ' . $unit->plate_number) }}'.includes(search.toLowerCase())"
+                                            @click="selected = '{{ $unit->id }}'; open = false"
+                                            data-value="{{ $unit->id }}"
+                                            class="px-4 py-2 cursor-pointer hover:bg-indigo-100 {{ request('unit') == $unit->id ? 'bg-indigo-50' : '' }}"
+                                        >{{ $unit->unit_number }} @if($unit->plate_number) ({{ $unit->plate_number }})@endif</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="flex justify-end space-x-3">
@@ -86,7 +133,7 @@
                 </form>
             </div>
 
-            @if(request()->anyFilled(['name', 'ktp', 'type', 'status']))
+            @if(request()->anyFilled(['name', 'ktp', 'type', 'status', 'unit', 'route']))
                 <div class="mb-4">
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="text-sm font-medium text-gray-700">Active Filters:</span>
@@ -126,6 +173,24 @@
                                 </a>
                             </span>
                         @endif
+
+                        @if(request('unit'))
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                Unit: {{ optional($units->firstWhere('id', request('unit')))->unit_number }}
+                                <a href="{{ request()->fullUrlWithoutQuery(['unit']) }}" class="ml-1.5 text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-times-circle"></i>
+                                </a>
+                            </span>
+                        @endif
+
+                        @if(request('route'))
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                Rute: {{ optional($routes->firstWhere('id', request('route')))->route_number }} - {{ optional($routes->firstWhere('id', request('route')))->name }}
+                                <a href="{{ request()->fullUrlWithoutQuery(['route']) }}" class="ml-1.5 text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-times-circle"></i>
+                                </a>
+                            </span>
+                        @endif
                     </div>
                 </div>
             @endif
@@ -137,7 +202,8 @@
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No KTP</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No KPP</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rute</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipe</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Telepon</th>
@@ -159,7 +225,28 @@
                                 </div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $driver->ktp }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $driver->kpp }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                @if($driver->routes && $driver->routes->count())
+                                    <div class="flex flex-wrap gap-1">
+                                        @foreach($driver->routes as $route)
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                                                {{ $route->route_number }} - {{ $route->name }}
+                                            </span>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                @if($driver->units && $driver->units->count())
+                                    <div class="flex flex-wrap gap-1">
+                                        @foreach($driver->units as $unit)
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                                KWK-{{ $unit->unit_number }}
+                                            </span>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $driver->type === 'batangan' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800' }}">
                                     {{ ucfirst($driver->type) }}
@@ -205,7 +292,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="8" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">No drivers found</td>
+                            <td colspan="9" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">No drivers found</td>
                         </tr>
                         @endforelse
                     </tbody>
