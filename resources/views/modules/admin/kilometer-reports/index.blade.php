@@ -18,18 +18,59 @@
 
     <x-flash-message />
     <x-toast id="km-toast" />
+    
+    <!-- Month/Year Filter -->
+    <div class="mb-6">
+        <x-card>
+            <form id="filter-form" method="GET" action="{{ route('kilometer-reports.index') }}">
+                <div class="flex space-x-4">
+                    <div>
+                        <x-input-label for="month" value="Bulan" class="font-medium" />
+                        <select id="month" name="month" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                            @foreach(range(1, 12) as $m)
+                                @php
+                                    $monthName = \Carbon\Carbon::create()->month($m)->translatedFormat('F');
+                                @endphp
+                                <option value="{{ $m }}" {{ $m == request('month', Carbon\Carbon::now()->month) ? 'selected' : '' }}>
+                                    {{ $monthName }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <x-input-label for="year" value="Tahun" class="font-medium" />
+                        <select id="year" name="year" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                            @foreach(range(Carbon\Carbon::now()->year - 2, Carbon\Carbon::now()->year + 1) as $y)
+                                <option value="{{ $y }}" {{ $y == request('year', Carbon\Carbon::now()->year) ? 'selected' : '' }}>
+                                    {{ $y }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <input type="hidden" name="period" value="{{ $period }}" />
+                    <input type="hidden" name="group" value="{{ $activeRouteGroup }}" />
+                    <div class="flex items-end">
+                        <x-primary-button type="submit">
+                            <i class="fas fa-filter mr-2"></i>
+                            Filter
+                        </x-primary-button>
+                    </div>
+                </div>
+            </form>
+        </x-card>
+    </div>
 
     <!-- Period Tabs -->
     <div class="mb-6">
         <div class="border-b border-gray-200">
             <nav class="-mb-px flex" aria-label="Tabs">
-                <a href="{{ route('kilometer-reports.index', ['period' => 1, 'group' => $activeRouteGroup]) }}" 
+                <a href="{{ route('kilometer-reports.index', ['period' => 1, 'group' => $activeRouteGroup, 'month' => request('month', Carbon\Carbon::now()->month), 'year' => request('year', Carbon\Carbon::now()->year)]) }}" 
                    class="py-4 px-6 text-center border-b-2 font-medium text-sm {{ $period == 1 ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
                     Periode 1 (1-15)
                 </a>
-                <a href="{{ route('kilometer-reports.index', ['period' => 2, 'group' => $activeRouteGroup]) }}" 
+                <a href="{{ route('kilometer-reports.index', ['period' => 2, 'group' => $activeRouteGroup, 'month' => request('month', Carbon\Carbon::now()->month), 'year' => request('year', Carbon\Carbon::now()->year)]) }}" 
                    class="py-4 px-6 text-center border-b-2 font-medium text-sm {{ $period == 2 ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
-                    Periode 2 (16-{{ Carbon\Carbon::now()->endOfMonth()->format('d') }})
+                    Periode 2 (16-{{ Carbon\Carbon::createFromDate(request('year', Carbon\Carbon::now()->year), request('month', Carbon\Carbon::now()->month), 1)->endOfMonth()->day }})
                 </a>
             </nav>
         </div>

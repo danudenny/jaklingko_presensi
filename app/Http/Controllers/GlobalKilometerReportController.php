@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Driver;
+use App\Models\GlobalKilometerReport;
 use App\Models\Holiday;
 use App\Models\KilometerReport;
 use App\Models\MaintenanceLog;
@@ -21,11 +22,12 @@ class GlobalKilometerReportController extends Controller
      */
     public function index(Request $request)
     {
-        $period = $request->input('period', 1); // Default to period 1
+        $period = (int)$request->input('period', 1); // Default to period 1
+        $month = (int)$request->input('month', Carbon::now()->month);
+        $year = (int)$request->input('year', Carbon::now()->year);
         
         // Determine date ranges based on period
-        $today = Carbon::now();
-        $currentMonth = $today->copy()->startOfMonth();
+        $currentMonth = Carbon::createFromDate($year, $month, 1);
         
         if ($period == 1) {
             // Period 1: 1st to 15th of the month
@@ -36,6 +38,12 @@ class GlobalKilometerReportController extends Controller
             $startDate = $currentMonth->copy()->addDays(15)->format('Y-m-d');
             $endDate = $currentMonth->copy()->endOfMonth()->format('Y-m-d');
         }
+        
+        // Check if we have any global kilometer reports for this period
+        $hasReports = GlobalKilometerReport::where('period', $period)
+            ->where('month', $month)
+            ->where('year', $year)
+            ->exists();
         
         // Get all route groups for the tabs
         $routeGroups = Route::select('route_number')
@@ -75,10 +83,15 @@ class GlobalKilometerReportController extends Controller
             $currentDate->addDay();
         }
         
-        // Get all kilometer reports for the date range
-        $reports = KilometerReport::with(['unit', 'route'])
-            ->whereBetween('date', [$startDate, $endDate])
-            ->get();
+        // Get all dates in the range
+        $dates = [];
+        $currentDate = Carbon::parse($startDate);
+        $lastDate = Carbon::parse($endDate);
+        
+        while ($currentDate->lte($lastDate)) {
+            $dates[] = $currentDate->format('Y-m-d');
+            $currentDate->addDay();
+        }
         
         // Get all drivers
         $drivers = Driver::active()->get()->keyBy('id');
@@ -86,148 +99,80 @@ class GlobalKilometerReportController extends Controller
         // Get all units with their drivers
         $units = Unit::with('drivers')->get()->keyBy('id');
         
-        // Get all schedules for the date range to determine drivers per unit
-        $schedules = Schedule::with(['driver', 'unit', 'route'])
-            ->whereBetween('schedule_date', [$startDate, $endDate])
-            ->get();
-        
-        // Organize all schedules by unit and date
-        $schedulesByUnitDate = [];
-        foreach ($schedules as $schedule) {
-            $unitId = $schedule->unit_id;
-            $date = $schedule->schedule_date->format('Y-m-d');
-            
-            if (!isset($schedulesByUnitDate[$unitId])) {
-                $schedulesByUnitDate[$unitId] = [];
-            }
-            if (!isset($schedulesByUnitDate[$unitId][$date])) {
-                $schedulesByUnitDate[$unitId][$date] = [];
-            }
-            
-            $schedulesByUnitDate[$unitId][$date][] = $schedule;
-        }
-        
-        // If we don't have any schedules, let's assign drivers from unit.drivers relationship
-        if ($schedules->isEmpty()) {
-            foreach ($units as $unit) {
-                $unitId = $unit->id;
-                $unitDrivers = $unit->drivers;
-                
-                if ($unitDrivers->isNotEmpty()) {
-                    $schedulesByUnitDate[$unitId] = [];
-                    
-                    foreach ($dates as $date) {
-                        $schedulesByUnitDate[$unitId][$date] = [];
-                        
-                        // Create fake schedules for each driver
-                        foreach ($unitDrivers as $index => $driver) {
-                            $fakeSchedule = new \stdClass();
-                            $fakeSchedule->driver_id = $driver->id;
-                            $fakeSchedule->unit_id = $unitId;
-                            $fakeSchedule->shift = $index == 0 ? 'Pagi' : 'Siang';
-                            $fakeSchedule->driver = $driver;
-                            
-                            $schedulesByUnitDate[$unitId][$date][] = $fakeSchedule;
-                        }
-                    }
-                }
-            }
-        }
-        
         // Organize reports by route, unit, driver, and date
-        $reportsByRouteUnitDriverDate = [];
-        $driverCountByRouteUnitDate = [];
         $routeTotals = [];
         $unitTotals = [];
         $driverTotals = [];
         $dateTotals = [];
         $routeUnitTotals = [];
         $routeDriverTotals = [];
+        
+        // Initialize empty arrays for the view if there are no reports
+        $reportsByRouteUnitDriverDate = [];
+        $driverCountByRouteUnitDate = [];
+        $maintenanceUnitsByDate = [];
         $grandTotal = 0;
         
-        // Process kilometer reports
-        foreach ($reports as $report) {
-            $unitId = $report->unit_id;
-            $routeId = $report->route_id;
-            $date = $report->date->format('Y-m-d');
-            $kilometers = $report->kilometers;
-            
-            // Initialize arrays if not set
-            if (!isset($reportsByRouteUnitDriverDate[$routeId])) {
-                $reportsByRouteUnitDriverDate[$routeId] = [];
-            }
-            if (!isset($reportsByRouteUnitDriverDate[$routeId][$unitId])) {
-                $reportsByRouteUnitDriverDate[$routeId][$unitId] = [];
-            }
-            
-            // Get schedules for this unit and date
-            $unitSchedules = $schedulesByUnitDate[$unitId][$date] ?? [];
-            $driverCount = count($unitSchedules);
-            
-            // If no drivers scheduled, try to get drivers from the unit's relationship
-            if ($driverCount == 0 && isset($units[$unitId])) {
-                $unitDrivers = $units[$unitId]->drivers;
+        // If we have global kilometer reports, use them
+        if ($hasReports) {
+            // Get all global kilometer reports for this period
+            $globalReports = GlobalKilometerReport::with(['driver', 'unit', 'route'])
+                ->where('period', $period)
+                ->where('month', $month)
+                ->where('year', $year);
                 
-                if ($unitDrivers->isNotEmpty()) {
-                    // Create fake schedules for unit drivers
-                    foreach ($unitDrivers as $index => $driver) {
-                        $fakeSchedule = new \stdClass();
-                        $fakeSchedule->driver_id = $driver->id;
-                        $fakeSchedule->unit_id = $unitId;
-                        $fakeSchedule->shift = $index == 0 ? 'Pagi' : 'Siang';
-                        $fakeSchedule->driver = $driver;
-                        
-                        $unitSchedules[] = $fakeSchedule;
-                    }
-                    
-                    $driverCount = count($unitSchedules);
-                }
+            // If filtering by route group
+            if ($activeRouteGroup !== 'all') {
+                $globalReports->whereHas('route', function ($query) use ($activeRouteGroup) {
+                    $query->where('route_number', $activeRouteGroup);
+                });
             }
             
-            // If still no drivers, create a placeholder for the unit
-            if ($driverCount == 0) {
-                // Store unit total
-                if (!isset($routeUnitTotals[$routeId])) {
-                    $routeUnitTotals[$routeId] = [];
-                }
-                if (!isset($routeUnitTotals[$routeId][$unitId])) {
-                    $routeUnitTotals[$routeId][$unitId] = 0;
-                }
-                $routeUnitTotals[$routeId][$unitId] += $kilometers;
+            $globalReports = $globalReports->get();
+            
+            // Process global kilometer reports
+            foreach ($globalReports as $report) {
+                $unitId = $report->unit_id;
+                $routeId = $report->route_id;
+                $driverId = $report->driver_id;
+                $date = $report->report_date->format('Y-m-d');
+                $kilometers = $report->kilometers;
+                $driverCount = $report->driver_count;
                 
-                continue;
-            }
-            
-            // Calculate kilometers per driver
-            $kilometersPerDriver = $driverCount > 0 ? $kilometers / $driverCount : 0;
-            
-            // Store driver count for this unit and date
-            if (!isset($driverCountByRouteUnitDate[$routeId])) {
-                $driverCountByRouteUnitDate[$routeId] = [];
-            }
-            if (!isset($driverCountByRouteUnitDate[$routeId][$unitId])) {
-                $driverCountByRouteUnitDate[$routeId][$unitId] = [];
-            }
-            $driverCountByRouteUnitDate[$routeId][$unitId][$date] = $driverCount;
-            
-            // Assign kilometers to each driver
-            foreach ($unitSchedules as $schedule) {
-                $driverId = $schedule->driver_id;
+                // Initialize arrays if not set
+                if (!isset($reportsByRouteUnitDriverDate[$routeId])) {
+                    $reportsByRouteUnitDriverDate[$routeId] = [];
+                }
+                if (!isset($reportsByRouteUnitDriverDate[$routeId][$unitId])) {
+                    $reportsByRouteUnitDriverDate[$routeId][$unitId] = [];
+                }
+                if (!isset($reportsByRouteUnitDriverDate[$routeId][$unitId][$driverId])) {
+                    $reportsByRouteUnitDriverDate[$routeId][$unitId][$driverId] = [];
+                }
                 
                 // Store report data
                 $reportsByRouteUnitDriverDate[$routeId][$unitId][$driverId][$date] = (object) [
-                    'kilometers' => $kilometersPerDriver,
+                    'kilometers' => $kilometers,
                     'notes' => $report->notes,
-                    'original_kilometers' => $kilometers,
+                    'original_kilometers' => $kilometers * $driverCount, // Original total kilometers
                     'driver_count' => $driverCount,
-                    'shift' => $schedule->shift
+                    'shift' => 'All' // We don't track shift in global reports
                 ];
+                
+                // Store driver count for this unit and date
+                if (!isset($driverCountByRouteUnitDate[$routeId])) {
+                    $driverCountByRouteUnitDate[$routeId] = [];
+                }
+                if (!isset($driverCountByRouteUnitDate[$routeId][$unitId])) {
+                    $driverCountByRouteUnitDate[$routeId][$unitId] = [];
+                }
+                $driverCountByRouteUnitDate[$routeId][$unitId][$date] = $driverCount;
                 
                 // Driver totals
                 if (!isset($driverTotals[$driverId])) {
                     $driverTotals[$driverId] = 0;
                 }
-                $driverTotals[$driverId] += $kilometersPerDriver;
+                $driverTotals[$driverId] += $kilometers;
                 
                 // Route-Driver totals
                 if (!isset($routeDriverTotals[$routeId])) {
@@ -236,39 +181,43 @@ class GlobalKilometerReportController extends Controller
                 if (!isset($routeDriverTotals[$routeId][$driverId])) {
                     $routeDriverTotals[$routeId][$driverId] = 0;
                 }
-                $routeDriverTotals[$routeId][$driverId] += $kilometersPerDriver;
+                $routeDriverTotals[$routeId][$driverId] += $kilometers;
+                
+                // Calculate original kilometers (before driver division)
+                $originalKilometers = $kilometers * $driverCount;
+                
+                // Route totals (based on original kilometers)
+                if (!isset($routeTotals[$routeId])) {
+                    $routeTotals[$routeId] = 0;
+                }
+                $routeTotals[$routeId] += $originalKilometers;
+                
+                // Unit totals (based on original kilometers)
+                if (!isset($unitTotals[$unitId])) {
+                    $unitTotals[$unitId] = 0;
+                }
+                $unitTotals[$unitId] += $originalKilometers;
+                
+                // Date totals (based on original kilometers)
+                if (!isset($dateTotals[$date])) {
+                    $dateTotals[$date] = 0;
+                }
+                $dateTotals[$date] += $originalKilometers;
+                
+                // Route-Unit totals (based on original kilometers)
+                if (!isset($routeUnitTotals[$routeId])) {
+                    $routeUnitTotals[$routeId] = [];
+                }
+                if (!isset($routeUnitTotals[$routeId][$unitId])) {
+                    $routeUnitTotals[$routeId][$unitId] = 0;
+                }
+                $routeUnitTotals[$routeId][$unitId] += $originalKilometers;
+                
+                // Grand total (based on original kilometers)
+                $grandTotal += $originalKilometers;
             }
-            
-            // Route totals
-            if (!isset($routeTotals[$routeId])) {
-                $routeTotals[$routeId] = 0;
-            }
-            $routeTotals[$routeId] += $kilometers;
-            
-            // Unit totals
-            if (!isset($unitTotals[$unitId])) {
-                $unitTotals[$unitId] = 0;
-            }
-            $unitTotals[$unitId] += $kilometers;
-            
-            // Date totals
-            if (!isset($dateTotals[$date])) {
-                $dateTotals[$date] = 0;
-            }
-            $dateTotals[$date] += $kilometers;
-            
-            // Route-Unit totals
-            if (!isset($routeUnitTotals[$routeId])) {
-                $routeUnitTotals[$routeId] = [];
-            }
-            if (!isset($routeUnitTotals[$routeId][$unitId])) {
-                $routeUnitTotals[$routeId][$unitId] = 0;
-            }
-            $routeUnitTotals[$routeId][$unitId] += $kilometers;
-            
-            // Grand total
-            $grandTotal += $kilometers;
-        }
+        } 
+        // Don't redirect, just continue and show empty table with a flash message
         
         // Get all holidays for the date range
         $holidays = Holiday::whereBetween('date', [$startDate, $endDate])
@@ -276,6 +225,9 @@ class GlobalKilometerReportController extends Controller
             ->keyBy(function ($holiday) {
                 return $holiday->date->format('Y-m-d');
             });
+        
+        // Get maintenance units data    
+        $maintenanceUnitsByDate = [];
         
         // Get all maintenance logs for the date range
         $maintenanceLogs = MaintenanceLog::whereBetween('date_reported', [$startDate, $endDate])
@@ -289,7 +241,6 @@ class GlobalKilometerReportController extends Controller
             ->get();
         
         // Create a lookup for units under maintenance on specific dates
-        $maintenanceUnitsByDate = [];
         foreach ($dates as $date) {
             $maintenanceUnitsByDate[$date] = [];
             foreach ($maintenanceLogs as $log) {
@@ -300,6 +251,11 @@ class GlobalKilometerReportController extends Controller
                     $maintenanceUnitsByDate[$date][] = $log->unit_id;
                 }
             }
+        }
+            
+        // Add a flash message if no reports exist
+        if (!$hasReports) {
+            session()->flash('info', 'Tidak ada laporan kilometer global untuk periode ini. Silakan generate laporan terlebih dahulu.');
         }
         
         return view('modules.admin.global-kilometer-reports.index', compact(
@@ -329,10 +285,13 @@ class GlobalKilometerReportController extends Controller
      */
     public function exportExcel(Request $request)
     {
-        $period = $request->input('period', 1);
+        $period = (int)$request->input('period', 1);
         $group = $request->input('group', 'all');
+        $month = (int)$request->input('month', Carbon::now()->month);
+        $year = (int)$request->input('year', Carbon::now()->year);
         
-        $title = "Laporan Kilometer Global - " . ($period == 1 ? "Periode 1" : "Periode 2") . " " . Carbon::now()->format('F Y');
+        $date = Carbon::createFromDate($year, $month, 1);
+        $title = "Laporan Kilometer Global - " . ($period == 1 ? "Periode 1" : "Periode 2") . " " . $date->format('F Y');
         if ($group != 'all') {
             $title .= " - Rute " . $group;
         }
@@ -347,10 +306,13 @@ class GlobalKilometerReportController extends Controller
      */
     public function exportPdf(Request $request)
     {
-        $period = $request->input('period', 1);
+        $period = (int)$request->input('period', 1);
         $group = $request->input('group', 'all');
+        $month = (int)$request->input('month', Carbon::now()->month);
+        $year = (int)$request->input('year', Carbon::now()->year);
         
-        $title = "Laporan Kilometer Global - " . ($period == 1 ? "Periode 1" : "Periode 2") . " " . Carbon::now()->format('F Y');
+        $date = Carbon::createFromDate($year, $month, 1);
+        $title = "Laporan Kilometer Global - " . ($period == 1 ? "Periode 1" : "Periode 2") . " " . $date->format('F Y');
         if ($group != 'all') {
             $title .= " - Rute " . $group;
         }

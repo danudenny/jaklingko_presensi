@@ -19,11 +19,12 @@ class KilometerReportController extends Controller
      */
     public function index(Request $request)
     {
-        $period = $request->input('period', 1); // Default to period 1
+        $period = (int)$request->input('period', 1); // Default to period 1
+        $month = (int)$request->input('month', Carbon::now()->month);
+        $year = (int)$request->input('year', Carbon::now()->year);
         
         // Determine date ranges based on period
-        $today = Carbon::now();
-        $currentMonth = $today->copy()->startOfMonth();
+        $currentMonth = Carbon::createFromDate($year, $month, 1);
         
         if ($period == 1) {
             // Period 1: 1st to 15th of the month

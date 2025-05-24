@@ -16,6 +16,7 @@ use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\UnitRenopsController;
 use App\Http\Controllers\DriverScheduleSettingsController;
 use App\Http\Controllers\GlobalKilometerReportController;
+use App\Http\Controllers\GlobalKilometerReportGeneratorController;
 use App\Http\Controllers\GlobalSearchController;
 use Illuminate\Support\Facades\Route;
 
@@ -106,6 +107,8 @@ Route::middleware('auth')->group(function () {
     Route::get('global-kilometer-reports', [GlobalKilometerReportController::class, 'index'])->name('global-kilometer-reports.index');
     Route::get('global-kilometer-reports/export/excel', [GlobalKilometerReportController::class, 'exportExcel'])->name('global-kilometer-reports.export.excel');
     Route::get('global-kilometer-reports/export/pdf', [GlobalKilometerReportController::class, 'exportPdf'])->name('global-kilometer-reports.export.pdf');
+    Route::get('global-kilometer-reports/generate', [GlobalKilometerReportGeneratorController::class, 'showGenerateForm'])->name('global-kilometer-reports.generate.form');
+    Route::post('global-kilometer-reports/generate', [GlobalKilometerReportGeneratorController::class, 'generate'])->name('global-kilometer-reports.generate');
 
     // Holiday Routes
     Route::resource('holidays', HolidayController::class);
