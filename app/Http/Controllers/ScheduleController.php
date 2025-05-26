@@ -501,39 +501,25 @@ class ScheduleController extends Controller
         }
         
         try {
-            Log::info("Starting schedule generation for period: {$startDate} to {$endDate}");
-            
-            // Use the built-in auto-generation method from the Schedule model
             $result = Schedule::autoGenerate($startDate, $endDate);
-            
-            // Log the full result for debugging
-            Log::info("Schedule generation completed with result: " . json_encode($result));
-            
-            // Verify schedules were actually created
             $createdCount = Schedule::whereBetween('schedule_date', [$startDate, $endDate])->count();
-            Log::info("Actual schedules found in database for period: {$createdCount}");
-            
-            // Check if there were any error messages
             if (!isset($result['success']) || $result['success'] === false) {
                 $errorMessage = $result['message'] ?? 'Failed to generate schedules. Please check the logs for details.';
-                Log::error("Schedule generation failed: {$errorMessage}");
                 return back()->withErrors(['generation' => $errorMessage]);
             }
             
-            // Process any warnings or info messages
             $generationResults = [
                 'success' => $result['success'] ?? false,
                 'created' => $result['success'] ?? 0,
                 'skipped' => $result['failed'] ?? 0,
                 'messages' => $result['messages'] ?? [],
                 'failed' => $result['failed'] ?? 0,
-                'actual_in_db' => $createdCount // Add the actual count from database
+                'actual_in_db' => $createdCount 
             ];
             
-            return back()->with('generation_results', $generationResults)
+            return redirect()->route('schedules.index')->with('generation_results', $generationResults)
                          ->with('success_message', "Successfully generated {$generationResults['created']} schedules. Actual records in database: {$createdCount}");
         } catch (\Exception $e) {
-            Log::error('Schedule generation error: ' . $e->getMessage());
             Log::error($e->getTraceAsString());
             return back()->withErrors(['generation' => 'An error occurred while generating schedules: ' . $e->getMessage()]);
         }

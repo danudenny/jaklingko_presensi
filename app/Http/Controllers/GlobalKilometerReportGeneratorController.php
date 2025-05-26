@@ -69,13 +69,6 @@ class GlobalKilometerReportGeneratorController extends Controller
             // Begin transaction
             DB::beginTransaction();
             
-            // Delete any existing global kilometer reports for this period
-            GlobalKilometerReport::where([
-                'year' => $year,
-                'month' => $month,
-                'period' => $period,
-            ])->delete();
-            
             // Generate new reports
             $this->generateReports($startDate, $endDate, $period, $month, $year);
             
@@ -93,89 +86,109 @@ class GlobalKilometerReportGeneratorController extends Controller
         }
     }
     
-    /**
-     * Generate reports for the given date range.
-     *
-     * @param  \Carbon\Carbon  $startDate
-     * @param  \Carbon\Carbon  $endDate
-     * @param  int  $period
-     * @param  int  $month
-     * @param  int  $year
-     * @return void
-     */
     private function generateReports(Carbon $startDate, Carbon $endDate, $period, $month, $year)
     {
-        $dates = [];
-        $currentDate = $startDate->copy();
-        
-        // Prepare all dates in the range
-        while ($currentDate->lte($endDate)) {
-            $dates[] = $currentDate->format('Y-m-d');
-            $currentDate->addDay();
-        }
-        
-        // Get all kilometer reports for the date range
-        $reports = KilometerReport::with(['unit', 'route'])
-            ->whereBetween('date', [$startDate, $endDate])
+        // Delete existing reports for this period to avoid conflicts
+        GlobalKilometerReport::where([
+            'period' => $period,
+            'month' => $month,
+            'year' => $year
+        ])->delete();
+
+        // Get all kilometer reports for the date range, making sure to include full days
+        $kilometerReports = KilometerReport::with(['unit', 'route'])
+            ->whereDate('date', '>=', $startDate)
+            ->whereDate('date', '<=', $endDate)
             ->get();
-        
+
         // Get all schedules for the date range
         $schedules = Schedule::with(['driver', 'unit', 'route'])
-            ->whereBetween('schedule_date', [$startDate, $endDate])
+            ->whereDate('schedule_date', '>=', $startDate)
+            ->whereDate('schedule_date', '<=', $endDate)
             ->get();
-        
-        // Group schedules by unit and date
+
+        if ($kilometerReports->isEmpty() || $schedules->isEmpty()) {
+            return ['created' => 0, 'skipped' => 0, 'message' => 'No reports or schedules found'];
+        }
+
+        // Group kilometer reports by unit_id and date for easy lookup
+        $kilometerByUnitDate = [];
+        foreach ($kilometerReports as $kilometerReport) {
+            $unitId = $kilometerReport->unit_id;
+            $date = $kilometerReport->date->format('Y-m-d');
+            $kilometerByUnitDate[$unitId][$date] = $kilometerReport;
+        }
+
+        // Group schedules by unit_id and date for easy lookup
         $schedulesByUnitDate = [];
         foreach ($schedules as $schedule) {
             $unitId = $schedule->unit_id;
             $date = $schedule->schedule_date->format('Y-m-d');
-            
-            if (!isset($schedulesByUnitDate[$unitId])) {
-                $schedulesByUnitDate[$unitId] = [];
-            }
-            if (!isset($schedulesByUnitDate[$unitId][$date])) {
-                $schedulesByUnitDate[$unitId][$date] = [];
-            }
-            
-            $schedulesByUnitDate[$unitId][$date][] = $schedule;
+            $shift = $schedule->shift;
+            $schedulesByUnitDate[$unitId][$date][$shift] = $schedule;
         }
-        
-        // Process each kilometer report
-        foreach ($reports as $report) {
-            $unitId = $report->unit_id;
-            $routeId = $report->route_id;
-            $date = $report->date->format('Y-m-d');
-            $kilometers = $report->kilometers;
-            
-            // Get schedules for this unit and date
-            $unitSchedules = $schedulesByUnitDate[$unitId][$date] ?? [];
-            $driverCount = count($unitSchedules);
-            
-            // If no drivers scheduled, continue to next report
-            if ($driverCount == 0) {
-                continue;
-            }
-            
-            // Calculate kilometers per driver
-            $kilometersPerDriver = $driverCount > 0 ? $kilometers / $driverCount : 0;
-            
-            // For each driver, create a global kilometer report
-            foreach ($unitSchedules as $schedule) {
-                $driverId = $schedule->driver_id;
-                
-                GlobalKilometerReport::create([
-                    'driver_id' => $driverId,
-                    'unit_id' => $unitId,
-                    'route_id' => $routeId,
-                    'report_date' => $date,
-                    'kilometers' => $kilometersPerDriver,
-                    'period' => $period,
-                    'month' => $month,
-                    'year' => $year,
-                    'driver_count' => $driverCount,
-                    'notes' => $report->notes,
-                ]);
+
+        $reportCount = 0;
+        $skippedCount = 0;
+
+        // Process each unit's kilometer reports
+        foreach ($kilometerByUnitDate as $unitId => $unitReports) {
+            foreach ($unitReports as $date => $kilometerReport) {
+                // Skip if no schedules for this unit and date
+                if (!isset($schedulesByUnitDate[$unitId][$date])) {
+                    $skippedCount++;
+                    continue;
+                }
+
+                $daySchedules = $schedulesByUnitDate[$unitId][$date];
+                $totalKilometers = $kilometerReport->kilometers;
+                $routeId = $kilometerReport->route_id;
+                $notes = $kilometerReport->notes ?? '';
+
+                // Divide kilometers by 2 since we always have 2 shifts
+                $kilometerPerShift = $totalKilometers / 2;
+
+                // Create reports for both shifts if they exist
+                foreach (['pagi', 'siang'] as $shift) {
+                    if (!isset($daySchedules[$shift])) {
+                        continue;
+                    }
+
+                    $schedule = $daySchedules[$shift];
+                    $driverId = $schedule->driver_id;
+
+                    if (!$driverId) {
+                        continue;
+                    }
+
+                    try {
+                        // Create new global kilometer report
+                        GlobalKilometerReport::create([
+                            'driver_id' => $driverId,
+                            'unit_id' => $unitId,
+                            'route_id' => $routeId,
+                            'report_date' => $date,
+                            'shift' => $shift,
+                            'period' => $period,
+                            'month' => $month,
+                            'year' => $year,
+                            'kilometers' => $kilometerPerShift,
+                            'driver_count' => $shift === 'pagi' ? 1 : 2, // First driver gets 1, second gets 2
+                            'notes' => $notes,
+                        ]);
+
+                        $reportCount++;
+
+                    } catch (\Exception $e) {
+                        throw new \Exception('Error creating GlobalKilometerReport: ' . $e->getMessage());
+                    }
+                }
             }
         }
+
+        return [
+            'created' => $reportCount,
+            'skipped' => $skippedCount
+        ];
     }
 }

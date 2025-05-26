@@ -87,71 +87,9 @@
         </x-slot>
     </x-page-title>
 
-    <x-flash-message />
-    
-    @if ($errors->any())
-        <div class="p-4 mb-6 border-l-4 border-red-400 bg-red-50">
-            <div class="flex">
-                <div class="flex-shrink-0">
-                    <i class="text-xl text-red-400 fas fa-exclamation-circle"></i>
-                </div>
-                <div class="ml-3">
-                    <h3 class="text-sm font-medium text-red-800">
-                        Error dalam Pembuatan Jadwal
-                    </h3>
-                    <div class="mt-2 text-sm text-red-700">
-                        <ul class="pl-5 space-y-1 list-disc">
-                            @foreach ($errors->all() as $error)
-                                <li>{{ $error }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </div>
-    @endif
 
     <x-card>
         <div class="mb-6">  
-            @if (session('generation_results'))
-                <div class="mb-6">
-                    <div class="p-4 border-l-4 border-green-400 bg-green-50">
-                        <div class="flex">
-                            <div class="flex-shrink-0">
-                                <i class="text-xl text-green-400 fas fa-check-circle"></i>
-                            </div>
-                            <div class="ml-3">
-                                <h3 class="text-sm font-medium text-green-800">
-                                    Hasil Pembuatan Jadwal
-                                </h3>
-                                <div class="mt-2 text-sm text-green-700">
-                                    <p>Berhasil membuat {{ session('generation_results.created') }} jadwal.</p>
-                                    @if (session('generation_results.skipped') > 0)
-                                        <p class="text-yellow-700">{{ session('generation_results.skipped') }} jadwal dilewati karena tidak tersedia pengemudi.</p>
-                                    @endif
-                                    @if (session('generation_results.failed') > 0)
-                                        <p class="text-yellow-700">Gagal membuat {{ session('generation_results.failed') }} jadwal.</p>
-                                    @endif
-                                    
-                                    @if (session('generation_results.messages') && count(session('generation_results.messages')) > 0)
-                                        <div class="mt-3">
-                                            <p class="font-medium">Detail:</p>
-                                            <div class="p-2 mt-1 overflow-y-auto bg-white border border-gray-200 rounded max-h-40">
-                                                <ul class="pl-5 space-y-1 text-xs list-disc">
-                                                    @foreach (session('generation_results.messages') as $message)
-                                                        <li>{{ $message }}</li>
-                                                    @endforeach
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    @endif
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            @endif
-
             <form action="{{ route('schedules.generate') }}" method="POST" id="generate-form">
                 @csrf
                 <div class="grid grid-cols-1 gap-6 mb-6 md:grid-cols-2">
@@ -159,7 +97,7 @@
                         <label for="date-range" class="block mb-1 text-sm font-medium text-gray-700">Periode Jadwal</label>
                         <div class="relative rounded-md shadow-sm">
                             <input type="text" id="date-range" name="date_range" placeholder="Pilih tanggal"
-                                class="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 sm:text-sm border-gray-300 rounded-md @error('start_date') border-red-500 @enderror @error('end_date') border-red-500 @enderror"
+                                class="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 sm:text-sm border-gray-300 rounded-md @error('start_date') @enderror @error('end_date') @enderror"
                                 value="{{ old('start_date') && old('end_date') ? old('start_date') . ' to ' . old('end_date') : '' }}">
                             <input type="hidden" id="start_date" name="start_date" value="{{ old('start_date', now()->format('Y-m-d')) }}">
                             <input type="hidden" id="end_date" name="end_date" value="{{ old('end_date', now()->addDays(7)->format('Y-m-d')) }}">
@@ -205,8 +143,6 @@
                             </button>
                         </div>
 
-                        
-                        
                         @error('start_date')
                             <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                         @enderror
@@ -222,10 +158,7 @@
                         <i class="mr-2 fas fa-calendar-plus" id="button-icon"></i>
                         <span id="button-text">Buat Jadwal</span>
                         <span id="loading-spinner" class="hidden ml-2">
-                            <svg class="w-5 h-5 text-white animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
+                            <i class="fas fa-spinner fa-spin"></i>
                         </span>
                     </button>
                 </div>
@@ -546,20 +479,6 @@
             $("#days-count").text(days);
         }
         
-        // Show toaster notifications for generation results if available
-        @if(session('generation_results'))
-            @if(session('generation_results.created') > 0)
-                toastr.success(
-                    'Berhasil membuat {{ session("generation_results.created") }} jadwal.{{ session("generation_results.skipped") > 0 ? " " . session("generation_results.skipped") . " jadwal dilewati karena tidak tersedia pengemudi." : "" }}{{ session("generation_results.failed") > 0 ? " " . session("generation_results.failed") . " jadwal gagal dibuat." : "" }}',
-                    'Pembuatan Jadwal Berhasil'
-                );
-            @elseif(session('generation_results.failed') > 0)
-                toastr.error(
-                    'Gagal membuat {{ session("generation_results.failed") }} jadwal. Silakan periksa detail untuk informasi lebih lanjut.',
-                    'Pembuatan Jadwal Gagal'
-                );
-            @endif
-        @endif
     });
 </script>
 @endpush

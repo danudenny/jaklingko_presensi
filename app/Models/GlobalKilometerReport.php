@@ -19,6 +19,7 @@ class GlobalKilometerReport extends Model
         'year',
         'driver_count',
         'notes',
+        'shift', // Adding shift to fillable array
     ];
 
     protected $casts = [
