@@ -8,16 +8,16 @@
         <x-slot name="title">Pengemudi</x-slot>
         <x-slot name="actions">
             <div class="flex space-x-2">
-                <a href="{{ route('drivers.create') }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 active:bg-indigo-700 focus:outline-none focus:border-indigo-700 focus:ring ring-indigo-300 disabled:opacity-25 transition ease-in-out duration-150">
-                    <i class="fas fa-plus mr-2"></i>
+                <a href="{{ route('drivers.create') }}" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-500 active:bg-indigo-700 focus:outline-none focus:border-indigo-700 focus:ring ring-indigo-300 disabled:opacity-25">
+                    <i class="mr-2 fas fa-plus"></i>
                     Tambah Pengemudi
                 </a>
-                <a href="{{ route('drivers.import') }}" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 active:bg-green-700 focus:outline-none focus:border-green-700 focus:ring ring-green-300 disabled:opacity-25 transition ease-in-out duration-150">
-                    <i class="fas fa-file-import mr-2"></i>
+                <a href="{{ route('drivers.import') }}" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out bg-green-600 border border-transparent rounded-md hover:bg-green-500 active:bg-green-700 focus:outline-none focus:border-green-700 focus:ring ring-green-300 disabled:opacity-25">
+                    <i class="mr-2 fas fa-file-import"></i>
                     Import
                 </a>
-                <a href="{{ route('driver.schedule.settings') }}" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 active:bg-blue-700 focus:outline-none focus:border-blue-700 focus:ring ring-blue-300 disabled:opacity-25 transition ease-in-out duration-150">
-                    <i class="fas fa-cog mr-2"></i>
+                <a href="{{ route('driver.schedule.settings') }}" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out bg-blue-600 border border-transparent rounded-md hover:bg-blue-500 active:bg-blue-700 focus:outline-none focus:border-blue-700 focus:ring ring-blue-300 disabled:opacity-25">
+                    <i class="mr-2 fas fa-cog"></i>
                     Pengaturan Jadwal
                 </a>
             </div>
@@ -29,35 +29,35 @@
     <!-- Drivers Table -->
     <x-card id="drivers-table-container">
         <div class="p-6">
-            <div class="flex justify-between items-center mb-4">
+            <div class="flex items-center justify-between mb-4">
                 <div>
                     <h2 class="text-lg font-semibold text-gray-900">Daftar Pengemudi</h2>
                     <p class="mt-1 text-sm text-gray-600">Total Pengemudi: {{ $drivers->total() }}</p>
                 </div>
                 <div class="flex space-x-2">
-                    <button type="button" id="toggle-filter" class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                        <i class="fas fa-filter mr-2"></i> Pencarian
+                    <button type="button" id="toggle-filter" class="inline-flex items-center px-3 py-2 text-sm font-medium leading-4 text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        <i class="mr-2 fas fa-filter"></i> Pencarian
                     </button>
                 </div>
             </div>
 
             <!-- Advanced Filter Form -->
-            <div id="filter-form" class="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200 hidden">
+            <div id="filter-form" class="hidden p-4 mb-6 border border-gray-200 rounded-lg bg-gray-50">
                 <form method="GET" action="{{ route('drivers.index') }}" class="space-y-4">
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
                         <div>
                             <label for="name" class="block text-sm font-medium text-gray-700">Nama</label>
-                            <input type="text" name="name" id="name" value="{{ request('name') }}" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
+                            <input type="text" name="name" id="name" value="{{ request('name') }}" class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                         </div>
 
                         <div>
                             <label for="ktp" class="block text-sm font-medium text-gray-700">No KTP</label>
-                            <input type="text" name="ktp" id="ktp" value="{{ request('ktp') }}" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
+                            <input type="text" name="ktp" id="ktp" value="{{ request('ktp') }}" class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                         </div>
 
                         <div>
                             <label for="type" class="block text-sm font-medium text-gray-700">Tipe</label>
-                            <select name="type" id="type" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            <select name="type" id="type" class="block w-full px-3 py-2 mt-1 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                 <option value="">Semua Tipe</option>
                                 <option value="batangan" {{ request('type') == 'batangan' ? 'selected' : '' }}>Batangan</option>
                                 <option value="cadangan" {{ request('type') == 'cadangan' ? 'selected' : '' }}>Cadangan</option>
@@ -66,7 +66,7 @@
 
                         <div>
                             <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
-                            <select name="status" id="status" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            <select name="status" id="status" class="block w-full px-3 py-2 mt-1 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                 <option value="">Semua Status</option>
                                 <option value="aktif" {{ request('status') == 'aktif' ? 'selected' : '' }}>Aktif</option>
                                 <option value="nonaktif" {{ request('status') == 'nonaktif' ? 'selected' : '' }}>Non Aktif</option>
@@ -76,7 +76,7 @@
 
                         <div>
                             <label for="route" class="block text-sm font-medium text-gray-700">Rute</label>
-                            <select name="route" id="route" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            <select name="route" id="route" class="block w-full px-3 py-2 mt-1 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                 <option value="">Semua Rute</option>
                                 @foreach($routes as $route)
                                     <option value="{{ $route->id }}" {{ request('route') == $route->id ? 'selected' : '' }}>
@@ -91,7 +91,7 @@
                             <input
                                 type="text"
                                 placeholder="Cari unit..."
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white"
+                                class="block w-full mt-1 bg-white border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                                 x-model="search"
                                 x-on:focus="open = true"
                                 x-on:input="open = true"
@@ -102,12 +102,12 @@
                             <div
                                 x-show="open"
                                 x-on:click.away="open = false"
-                                class="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-auto"
+                                class="absolute z-10 w-full mt-1 overflow-auto bg-white border border-gray-300 rounded-md shadow-lg max-h-48"
                             >
                                 <ul x-ref="unitList">
                                     <li
                                         x-show="search === ''"
-                                        class="px-4 py-2 text-gray-400 italic"
+                                        class="px-4 py-2 italic text-gray-400"
                                     >Pilih unit</li>
                                     @foreach($units as $unit)
                                         <li
@@ -123,10 +123,10 @@
                     </div>
 
                     <div class="flex justify-end space-x-3">
-                        <a href="{{ route('drivers.index') }}" class="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        <a href="{{ route('drivers.index') }}" class="inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                             Reset
                         </a>
-                        <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        <button type="submit" class="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                             Apply Filter
                         </button>
                     </div>
@@ -199,38 +199,39 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No KTP</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rute</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipe</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Telepon</th>
-                            <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                            <th scope="col" class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">No</th>
+                            <th scope="col" class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Nama</th>
+                            <th scope="col" class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Rute</th>
+                            <th scope="col" class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Unit</th>
+                            <th scope="col" class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Status</th>
+                            <th scope="col" class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Telepon</th>
+                            <th scope="col" class="px-6 py-3 text-xs font-medium tracking-wider text-right text-gray-500 uppercase">Aksi</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200" id="drivers-table-body">
                         @forelse ($drivers as $key => $driver)
                         <tr>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $key + 1 }}</td>
+                            <td class="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">{{ $key + 1 }}</td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="flex items-center">
-                                    <div class="flex-shrink-0 h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
-                                        <span class="text-white font-medium">{{ substr($driver->name, 0, 1) }}</span>
+                                    <div class="flex items-center justify-center flex-shrink-0 w-10 h-10 {{ $driver->type === 'batangan' ? 'bg-blue-300 text-blue-800' : 'bg-purple-300 text-purple-800' }} rounded-full">
+                                        <span class="font-medium ">{{ collect(explode(' ', $driver->name))->map(fn($word) => substr($word, 0, 1))->implode('') }}
+                                        </span>
                                     </div>
                                     <div class="ml-4">
                                         <div class="text-sm font-medium text-gray-900">{{ $driver->name }}</div>
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $driver->type === 'batangan' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800' }}">
+                                            {{ ucfirst($driver->type) }}
+                                        </span>
                                     </div>
                                 </div>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $driver->ktp }}</td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 @if($driver->routes && $driver->routes->count())
                                     <div class="flex flex-wrap gap-1">
                                         @foreach($driver->routes as $route)
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                                                {{ $route->route_number }} - {{ $route->name }}
+                                                {{ $route->route_number }}
                                             </span>
                                         @endforeach
                                     </div>
@@ -246,11 +247,6 @@
                                         @endforeach
                                     </div>
                                 @endif
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $driver->type === 'batangan' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800' }}">
-                                    {{ ucfirst($driver->type) }}
-                                </span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 @php
@@ -269,16 +265,16 @@
                                     {{ $statusLabel[$driver->status] ?? ucfirst($driver->status) }}
                                 </span>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td class="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
                                 @if($driver->phone)
                                     <div>{{ $driver->phone }}</div>
                                 @endif
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <a href="{{ route('drivers.show', $driver) }}" class="text-blue-600 hover:text-blue-900 mr-2">
+                            <td class="px-6 py-4 text-sm font-medium text-right whitespace-nowrap">
+                                <a href="{{ route('drivers.show', $driver) }}" class="mr-2 text-blue-600 hover:text-blue-900">
                                     <i class="fas fa-eye"></i>
                                 </a>
-                                <a href="{{ route('drivers.edit', $driver) }}" class="text-indigo-600 hover:text-indigo-900 mr-2">
+                                <a href="{{ route('drivers.edit', $driver) }}" class="mr-2 text-indigo-600 hover:text-indigo-900">
                                     <i class="fas fa-edit"></i>
                                 </a>
                                 <form class="inline-block delete-driver-form" method="POST" action="{{ route('drivers.destroy', $driver) }}" data-driver-id="{{ $driver->id }}">
@@ -292,7 +288,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="9" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">No drivers found</td>
+                            <td colspan="9" class="px-6 py-4 text-sm text-center text-gray-500 whitespace-nowrap">No drivers found</td>
                         </tr>
                         @endforelse
                     </tbody>
@@ -300,7 +296,7 @@
             </div>
 
             <!-- Pagination Links -->
-            <div class="px-6 py-4">
+            <div class="px-6 py-4 ">
                 {{ $drivers->links() }}
             </div>
         </x-card>

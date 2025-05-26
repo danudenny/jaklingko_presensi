@@ -205,64 +205,7 @@
                             </button>
                         </div>
 
-                        <div class="period-selector">
-                            <h4 class="mb-3 text-sm font-medium text-gray-700">
-                                <i class="mr-1 fas fa-calendar-alt text-emerald-500"></i>
-                                Jadwal per Periode
-                            </h4>
-                            
-                            <div class="flex flex-wrap items-end gap-4">
-                                <div>
-                                    <label for="period-month" class="block mb-1 text-xs font-medium text-gray-500">Pilih Bulan</label>
-                                    <select id="period-month" class="block w-full border-gray-300 rounded-md month-selector focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm">
-                                        @php
-                                            $currentMonth = now()->month;
-                                            $currentYear = now()->year;
-                                        @endphp
-                                        @for ($i = 0; $i < 6; $i++)
-                                            @php
-                                                $date = now()->addMonths($i);
-                                                $monthNum = $date->format('n');
-                                                $monthName = $date->format('F');
-                                                $year = $date->format('Y');
-                                                $value = $date->format('Y-m');
-                                            @endphp
-                                            <option value="{{ $value }}" {{ $i == 0 ? 'selected' : '' }}>{{ $monthName }} {{ $year }}</option>
-                                        @endfor
-                                    </select>
-                                </div>
-                                
-                                <div class="flex gap-2">
-                                    <button type="button" id="first-period-btn" class="period-preset">
-                                        <i class="mr-1 fas fa-calendar-day"></i>
-                                        Periode 1 (1-15)
-                                    </button>
-                                    <button type="button" id="second-period-btn" class="period-preset">
-                                        <i class="mr-1 fas fa-calendar-week"></i>
-                                        Periode 2 (16-akhir bulan)
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div class="flex items-center mt-2 text-xs text-gray-500">
-                                <i class="mr-1 fas fa-info-circle text-emerald-500"></i>
-                                Pilih bulan dan periode untuk membuat jadwal otomatis sesuai periode tersebut
-                            </div>
-                        </div>
-
-                        <div class="period-selector">
-                            <span class="block mb-2 text-sm font-medium text-gray-700">Aturan Periode</span>
-                            <div class="flex flex-wrap gap-2">
-                                <button type="button" data-period="mingguan" class="period-preset">
-                                    <i class="mr-1 fas fa-calendar-week"></i>
-                                    Mingguan
-                                </button>
-                                <button type="button" data-period="bulanan" class="period-preset">
-                                    <i class="mr-1 fas fa-calendar-alt"></i>
-                                    Bulanan
-                                </button>
-                            </div>
-                        </div>
+                        
                         
                         @error('start_date')
                             <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
@@ -273,30 +216,6 @@
                     </div>
                 </div>
 
-                <div class="p-4 mb-6 rounded-md bg-yellow-50">
-                    <div class="flex">
-                        <div class="flex-shrink-0">
-                            <i class="text-yellow-400 fas fa-exclamation-triangle"></i>
-                        </div>
-                        <div class="ml-3">
-                            <h3 class="text-sm font-medium text-yellow-800">
-                                Perhatian
-                            </h3>
-                            <div class="mt-2 text-sm text-yellow-700">
-                                <p>Pembuatan jadwal otomatis akan mengikuti aturan berikut:</p>
-                                <ul class="pl-5 mt-1 list-disc">
-                                    <li>Jadwal akan dibuat berdasarkan prioritas: pengemudi tetap (batangan) untuk unit tertentu, pengemudi tetap untuk rute, lalu pengemudi cadangan.</li>
-                                    <li>Pengemudi tidak akan dijadwalkan untuk kedua shift (pagi dan siang) pada hari yang sama.</li>
-                                    <li>Jadwal akan mempertimbangkan unit yang tidak beroperasi (renops).</li>
-                                    <li>Jadwal akan mempertimbangkan pengemudi yang sedang cuti.</li>
-                                    <li>Jadwal akan mempertimbangkan batas minimum dan maksimum hari kerja per pengemudi.</li>
-                                    <li>Jadwal akan mempertimbangkan kualifikasi pengemudi untuk rute dan unit tertentu.</li>
-                                </ul>
-                                <p class="mt-2">Proses ini mungkin memerlukan waktu beberapa saat tergantung pada jumlah hari yang dipilih.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
                 <div class="flex justify-end">
                     <button type="submit" id="submit-button" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">

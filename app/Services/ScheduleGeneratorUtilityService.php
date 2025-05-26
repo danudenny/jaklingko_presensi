@@ -122,11 +122,12 @@ class ScheduleGeneratorUtilityService
         if (!$batanganSettingsObj) {
             Log::warning("No settings found for driver type 'batangan' in the database. Using default values.");
             $driverScheduleSettings['batangan'] = [
-                'min_schedules' => 12, // Default based on memory
-                'max_schedules' => 13, // Default based on memory
-                'period_days' => 15    // Default based on memory
+                'min_schedules' => 13, // Target for fixed schedule drivers
+                'max_schedules' => 14, // Maximum allowed per period
+                'period_days' => 15,   // 15 day period
+                'weekend_ratio' => 0.8 // 80% weekend coverage
             ];
-            $messages[] = "Using default settings for batangan drivers: min 12, max 13, period 15 days";
+            $messages[] = "Using default settings for batangan drivers: min 13, max 14, period 15 days, weekend coverage 80%";
         } else {
             $driverScheduleSettings['batangan'] = [
                 'min_schedules' => $batanganSettingsObj->min_schedules,
@@ -141,11 +142,12 @@ class ScheduleGeneratorUtilityService
         if (!$cadanganSettingsObj) {
             Log::warning("No settings found for driver type 'cadangan' in the database. Using default values.");
             $driverScheduleSettings['cadangan'] = [
-                'min_schedules' => 11, // Default based on memory
-                'max_schedules' => 12, // Default based on memory
-                'period_days' => 15    // Default based on memory
+                'min_schedules' => 10, // Target for backup drivers (85% of batangan)
+                'max_schedules' => 11, // Maximum allowed per period 
+                'period_days' => 15,   // 15 day period
+                'ratio' => 0.85        // 85% of batangan schedules
             ];
-            $messages[] = "Using default settings for cadangan drivers: min 11, max 12, period 15 days";
+            $messages[] = "Using default settings for cadangan drivers: min 10, max 11, period 15 days, batangan ratio 85%";
         } else {
             $driverScheduleSettings['cadangan'] = [
                 'min_schedules' => $cadanganSettingsObj->min_schedules,

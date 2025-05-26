@@ -8,6 +8,7 @@ use App\Observers\UnitRenopsObserver;
 use App\Services\ScheduleGeneratorService;
 use App\Services\ScheduleGeneratorUtilityService;
 use App\Services\DriverSelectionService;
+use App\Services\SchedulePlannerService;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -19,12 +20,14 @@ class AppServiceProvider extends ServiceProvider
         // Register schedule generator related services
         $this->app->singleton(ScheduleGeneratorUtilityService::class);
         $this->app->singleton(DriverSelectionService::class);
+        $this->app->singleton(SchedulePlannerService::class);
         
         // Register the main service with its dependencies
         $this->app->singleton(ScheduleGeneratorService::class, function ($app) {
             return new ScheduleGeneratorService(
                 $app->make(ScheduleGeneratorUtilityService::class),
-                $app->make(DriverSelectionService::class)
+                $app->make(DriverSelectionService::class),
+                $app->make(SchedulePlannerService::class)
             );
         });
     }

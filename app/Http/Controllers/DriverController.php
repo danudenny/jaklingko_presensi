@@ -56,9 +56,9 @@ class DriverController extends Controller
             });
         }
 
-        $drivers = $query->paginate(10)->withQueryString();
-        $units = \App\Models\Unit::orderBy('unit_number')->get();
-        $routes = \App\Models\Route::orderBy('route_number')->get();
+        $drivers = $query->orderBy('name')->paginate(10)->withQueryString();
+        $units = Unit::orderBy('unit_number')->get();
+        $routes = Route::orderBy('route_number')->get();
 
         if ($request->ajax()) {
             if ($request->header('X-Requested-With') === 'XMLHttpRequest') {
