@@ -179,9 +179,14 @@ class ScheduleGeneratorService
 
                 // Get drivers on leave for this date
                 $driversOnLeaveIds = $driversOnLeaveByDate[$dateStr] ?? [];
+                
+                // Track newly scheduled drivers for this day to ensure one driver can't work both shifts
+                $dayDriversScheduled = []; 
+                
+                $this->messages[] = "Scheduling both shifts for {$dateStr}";
 
                 // Process morning shift with optimized data - batangan first, then cadangan
-                $this->generateShiftSchedules(
+                $morningResults = $this->generateShiftSchedules(
                     $dateStr,
                     'pagi',
                     $resourcePercentage,
@@ -190,11 +195,18 @@ class ScheduleGeneratorService
                     $unavailableUnitIds,
                     $scheduledUnitIdsMorning,
                     $scheduledDriverIds,
-                    $driversOnLeaveIds
+                    $driversOnLeaveIds,
+                    $dayDriversScheduled
                 );
+                
+                // Log morning shift results
+                $this->messages[] = "Morning shift: Scheduled {$morningResults['units_scheduled']} units with {$morningResults['drivers_scheduled']} drivers for {$dateStr}";
+                
+                // Update drivers scheduled for the day before scheduling afternoon shift
+                $scheduledDriverIdsForAfternoon = array_merge($scheduledDriverIds, array_keys($dayDriversScheduled));
 
                 // Process evening shift with optimized data - batangan first, then cadangan
-                $this->generateShiftSchedules(
+                $afternoonResults = $this->generateShiftSchedules(
                     $dateStr,
                     'siang',
                     $resourcePercentage,
@@ -202,9 +214,76 @@ class ScheduleGeneratorService
                     $endDate->format('Y-m-d'),
                     $unavailableUnitIds,
                     $scheduledUnitIdsEvening,
-                    $scheduledDriverIds,
-                    $driversOnLeaveIds
+                    $scheduledDriverIdsForAfternoon,
+                    $driversOnLeaveIds,
+                    $dayDriversScheduled
                 );
+                
+                // Log afternoon shift results
+                $this->messages[] = "Afternoon shift: Scheduled {$afternoonResults['units_scheduled']} units with {$afternoonResults['drivers_scheduled']} drivers for {$dateStr}";
+                
+                // Calculate available units for this day
+                $availableUnitsCount = count($this->units) - count($unavailableUnitIds);
+                
+                // Check if we have scheduled both shifts for all available units
+                $unitsWithMorningShift = $morningResults['scheduled_units'] ?? [];
+                $unitsWithAfternoonShift = $afternoonResults['scheduled_units'] ?? [];
+                
+                // Units missing morning shifts
+                $unitsMissingMorning = array_diff(
+                    array_column($this->units->whereNotIn('id', $unavailableUnitIds)->all(), 'id'), 
+                    $unitsWithMorningShift
+                );
+                
+                // Units missing afternoon shifts
+                $unitsMissingAfternoon = array_diff(
+                    array_column($this->units->whereNotIn('id', $unavailableUnitIds)->all(), 'id'), 
+                    $unitsWithAfternoonShift
+                );
+                
+                // Report on units missing shifts
+                if (count($unitsMissingMorning) > 0) {
+                    $this->messages[] = "Warning: {$dateStr} has " . count($unitsMissingMorning) . " units missing morning shifts";
+                }
+                
+                if (count($unitsMissingAfternoon) > 0) {
+                    $this->messages[] = "Warning: {$dateStr} has " . count($unitsMissingAfternoon) . " units missing afternoon shifts";
+                }
+                
+                // If we have units missing shifts, try to assign drivers to those units
+                if (count($unitsMissingMorning) > 0 || count($unitsMissingAfternoon) > 0) {
+                    // Update the list of scheduled driver IDs including both shifts
+                    $updatedScheduledDriverIds = array_merge($scheduledDriverIds, array_keys($dayDriversScheduled));
+                    
+                    // Initialize reschedule results
+                    $rescheduleResults = [
+                        'morning_added' => 0,
+                        'afternoon_added' => 0
+                    ];
+                    
+                    // Attempt to find drivers for units missing shifts
+                    $rescheduleResults = $this->attemptRescheduleForMissingShifts(
+                        $dateStr,
+                        $unitsMissingMorning,
+                        $unitsMissingAfternoon,
+                        $updatedScheduledDriverIds,
+                        $driversOnLeaveIds,
+                        $dayDriversScheduled
+                    );
+                    
+                    // Log results of the rescheduling attempt
+                    if ($rescheduleResults['morning_added'] > 0 || $rescheduleResults['afternoon_added'] > 0) {
+                        $this->messages[] = "Successfully added {$rescheduleResults['morning_added']} morning shifts and {$rescheduleResults['afternoon_added']} afternoon shifts for {$dateStr}";
+                    } else {
+                        $this->messages[] = "Could not find drivers for the missing shifts on {$dateStr}";
+                    }
+                }
+                
+                // If we still have some units with uneven shift coverage after the rescheduling attempt, log this
+                if ((count($unitsMissingMorning) - ($rescheduleResults['morning_added'] ?? 0) > 0) || 
+                    (count($unitsMissingAfternoon) - ($rescheduleResults['afternoon_added'] ?? 0) > 0)) {
+                    $this->messages[] = "Note: Some units still have uneven shift coverage for {$dateStr} after rescheduling attempt.";
+                }
 
                 // Log progress periodically
                 if ($daysProcessed % 3 == 0 || $currentDate->equalTo($endDate)) {
@@ -343,9 +422,16 @@ class ScheduleGeneratorService
         array $unavailableUnitIds,
         array $scheduledUnitIds,
         array $scheduledDriverIds,
-        array $driversOnLeaveIds
-    ): void {
+        array $driversOnLeaveIds,
+        array &$dayDriversScheduled = []
+    ): array {
         $this->messages[] = "Generating {$shift} shift schedules for {$dateStr}";
+        
+        $result = [
+            'units_scheduled' => 0,
+            'drivers_scheduled' => 0,
+            'scheduled_units' => []  // Track unit IDs that were scheduled
+        ];
 
         // Create sets for faster lookups
         $scheduledDriverIdsSet = array_flip($scheduledDriverIds);
@@ -424,16 +510,24 @@ class ScheduleGeneratorService
 
             // If a suitable batangan driver was found, create the schedule
             if ($driver) {
+                // Check if driver is already scheduled on this day for a different shift
+                if (isset($dayDriversScheduled[$driver->id])) {
+                    $this->messages[] = "Driver {$driver->name} already scheduled for {$dateStr} ({$dayDriversScheduled[$driver->id]} shift). Skipping assignment to {$shift} shift.";
+                    continue;
+                }
+                
                 // Only assign if this day/shift is in the pre-generated plan
                 $plan = $this->batanganSchedulePlan[$unit->id][$driver->id] ?? [];
                 if (!isset($plan[$dateStr]) || $plan[$dateStr] !== $shift) {
                     continue;
                 }
+                
                 $routeId = $unit->routes->isNotEmpty() ? $unit->routes->first()->id : null;
                 if (!$routeId) {
                     $this->messages[] = "Warning: Unit {$unit->unit_number} has no routes. Schedule cannot be created.";
                     continue;
                 }
+                
                 $schedule = [
                     'unit_id' => $unit->id,
                     'driver_id' => $driver->id,
@@ -443,10 +537,13 @@ class ScheduleGeneratorService
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];
+                
                 $schedulesToCreate[] = $schedule;
                 $scheduledDriverIdsSet[$driver->id] = true;
                 $scheduledUnitIdsSet[$unit->id] = true;
                 $scheduledDriverShiftsSet[$dateStr][$driver->id] = $shift; // Mark driver as scheduled for this shift on this day
+                $dayDriversScheduled[$driver->id] = $shift; // Also mark in the daily tracking array
+                
                 if (!isset($driverScheduleCounts[$driver->id])) {
                     $driverScheduleCounts[$driver->id] = 0;
                 }
@@ -517,7 +614,21 @@ class ScheduleGeneratorService
             list($success, $failed) = $this->utilityService->createSchedules($schedulesToCreate, $this->messages);
             $this->success += $success;
             $this->failed += $failed;
+            
+            // Track scheduled units and drivers for this shift
+            $scheduledUnitIds = array_unique(array_column($schedulesToCreate, 'unit_id'));
+            $result['units_scheduled'] = count($scheduledUnitIds);
+            $result['scheduled_units'] = $scheduledUnitIds;
+            $result['drivers_scheduled'] = count(array_unique(array_column($schedulesToCreate, 'driver_id')));
+            
+            // Add scheduled drivers to day tracking
+            foreach ($schedulesToCreate as $schedule) {
+                // Track which driver was scheduled for this day to prevent assignment to multiple shifts
+                $dayDriversScheduled[$schedule['driver_id']] = $schedule['shift'];
+            }
         }
+        
+        return $result;
     }
     
     /**
@@ -621,5 +732,184 @@ class ScheduleGeneratorService
             Log::error("Error creating schedule history records: " . $e->getMessage());
             Log::error($e->getTraceAsString());
         }
+    }
+    
+    /**
+     * Attempt to find additional drivers for units missing either morning or afternoon shifts
+     *
+     * @param string $dateStr The date to schedule for
+     * @param array $unitsMissingMorning Unit IDs missing morning shifts
+     * @param array $unitsMissingAfternoon Unit IDs missing afternoon shifts
+     * @param array $scheduledDriverIds Currently scheduled drivers
+     * @param array $driversOnLeaveIds Drivers on leave
+     * @param array $dayDriversScheduled Tracking of drivers scheduled for this day
+     * @return array Result with counts of additional schedules created
+     */
+    protected function attemptRescheduleForMissingShifts(
+        string $dateStr,
+        array $unitsMissingMorning,
+        array $unitsMissingAfternoon,
+        array $scheduledDriverIds,
+        array $driversOnLeaveIds,
+        array &$dayDriversScheduled
+    ): array {
+        $result = [
+            'morning_added' => 0,
+            'afternoon_added' => 0
+        ];
+        
+        $this->messages[] = "Attempting to find drivers for units with missing shifts on {$dateStr}";
+        
+        // Combine all scheduled drivers to ensure we don't double-assign
+        $allScheduledDriverIdsSet = array_flip($scheduledDriverIds);
+        foreach ($dayDriversScheduled as $driverId => $shift) {
+            $allScheduledDriverIdsSet[$driverId] = true;
+        }
+        
+        $driversOnLeaveIdsSet = array_flip($driversOnLeaveIds);
+        
+        // Try to find available drivers for morning shifts
+        if (!empty($unitsMissingMorning)) {
+            $morningSchedulesToCreate = [];
+            
+            foreach ($unitsMissingMorning as $unitId) {
+                $unit = $this->units->firstWhere('id', $unitId);
+                if (!$unit) {
+                    continue;
+                }
+                
+                // First try cadangan drivers who are not yet scheduled for this day
+                $availableDrivers = $this->cadanganDrivers->filter(function($driver) use ($allScheduledDriverIdsSet, $driversOnLeaveIdsSet) {
+                    return !isset($allScheduledDriverIdsSet[$driver->id]) && !isset($driversOnLeaveIdsSet[$driver->id]);
+                });
+                
+                // Filter drivers to only those assigned to this specific unit
+                $availableDrivers = $availableDrivers->filter(function($driver) use ($unitId) {
+                    return $driver->units->contains('id', $unitId);
+                });
+                
+                if ($availableDrivers->isEmpty()) {
+                    // If no cadangan drivers available for this unit, try batangan drivers who are not yet scheduled
+                    $availableDrivers = $this->batanganDrivers->filter(function($driver) use ($allScheduledDriverIdsSet, $driversOnLeaveIdsSet) {
+                        return !isset($allScheduledDriverIdsSet[$driver->id]) && !isset($driversOnLeaveIdsSet[$driver->id]);
+                    });
+                    
+                    // Filter batangan drivers to only those assigned to this specific unit
+                    $availableDrivers = $availableDrivers->filter(function($driver) use ($unitId) {
+                        return $driver->units->contains('id', $unitId);
+                    });
+                }
+                
+                if (!$availableDrivers->isEmpty()) {
+                    // Find first available driver that can be assigned to this unit
+                    // Driver MUST be assigned to this specific unit in the driver_units table
+                    $driver = $availableDrivers->first(function($driver) use ($unit, $unitId) {
+                        // Only check direct unit assignments through driver_units table
+                        return $driver->units->contains('id', $unitId);
+                    });
+                    
+                    if ($driver) {
+                        $routeId = $unit->routes->isNotEmpty() ? $unit->routes->first()->id : null;
+                        if ($routeId) {
+                            $schedule = [
+                                'unit_id' => $unit->id,
+                                'driver_id' => $driver->id,
+                                'route_id' => $routeId,
+                                'schedule_date' => $dateStr,
+                                'shift' => 'pagi',
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ];
+                            
+                            $morningSchedulesToCreate[] = $schedule;
+                            $allScheduledDriverIdsSet[$driver->id] = true;
+                            $dayDriversScheduled[$driver->id] = 'pagi';
+                            $this->messages[] = "Extra assignment: Driver {$driver->name} assigned to unit {$unit->unit_number} for morning shift on {$dateStr}";
+                        }
+                    }
+                }
+            }
+            
+            // Create the additional morning schedules if any were found
+            if (!empty($morningSchedulesToCreate)) {
+                list($success, $failed) = $this->utilityService->createSchedules($morningSchedulesToCreate, $this->messages);
+                $this->success += $success;
+                $this->failed += $failed;
+                $result['morning_added'] = $success;
+            }
+        }
+        
+        // Try to find available drivers for afternoon shifts
+        if (!empty($unitsMissingAfternoon)) {
+            $afternoonSchedulesToCreate = [];
+            
+            foreach ($unitsMissingAfternoon as $unitId) {
+                $unit = $this->units->firstWhere('id', $unitId);
+                if (!$unit) {
+                    continue;
+                }
+                
+                // First try cadangan drivers who are not yet scheduled for this day
+                $availableDrivers = $this->cadanganDrivers->filter(function($driver) use ($allScheduledDriverIdsSet, $driversOnLeaveIdsSet) {
+                    return !isset($allScheduledDriverIdsSet[$driver->id]) && !isset($driversOnLeaveIdsSet[$driver->id]);
+                });
+                
+                // Filter drivers to only those assigned to this specific unit
+                $availableDrivers = $availableDrivers->filter(function($driver) use ($unitId) {
+                    return $driver->units->contains('id', $unitId);
+                });
+                
+                if ($availableDrivers->isEmpty()) {
+                    // If no cadangan drivers available, try batangan drivers who are not yet scheduled
+                    $availableDrivers = $this->batanganDrivers->filter(function($driver) use ($allScheduledDriverIdsSet, $driversOnLeaveIdsSet) {
+                        return !isset($allScheduledDriverIdsSet[$driver->id]) && !isset($driversOnLeaveIdsSet[$driver->id]);
+                    });
+                    
+                    // Filter batangan drivers to only those assigned to this specific unit
+                    $availableDrivers = $availableDrivers->filter(function($driver) use ($unitId) {
+                        return $driver->units->contains('id', $unitId);
+                    });
+                }
+                
+                if (!$availableDrivers->isEmpty()) {
+                    // Find first available driver that can be assigned to this unit
+                    // Driver MUST be assigned to this specific unit in the driver_units table
+                    $driver = $availableDrivers->first(function($driver) use ($unit, $unitId) {
+                        // Only check direct unit assignments through driver_units table
+                        return $driver->units->contains('id', $unitId);
+                    });
+                    
+                    if ($driver) {
+                        $routeId = $unit->routes->isNotEmpty() ? $unit->routes->first()->id : null;
+                        if ($routeId) {
+                            $schedule = [
+                                'unit_id' => $unit->id,
+                                'driver_id' => $driver->id,
+                                'route_id' => $routeId,
+                                'schedule_date' => $dateStr,
+                                'shift' => 'siang',
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ];
+                            
+                            $afternoonSchedulesToCreate[] = $schedule;
+                            $allScheduledDriverIdsSet[$driver->id] = true;
+                            $dayDriversScheduled[$driver->id] = 'siang';
+                            $this->messages[] = "Extra assignment: Driver {$driver->name} assigned to unit {$unit->unit_number} for afternoon shift on {$dateStr}";
+                        }
+                    }
+                }
+            }
+            
+            // Create the additional afternoon schedules if any were found
+            if (!empty($afternoonSchedulesToCreate)) {
+                list($success, $failed) = $this->utilityService->createSchedules($afternoonSchedulesToCreate, $this->messages);
+                $this->success += $success;
+                $this->failed += $failed;
+                $result['afternoon_added'] = $success;
+            }
+        }
+        
+        return $result;
     }
 }
