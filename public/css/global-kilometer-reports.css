@@ -1,0 +1,108 @@
+/* Highlighted days */
+.highlight-saturday,
+.highlight-sunday {
+    background-color: #fefce8 !important; /* yellow-50 - lighter yellow */
+}
+
+.highlight-holiday {
+    background-color: #fef2f2 !important; /* red-50 - lighter red */
+}
+
+/* Low kilometers indicator */
+.low-kilometers {
+    background-color: #fee2e2 !important; /* red-100 */
+}
+
+/* Sticky columns for better navigation */
+.sticky {
+    position: sticky !important;
+    left: 0;
+    z-index: 10;
+    background-color: white;
+}
+
+/* Route header styling */
+.route-header {
+    background: linear-gradient(to right, #f3f4f6, #e5e7eb) !important;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+/* Table container */
+#global-km-report-table {
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    position: relative;
+    border-radius: 0.375rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* Date column styling to ensure all dates have equal width */
+.date-column {
+    min-width: 1.2rem !important;
+    max-width: 1.6rem !important;
+    width: 1.2rem !important;
+    text-align: center;
+    padding: 0 !important;
+}
+
+/* Table scroll controls */
+.table-scroll-controls {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Sticky scroll controls */
+.scroll-controls-sticky {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 50;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    pointer-events: none; /* Allow clicking through the container */
+}
+
+.scroll-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 9999px;
+    background-color: #4f46e5;
+    color: white;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    pointer-events: auto; /* Re-enable pointer events for buttons */
+    opacity: 0.9;
+}
+
+.scroll-button:hover {
+    background-color: #4338ca;
+    transform: scale(1.05);
+    opacity: 1;
+}
+
+.scroll-button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.5);
+}
+
+.scroll-button:active {
+    transform: scale(0.95);
+}
+
+/* Make sticky header work better */
+.table-header th {
+    position: sticky;
+    top: 0;
+    background-color: #f9fafb;
+    z-index: 20;
+}

@@ -184,22 +184,28 @@
             @if($leaveRequest->status == 'requested' && !$hasAllBackups)
                 <div class="bg-yellow-50 p-4 border-b border-yellow-100">
                     <div class="flex">
-                        <div class="flex-shrink-0">`
+                        <div class="flex-shrink-0">
                             <i class="fas fa-exclamation-triangle text-yellow-400"></i>
                         </div>
                         <div class="ml-3">
-                            <h3 class="text-sm font-medium text-yellow-800">Perhatian</h3>
-                            <div class="mt-2 text-sm text-yellow-700">
-                                <p>
-                                    Tidak semua jadwal memiliki pengemudi cadangan yang tersedia. Anda perlu memilih pengemudi pengganti secara manual untuk jadwal yang tidak memiliki cadangan sebelum menyetujui pengajuan cuti ini.
+                            <p class="text-sm text-yellow-700">
+                                <strong>Perhatian:</strong> Tidak ada pengemudi pengganti yang tersedia untuk jadwal berikut:
+                            </p>
+                            @if(isset($schedulesWithoutBackup) && count($schedulesWithoutBackup) > 0)
+                                <ul class="mt-2 list-disc pl-5 text-sm text-yellow-700">
+                                    @foreach($schedulesWithoutBackup as $schedule)
+                                        <li>
+                                            <strong>{{ $schedule['date'] }}</strong> - 
+                                            Unit: {{ $schedule['unit'] }}, 
+                                            Shift: {{ $schedule['shift'] }}, 
+                                            Rute: {{ $schedule['route'] ?? 'N/A' }}
+                                        </li>
+                                    @endforeach
+                                </ul>
+                                <p class="mt-2 text-sm text-yellow-700">
+                                    Permohonan cuti tidak dapat disetujui sampai semua jadwal memiliki pengemudi pengganti yang tersedia. Sistem sudah mencoba mencari pengemudi batangan terlebih dahulu, lalu pengemudi cadangan.
                                 </p>
-                                <p class="mt-2">
-                                    <a href="#manual-assignment" class="font-medium text-yellow-800 hover:text-yellow-900">
-                                        <i class="fas fa-arrow-down mr-1"></i>
-                                        Pilih Pengganti
-                                    </a>
-                                </p>
-                            </div>
+                            @endif
                         </div>
                     </div>
                 </div>

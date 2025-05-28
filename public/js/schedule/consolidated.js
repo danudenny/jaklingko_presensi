@@ -49,6 +49,54 @@ document.addEventListener("DOMContentLoaded", function () {
             menu.classList.toggle("hidden");
         });
     });
+    
+    // Legends Drawer Functionality
+    const showLegendsBtn = document.getElementById('show-legends-btn');
+    const closeLegendsBtn = document.getElementById('close-legends-btn');
+    const legendsDrawer = document.getElementById('legends-drawer');
+    const legendsOverlay = document.getElementById('legends-overlay');
+    
+    // Function to open the legends drawer
+    function openLegendsDrawer() {
+        legendsDrawer.classList.remove('translate-x-full');
+        legendsOverlay.classList.remove('hidden');
+        setTimeout(() => {
+            legendsOverlay.classList.add('opacity-100');
+            legendsOverlay.classList.remove('opacity-0');
+        }, 50);
+        document.body.classList.add('overflow-hidden');
+    }
+    
+    // Function to close the legends drawer
+    function closeLegendsDrawer() {
+        legendsDrawer.classList.add('translate-x-full');
+        legendsOverlay.classList.add('opacity-0');
+        legendsOverlay.classList.remove('opacity-100');
+        setTimeout(() => {
+            legendsOverlay.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        }, 300);
+    }
+    
+    // Event listeners for opening and closing the drawer
+    if (showLegendsBtn) {
+        showLegendsBtn.addEventListener('click', openLegendsDrawer);
+    }
+    
+    if (closeLegendsBtn) {
+        closeLegendsBtn.addEventListener('click', closeLegendsDrawer);
+    }
+    
+    if (legendsOverlay) {
+        legendsOverlay.addEventListener('click', closeLegendsDrawer);
+    }
+    
+    // Close drawer with Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && !legendsDrawer.classList.contains('translate-x-full')) {
+            closeLegendsDrawer();
+        }
+    });
 
     document.addEventListener("click", function (event) {
         dropdownToggles.forEach((toggle) => {

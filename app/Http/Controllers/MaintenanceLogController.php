@@ -188,15 +188,22 @@ class MaintenanceLogController extends Controller
             $unit->status = 'maintenance';
             $unit->save();
 
-            // Update any active schedules for this unit to absent
+            // Update any active schedules for this unit to maintenance status
+            // We don't remove the schedules, just mark them as unavailable due to maintenance
             $schedules = Schedule::where('unit_id', $request->unit_id)
                 ->where('schedule_date', '>=', $request->date_reported)
-                ->where('status', 'scheduled')
+                ->whereIn('status', ['active', 'scheduled', 'confirmed'])
                 ->get();
 
             foreach ($schedules as $schedule) {
-                $schedule->status = 'absent';
-                $schedule->notes = 'Unit in maintenance: ' . $request->description;
+                // Store the original status in notes field to restore it later
+                $originalStatus = $schedule->status;
+                $schedule->status = 'maintenance';
+                $schedule->notes = json_encode([
+                    'maintenance_log_id' => $maintenanceLog->id,
+                    'maintenance_reason' => $request->description,
+                    'original_status' => $originalStatus
+                ]);
                 $schedule->save();
             }
 
@@ -295,10 +302,30 @@ class MaintenanceLogController extends Controller
             }
 
             // If status is completed, update the unit status back to active
+            // and restore affected schedules
             if ($request->status === 'completed') {
                 $unit = Unit::find($maintenanceLog->unit_id);
                 $unit->status = 'aktif';
                 $unit->save();
+                
+                // Find all schedules affected by this maintenance log
+                $affectedSchedules = Schedule::where('unit_id', $maintenanceLog->unit_id)
+                    ->where('status', 'maintenance')
+                    ->where('schedule_date', '>=', now()->format('Y-m-d'))
+                    ->get();
+                
+                foreach ($affectedSchedules as $schedule) {
+                    // Check if this schedule was affected by this specific maintenance log
+                    $notes = json_decode($schedule->notes, true);
+                    
+                    if (is_array($notes) && isset($notes['maintenance_log_id']) && $notes['maintenance_log_id'] == $maintenanceLog->id) {
+                        // Restore the original status
+                        $originalStatus = $notes['original_status'] ?? 'active';
+                        $schedule->status = $originalStatus;
+                        $schedule->notes = 'Maintenance completed on ' . now()->format('Y-m-d H:i') . '. Schedule restored.';
+                        $schedule->save();
+                    }
+                }
             }
 
             DB::commit();
@@ -382,11 +409,31 @@ class MaintenanceLogController extends Controller
             $maintenanceLog->save();
 
             // If status is completed, update the unit status back to active
+            // and restore affected schedules
             if ($request->status === 'completed') {
                 $unit = Unit::find($maintenanceLog->unit_id);
                 if ($unit) {
                     $unit->status = 'aktif';
                     $unit->save();
+                    
+                    // Find all schedules affected by this maintenance log
+                    $affectedSchedules = Schedule::where('unit_id', $maintenanceLog->unit_id)
+                        ->where('status', 'maintenance')
+                        ->where('schedule_date', '>=', now()->format('Y-m-d'))
+                        ->get();
+                    
+                    foreach ($affectedSchedules as $schedule) {
+                        // Check if this schedule was affected by this specific maintenance log
+                        $notes = json_decode($schedule->notes, true);
+                        
+                        if (is_array($notes) && isset($notes['maintenance_log_id']) && $notes['maintenance_log_id'] == $maintenanceLog->id) {
+                            // Restore the original status
+                            $originalStatus = $notes['original_status'] ?? 'active';
+                            $schedule->status = $originalStatus;
+                            $schedule->notes = 'Maintenance completed on ' . now()->format('Y-m-d H:i') . '. Schedule restored.';
+                            $schedule->save();
+                        }
+                    }
                 }
             }
 

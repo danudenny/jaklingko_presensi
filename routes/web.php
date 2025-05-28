@@ -82,7 +82,7 @@ Route::middleware('auth')->group(function () {
     Route::get('unit-problems/drivers-for-unit/{unitId}', [UnitProblemController::class, 'getDriversForUnit'])->name('unit-problems.drivers-for-unit');
     Route::post('unit-problems/driver-from-schedule', [UnitProblemController::class, 'getDriverFromSchedule'])->name('unit-problems.get-driver-from-schedule');
     Route::delete('unit-problems/photos/{id}', [UnitProblemController::class, 'deletePhoto'])->name('unit-problems.delete-photo');
-    Route::get('unit-problems/{unitProblem}/convert-to-maintenance', [UnitProblemController::class, 'convertToMaintenance'])
+    Route::get('unit-problems/{unit_problem}/convert-to-maintenance', [UnitProblemController::class, 'convertToMaintenance'])
         ->name('unit-problems.convert-to-maintenance');
 
     // Maintenance Log Routes
@@ -107,8 +107,8 @@ Route::middleware('auth')->group(function () {
     Route::get('global-kilometer-reports', [GlobalKilometerReportController::class, 'index'])->name('global-kilometer-reports.index');
     Route::get('global-kilometer-reports/export/excel', [GlobalKilometerReportController::class, 'exportExcel'])->name('global-kilometer-reports.export.excel');
     Route::get('global-kilometer-reports/export/pdf', [GlobalKilometerReportController::class, 'exportPdf'])->name('global-kilometer-reports.export.pdf');
-    Route::get('global-kilometer-reports/generate', [GlobalKilometerReportGeneratorController::class, 'showGenerateForm'])->name('global-kilometer-reports.generate.form');
     Route::post('global-kilometer-reports/generate', [GlobalKilometerReportGeneratorController::class, 'generate'])->name('global-kilometer-reports.generate');
+    Route::post('global-kilometer-reports/reset', [GlobalKilometerReportController::class, 'reset'])->name('global-kilometer-reports.reset');
 
     // Holiday Routes
     Route::resource('holidays', HolidayController::class);

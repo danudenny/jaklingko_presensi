@@ -14,7 +14,9 @@ class DriverScheduleHistory extends Model
         'driver_id',
         'period_start_date',
         'period_end_date',
-        'schedule_count',
+        'total_schedules',
+        'morning_shifts',
+        'afternoon_shifts',
         'target_count',
         'target_met',
     ];
@@ -22,7 +24,9 @@ class DriverScheduleHistory extends Model
     protected $casts = [
         'period_start_date' => 'date',
         'period_end_date' => 'date',
-        'schedule_count' => 'integer',
+        'total_schedules' => 'integer',
+        'morning_shifts' => 'integer',
+        'afternoon_shifts' => 'integer',
         'target_count' => 'integer',
         'target_met' => 'boolean',
     ];
@@ -52,14 +56,16 @@ class DriverScheduleHistory extends Model
                 'period_end_date' => $periodEndDate,
             ],
             [
-                'schedule_count' => 0,
+                'total_schedules' => 0,
+                'morning_shifts' => 0,
+                'afternoon_shifts' => 0,
                 'target_count' => 14,
                 'target_met' => false,
             ]
         );
         
-        $history->schedule_count += 1;
-        $history->target_met = $history->schedule_count >= $history->target_count;
+        $history->total_schedules += 1;
+        $history->target_met = $history->total_schedules >= $history->target_count;
         $history->save();
         
         return $history;
@@ -77,7 +83,7 @@ class DriverScheduleHistory extends Model
     {
         return self::where('period_start_date', $periodStartDate)
             ->where('period_end_date', $periodEndDate)
-            ->where('schedule_count', '<', $targetCount)
+            ->where('total_schedules', '<', $targetCount)
             ->where('target_met', false)
             ->with('driver')
             ->get();

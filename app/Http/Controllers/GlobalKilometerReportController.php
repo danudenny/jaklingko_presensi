@@ -17,35 +17,27 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class GlobalKilometerReportController extends Controller
 {
-    /**
-     * Display a listing of the global kilometer reports.
-     */
     public function index(Request $request)
     {
         $period = (int)$request->input('period', 1); // Default to period 1
         $month = (int)$request->input('month', Carbon::now()->month);
         $year = (int)$request->input('year', Carbon::now()->year);
         
-        // Determine date ranges based on period
         $currentMonth = Carbon::createFromDate($year, $month, 1);
         
         if ($period == 1) {
-            // Period 1: 1st to 15th of the month
             $startDate = $currentMonth->copy()->format('Y-m-d');
             $endDate = $currentMonth->copy()->addDays(14)->format('Y-m-d');
         } else {
-            // Period 2: 16th to end of month
             $startDate = $currentMonth->copy()->addDays(15)->format('Y-m-d');
             $endDate = $currentMonth->copy()->endOfMonth()->format('Y-m-d');
         }
         
-        // Check if we have any global kilometer reports for this period
         $hasReports = GlobalKilometerReport::where('period', $period)
             ->where('month', $month)
             ->where('year', $year)
             ->exists();
         
-        // Get all route groups for the tabs
         $routeGroups = Route::select('route_number')
             ->distinct()
             ->whereNotNull('route_number')
@@ -54,14 +46,11 @@ class GlobalKilometerReportController extends Controller
             ->pluck('route_number')
             ->toArray();
             
-        // Default to first route group if available, otherwise use 'all'
         $defaultGroup = !empty($routeGroups) ? $routeGroups[0] : 'all';
         $activeRouteGroup = $request->input('group', $defaultGroup);
         
-        // Add 'all' to the end of route groups
         $routeGroups[] = 'all';
         
-        // Get all routes
         if ($activeRouteGroup !== 'all') {
             $routes = Route::where('route_number', $activeRouteGroup)
                 ->with('units')
@@ -73,7 +62,6 @@ class GlobalKilometerReportController extends Controller
                 ->get();
         }
         
-        // Get all dates in the range
         $dates = [];
         $currentDate = Carbon::parse($startDate);
         $lastDate = Carbon::parse($endDate);
@@ -83,7 +71,6 @@ class GlobalKilometerReportController extends Controller
             $currentDate->addDay();
         }
         
-        // Get all dates in the range
         $dates = [];
         $currentDate = Carbon::parse($startDate);
         $lastDate = Carbon::parse($endDate);
@@ -93,13 +80,9 @@ class GlobalKilometerReportController extends Controller
             $currentDate->addDay();
         }
         
-        // Get all drivers
         $drivers = Driver::active()->get()->keyBy('id');
-        
-        // Get all units with their drivers
         $units = Unit::with('drivers')->get()->keyBy('id');
         
-        // Organize reports by route, unit, driver, and date
         $routeTotals = [];
         $unitTotals = [];
         $driverTotals = [];
@@ -107,21 +90,17 @@ class GlobalKilometerReportController extends Controller
         $routeUnitTotals = [];
         $routeDriverTotals = [];
         
-        // Initialize empty arrays for the view if there are no reports
         $reportsByRouteUnitDriverDate = [];
         $driverCountByRouteUnitDate = [];
         $maintenanceUnitsByDate = [];
         $grandTotal = 0;
         
-        // If we have global kilometer reports, use them
         if ($hasReports) {
-            // Get all global kilometer reports for this period
             $globalReports = GlobalKilometerReport::with(['driver', 'unit', 'route'])
                 ->where('period', $period)
                 ->where('month', $month)
                 ->where('year', $year);
                 
-            // If filtering by route group
             if ($activeRouteGroup !== 'all') {
                 $globalReports->whereHas('route', function ($query) use ($activeRouteGroup) {
                     $query->where('route_number', $activeRouteGroup);
@@ -130,7 +109,6 @@ class GlobalKilometerReportController extends Controller
             
             $globalReports = $globalReports->get();
             
-            // Process global kilometer reports
             foreach ($globalReports as $report) {
                 $unitId = $report->unit_id;
                 $routeId = $report->route_id;
@@ -252,7 +230,7 @@ class GlobalKilometerReportController extends Controller
                 }
             }
         }
-            
+        
         // Add a flash message if no reports exist
         if (!$hasReports) {
             session()->flash('info', 'Tidak ada laporan kilometer global untuk periode ini. Silakan generate laporan terlebih dahulu.');
@@ -320,5 +298,26 @@ class GlobalKilometerReportController extends Controller
         // TODO: Implement PDF export for global kilometer reports
         
         return redirect()->back()->with('info', 'Export PDF functionality will be implemented soon.');
+    }
+    
+    /**
+     * Reset all global kilometer reports data by truncating the table.
+     * 
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function reset()
+    {
+        try {
+            // Truncate the global_kilometer_reports table
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            GlobalKilometerReport::truncate();
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+            
+            return redirect()->route('global-kilometer-reports.index')
+                ->with('success', 'Data laporan kilometer global berhasil direset.');
+        } catch (\Exception $e) {
+            return redirect()->route('global-kilometer-reports.index')
+                ->with('error', 'Gagal mereset data: ' . $e->getMessage());
+        }
     }
 }

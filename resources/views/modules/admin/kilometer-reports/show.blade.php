@@ -8,7 +8,7 @@
         <x-slot name="title">Detail Laporan Kilometer: {{ $unit->unit_number }} - {{ $unit->plate_number }}</x-slot>
         <x-slot name="actions">
             <div class="flex space-x-2">
-                <a href="{{ route('kilometer-reports.index', ['period' => $period]) }}" class="inline-flex items-center px-4 py-2 bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-500 active:bg-gray-700 focus:outline-none focus:border-gray-700 focus:ring ring-gray-300 disabled:opacity-25 transition ease-in-out duration-150">
+                <a href="{{ route('kilometer-reports.index', ['period' => $period, 'month' => $month, 'year' => $year]) }}" class="inline-flex items-center px-4 py-2 bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-500 active:bg-gray-700 focus:outline-none focus:border-gray-700 focus:ring ring-gray-300 disabled:opacity-25 transition ease-in-out duration-150">
                     <i class="fas fa-arrow-left mr-2"></i>
                     Kembali
                 </a>
@@ -23,13 +23,13 @@
     <div class="mb-6">
         <div class="border-b border-gray-200">
             <nav class="-mb-px flex" aria-label="Tabs">
-                <a href="{{ route('kilometer-reports.show', ['unit' => $unit->id, 'period' => 1]) }}" 
+                <a href="{{ route('kilometer-reports.show', ['unit' => $unit->id, 'period' => 1, 'month' => $month, 'year' => $year]) }}" 
                    class="py-4 px-6 text-center border-b-2 font-medium text-sm {{ $period == 1 ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
                     Periode 1 (1-15)
                 </a>
-                <a href="{{ route('kilometer-reports.show', ['unit' => $unit->id, 'period' => 2]) }}" 
+                <a href="{{ route('kilometer-reports.show', ['unit' => $unit->id, 'period' => 2, 'month' => $month, 'year' => $year]) }}" 
                    class="py-4 px-6 text-center border-b-2 font-medium text-sm {{ $period == 2 ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
-                    Periode 2 (16-{{ Carbon\Carbon::now()->endOfMonth()->format('d') }})
+                    Periode 2 (16-{{ Carbon\Carbon::createFromDate($year, $month, 1)->endOfMonth()->format('d') }})
                 </a>
             </nav>
         </div>
@@ -41,7 +41,7 @@
             <x-card>
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-medium text-gray-900">
-                        Laporan Kilometer per Rute - Periode: {{ $period == 1 ? '1-15' : '16-' . Carbon\Carbon::now()->endOfMonth()->format('d') }} {{ Carbon\Carbon::now()->format('F Y') }}
+                        Laporan Kilometer per Rute - Periode: {{ $period == 1 ? '1-15' : '16-' . Carbon\Carbon::createFromDate($year, $month, 1)->endOfMonth()->format('d') }} {{ Carbon\Carbon::createFromDate($year, $month, 1)->translatedFormat('F Y') }}
                     </h3>
                     <div>
                         <button type="button" @click="toggleEditMode" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-500 active:bg-indigo-700 focus:outline-none focus:border-indigo-700 focus:ring ring-indigo-300 disabled:opacity-25 transition ease-in-out duration-150">
@@ -254,8 +254,16 @@
                     }
                 }));
                 
-                // Reload the table content via AJAX
-                fetch(window.location.href)
+                // Reload the table content via AJAX with current month and year parameters
+                const currentUrl = new URL(window.location.href);
+                // Ensure month and year parameters are preserved
+                if (!currentUrl.searchParams.has('month')) {
+                    currentUrl.searchParams.set('month', '{{ $month }}');
+                }
+                if (!currentUrl.searchParams.has('year')) {
+                    currentUrl.searchParams.set('year', '{{ $year }}');
+                }
+                fetch(currentUrl.toString())
                     .then(response => response.text())
                     .then(html => {
                         const parser = new DOMParser();
@@ -319,7 +327,9 @@
                         unit_id: unitId,
                         route_id: routeId,
                         date: date,
-                        kilometers: kilometers
+                        kilometers: kilometers,
+                        month: {{ $month }},
+                        year: {{ $year }}
                     })
                 })
                 .then(response => {

@@ -106,6 +106,7 @@ class LeaveRequestController extends Controller
         // Check if there are available backup drivers for each schedule
         $availableBackupDrivers = [];
         $hasAllBackups = true;
+        $schedulesWithoutBackup = [];
 
         foreach ($affectedSchedules as $schedule) {
             $backups = $schedule->findAvailableBackupDrivers();
@@ -113,6 +114,12 @@ class LeaveRequestController extends Controller
 
             if ($backups->isEmpty()) {
                 $hasAllBackups = false;
+                $schedulesWithoutBackup[] = [
+                    'date' => $schedule->schedule_date->format('Y-m-d'),
+                    'unit' => $schedule->unit->unit_number,
+                    'shift' => ucfirst($schedule->shift),
+                    'route' => $schedule->route->route_number . ' - ' . $schedule->route->name
+                ];
             }
         }
 
@@ -120,7 +127,8 @@ class LeaveRequestController extends Controller
             'leaveRequest',
             'affectedSchedules',
             'availableBackupDrivers',
-            'hasAllBackups'
+            'hasAllBackups',
+            'schedulesWithoutBackup'
         ));
     }
 
@@ -162,10 +170,20 @@ class LeaveRequestController extends Controller
             $leaveRequest->start_date = $validated['start_date'];
             $leaveRequest->end_date = $validated['end_date'];
 
-            if (!$leaveRequest->hasAvailableBackups()) {
+            // Check for available backups and get details of schedules without backups
+            $checkResult = $leaveRequest->checkAvailableBackupsWithDetails();
+            
+            if (!$checkResult['hasAllBackups']) {
+                $errorMessage = 'Tidak dapat menyetujui permohonan cuti. Tidak ada backup driver yang tersedia untuk jadwal berikut: ';
+                
+                foreach ($checkResult['schedulesWithoutBackup'] as $index => $schedule) {
+                    $errorMessage .= ($index > 0 ? ', ' : '') . 
+                        $schedule['date'] . ' (' . $schedule['unit'] . ' - ' . $schedule['shift'] . ')';
+                }
+                
                 return redirect()->back()
                     ->withInput()
-                    ->withErrors(['status' => 'Tidak dapat menyetujui permohonan cuti. Tidak ada backup driver yang tersedia untuk satu atau lebih jadwal yang terpengaruh.']);
+                    ->withErrors(['status' => $errorMessage]);
             }
         }
 
@@ -236,9 +254,9 @@ class LeaveRequestController extends Controller
                                 ->where('period_end_date', $periodEnd)
                                 ->first();
 
-                            if ($history && $history->schedule_count > 0) {
-                                $history->schedule_count -= 1;
-                                $history->target_met = $history->schedule_count >= $history->target_count;
+                            if ($history && $history->total_schedules > 0) {
+                                $history->total_schedules -= 1;
+                                $history->target_met = $history->total_schedules >= $history->target_count;
                                 $history->save();
                             }
                         }
@@ -342,9 +360,9 @@ class LeaveRequestController extends Controller
                         ->where('period_end_date', $periodEnd)
                         ->first();
 
-                    if ($history && $history->schedule_count > 0) {
-                        $history->schedule_count -= 1;
-                        $history->target_met = $history->schedule_count >= $history->target_count;
+                    if ($history && $history->total_schedules > 0) {
+                        $history->total_schedules -= 1;
+                        $history->target_met = $history->total_schedules >= $history->target_count;
                         $history->save();
                     }
                 }
@@ -390,10 +408,19 @@ class LeaveRequestController extends Controller
                 ->with('error', 'Hanya superadmin yang dapat menyetujui permohonan cuti.');
         }
 
-        // Check if there are available backup drivers
-        if (!$leaveRequest->hasAvailableBackups()) {
+        // Check if there are available backup drivers with detailed information
+        $checkResult = $leaveRequest->checkAvailableBackupsWithDetails();
+        
+        if (!$checkResult['hasAllBackups']) {
+            $errorMessage = 'Tidak dapat menyetujui permohonan cuti. Tidak ada backup driver yang tersedia untuk jadwal berikut: ';
+            
+            foreach ($checkResult['schedulesWithoutBackup'] as $index => $schedule) {
+                $errorMessage .= ($index > 0 ? ', ' : '') . 
+                    $schedule['date'] . ' (' . $schedule['unit'] . ' - ' . $schedule['shift'] . ')';
+            }
+            
             return redirect()->route('leave-requests.show', $leaveRequest)
-                ->with('error', 'Tidak dapat menyetujui permohonan cuti. Tidak ada backup driver yang tersedia untuk satu atau lebih jadwal yang terpengaruh.');
+                ->with('error', $errorMessage);
         }
 
         $leaveRequest->update([
@@ -490,13 +517,20 @@ class LeaveRequestController extends Controller
         // Check if there are available backup drivers for each schedule
         $availableBackupDrivers = [];
         $hasAllBackups = true;
+        $schedulesWithoutBackup = [];
 
         foreach ($affectedSchedules as $schedule) {
+            // This method already prioritizes batangan drivers over cadangan drivers
             $backups = $schedule->findAvailableBackupDrivers();
             $availableBackupDrivers[$schedule->id] = $backups;
 
             if ($backups->isEmpty()) {
                 $hasAllBackups = false;
+                $schedulesWithoutBackup[] = [
+                    'date' => $schedule->schedule_date->format('Y-m-d'),
+                    'unit' => $schedule->unit->unit_number,
+                    'shift' => ucfirst($schedule->shift)
+                ];
             }
         }
 

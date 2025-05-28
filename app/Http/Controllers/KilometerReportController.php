@@ -196,7 +196,7 @@ class KilometerReportController extends Controller
         }
         
         return view('modules.admin.kilometer-reports.index', compact(
-            'routes',
+            'routes', 
             'dates', 
             'reportsByRouteUnitDate', 
             'routeTotals', 
@@ -207,6 +207,8 @@ class KilometerReportController extends Controller
             'startDate',
             'endDate',
             'period',
+            'month',
+            'year',
             'routeGroups',
             'activeRouteGroup',
             'holidays',
@@ -224,6 +226,8 @@ class KilometerReportController extends Controller
             'route_id' => 'required|exists:routes,id',
             'date' => 'required|date',
             'kilometers' => 'required|numeric|min:0|max:999.9',
+            'month' => 'nullable|integer|min:1|max:12',
+            'year' => 'nullable|integer|min:2020|max:2050',
         ]);
         
         // Check if record already exists
@@ -269,19 +273,20 @@ class KilometerReportController extends Controller
     {
         $unit = Unit::findOrFail($unitId);
         $period = $request->input('period', 1); // Default to period 1
+        $month = $request->input('month', Carbon::now()->month); // Default to current month
+        $year = $request->input('year', Carbon::now()->year); // Default to current year
         
         // Determine date ranges based on period
         $today = Carbon::now();
-        $currentMonth = $today->copy()->startOfMonth();
         
         if ($period == 1) {
             // Period 1: 1st to 15th of the month
-            $startDate = $currentMonth->copy()->format('Y-m-d');
-            $endDate = $currentMonth->copy()->addDays(14)->format('Y-m-d');
+            $startDate = $year . '-' . $month . '-01';
+            $endDate = $year . '-' . $month . '-15';
         } else {
             // Period 2: 16th to end of month
-            $startDate = $currentMonth->copy()->addDays(15)->format('Y-m-d');
-            $endDate = $currentMonth->copy()->endOfMonth()->format('Y-m-d');
+            $startDate = $year . '-' . $month . '-16';
+            $endDate = $year . '-' . $month . '-' . Carbon::parse($endDate)->endOfMonth()->format('d');
         }
         
         // Get all dates in the range
@@ -366,7 +371,9 @@ class KilometerReportController extends Controller
             'endDate',
             'unitProblems',
             'schedules',
-            'period'
+            'period',
+            'month',
+            'year',
         ));
     }
 
@@ -463,10 +470,11 @@ class KilometerReportController extends Controller
     {
         $period = $request->input('period', 1); // Default to period 1
         $activeRouteGroup = $request->input('group', 'all'); // Default to all groups
+        $month = $request->input('month', Carbon::now()->month); // Default to current month
+        $year = $request->input('year', Carbon::now()->year); // Default to current year
         
-        // Determine date ranges based on period
-        $today = Carbon::now();
-        $currentMonth = $today->copy()->startOfMonth();
+        // Determine date ranges based on period and selected month/year
+        $currentMonth = Carbon::createFromDate($year, $month, 1);
         
         if ($period == 1) {
             // Period 1: 1st to 15th of the month
@@ -500,19 +508,42 @@ class KilometerReportController extends Controller
             $currentDate->addDay();
         }
         
+        // Get unit renops data for the date range
+        $unitRenops = \App\Models\UnitRenops::whereBetween('date', [$startDate, $endDate])
+            ->get()
+            ->groupBy(function($renop) {
+                return $renop->unit_id . '-' . $renop->date->format('Y-m-d');
+            });
+            
+        // Get maintenance logs for the date range
+        $maintenanceLogs = \App\Models\MaintenanceLog::whereBetween('date_reported', [$startDate, $endDate])
+            ->get()
+            ->groupBy(function($log) {
+                return $log->unit_id . '-' . $log->date_reported->format('Y-m-d');
+            });
+        
         // Create a new spreadsheet
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Kilometer Reports Template');
         
-        // Set headers
+        // Set fixed headers
         $sheet->setCellValue('A1', 'Route ID');
         $sheet->setCellValue('B1', 'Route Number');
         $sheet->setCellValue('C1', 'Unit ID');
         $sheet->setCellValue('D1', 'Unit Number');
-        $sheet->setCellValue('E1', 'Date');
-        $sheet->setCellValue('F1', 'Kilometers');
-        $sheet->setCellValue('G1', 'Notes');
+        
+        // Set date headers horizontally starting from column E
+        $col = 'E';
+        foreach ($dates as $date) {
+            $dateObj = Carbon::parse($date);
+            $sheet->setCellValue($col . '1', $dateObj->format('d M')); // Format as day and month
+            $col++;
+        }
+        
+        // Add Notes column after all dates
+        $sheet->setCellValue($col . '1', 'Notes');
+        $notesCol = $col;
         
         // Style the header row
         $headerStyle = [
@@ -531,36 +562,96 @@ class KilometerReportController extends Controller
             ],
         ];
         
-        $sheet->getStyle('A1:G1')->applyFromArray($headerStyle);
+        // Apply header style to all header cells
+        $sheet->getStyle('A1:' . $notesCol . '1')->applyFromArray($headerStyle);
         
         // Populate data rows
         $row = 2;
         foreach ($routes as $route) {
             foreach ($route->units as $unit) {
+                $sheet->setCellValue('A' . $row, $route->id);
+                $sheet->setCellValue('B' . $row, $route->route_number . ' - ' . $route->name);
+                $sheet->setCellValue('C' . $row, $unit->id);
+                $sheet->setCellValue('D' . $row, $unit->unit_number . ' - ' . $unit->plate_number);
+                
+                // Set empty cells for each date (for user to fill)
+                $dateCol = 'E';
                 foreach ($dates as $date) {
-                    $sheet->setCellValue('A' . $row, $route->id);
-                    $sheet->setCellValue('B' . $row, $route->route_number . ' - ' . $route->name);
-                    $sheet->setCellValue('C' . $row, $unit->id);
-                    $sheet->setCellValue('D' . $row, $unit->unit_number . ' - ' . $unit->plate_number);
-                    $sheet->setCellValue('E' . $row, $date);
-                    $sheet->setCellValue('F' . $row, ''); // Empty for user to fill
-                    $sheet->setCellValue('G' . $row, ''); // Empty for user to fill
-                    $row++;
+                    // Check if unit is on renops for this date
+                    $renopKey = $unit->id . '-' . $date;
+                    $isRenops = isset($unitRenops[$renopKey]);
+                    
+                    // Check if unit is in maintenance for this date
+                    $maintenanceKey = $unit->id . '-' . $date;
+                    $isInMaintenance = isset($maintenanceLogs[$maintenanceKey]);
+                    
+                    if ($isRenops) {
+                        // If unit is on renops, add a note in the cell
+                        $sheet->setCellValue($dateCol . $row, 'RENOPS');
+                        
+                        // Style the cell with gray background
+                        $sheet->getStyle($dateCol . $row)->applyFromArray([
+                            'fill' => [
+                                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                                'startColor' => ['rgb' => 'CCCCCC'],
+                            ],
+                            'font' => [
+                                'bold' => true,
+                                'color' => ['rgb' => '666666'],
+                            ],
+                        ]);
+                    } elseif ($isInMaintenance) {
+                        // If unit is in maintenance, add a note in the cell
+                        $sheet->setCellValue($dateCol . $row, '');
+                        
+                        // Style the cell with red background
+                        $sheet->getStyle($dateCol . $row)->applyFromArray([
+                            'fill' => [
+                                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                                'startColor' => ['rgb' => 'FFCCCC'],
+                            ],
+                            'font' => [
+                                'bold' => true,
+                                'color' => ['rgb' => 'CC0000'],
+                            ],
+                        ]);
+                    } else {
+                        // Normal cell - empty for user to fill
+                        $sheet->setCellValue($dateCol . $row, '');
+                    }
+                    
+                    $dateCol++;
                 }
+                
+                // Empty notes cell
+                $sheet->setCellValue($notesCol . $row, '');
+                
+                $row++;
             }
         }
         
         // Auto-size columns
-        foreach (range('A', 'G') as $col) {
+        foreach (range('A', $notesCol) as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
+        
+        // Add a hidden row with date values in YYYY-MM-DD format for reference during import
+        $hiddenRow = $row + 1;
+        $dateCol = 'E';
+        foreach ($dates as $date) {
+            $sheet->setCellValue($dateCol . $hiddenRow, $date); // Full date format
+            $dateCol++;
+        }
+        
+        // Hide the reference row
+        $sheet->getRowDimension($hiddenRow)->setVisible(false);
         
         // Create a writer
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
         
         // Set the filename
-        $periodText = $period == 1 ? '1-15' : '16-' . $today->copy()->endOfMonth()->format('d');
-        $filename = 'kilometer_report_template_' . $today->format('Y_m') . '_period_' . $periodText . '.xlsx';
+        $periodText = $period == 1 ? '1-15' : '16-' . $currentMonth->copy()->endOfMonth()->format('d');
+        $filename = 'kilometer_report_template_' . $year . '_' . str_pad($month, 2, '0', STR_PAD_LEFT) . '_period_' . $periodText . '.xlsx';
         
         // Create response with headers
         $response = new \Symfony\Component\HttpFoundation\StreamedResponse(function() use ($writer) {
@@ -590,10 +681,68 @@ class KilometerReportController extends Controller
             $file = $request->file('import_file');
             $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file->getPathname());
             $worksheet = $spreadsheet->getActiveSheet();
-            $rows = $worksheet->toArray();
             
-            // Remove header row
-            array_shift($rows);
+            // Get the header row to find date columns
+            $headerRow = $worksheet->getRowIterator(1)->current();
+            $headerCellIterator = $headerRow->getCellIterator();
+            $headerCellIterator->setIterateOnlyExistingCells(true);
+            
+            // Find the date columns and their indexes
+            $dateColumns = [];
+            $notesColumnIndex = null;
+            $columnIndex = 0;
+            
+            foreach ($headerCellIterator as $cell) {
+                $value = $cell->getValue();
+                $columnIndex = $cell->getColumn();
+                
+                // The last column should be Notes
+                if (strtolower($value) === 'notes') {
+                    $notesColumnIndex = $columnIndex;
+                }
+                // Columns E to the column before Notes are date columns
+                else if ($columnIndex >= 'E' && ($notesColumnIndex === null || $columnIndex < $notesColumnIndex)) {
+                    $dateColumns[] = $columnIndex;
+                }
+            }
+            
+            // Find the hidden reference row with full dates (should be the last row)
+            $highestRow = $worksheet->getHighestRow();
+            $dateValues = [];
+            
+            // Check if we have a reference row
+            $hasReferenceRow = false;
+            foreach ($dateColumns as $dateCol) {
+                $refValue = $worksheet->getCell($dateCol . $highestRow)->getValue();
+                if ($refValue && preg_match('/^\d{4}-\d{2}-\d{2}$/', $refValue)) {
+                    $hasReferenceRow = true;
+                    break;
+                }
+            }
+            
+            // If we have a reference row, use it for date values
+            if ($hasReferenceRow) {
+                foreach ($dateColumns as $index => $dateCol) {
+                    $dateValues[$dateCol] = $worksheet->getCell($dateCol . $highestRow)->getValue();
+                }
+            }
+            // Otherwise, try to parse the date headers
+            else {
+                // This is a fallback if there's no reference row
+                // We'll try to parse the date headers (which might be in format like "15 Jan")
+                $year = Carbon::now()->year; // Default to current year
+                $month = $request->input('month', Carbon::now()->month); // Get month from request or default to current
+                
+                foreach ($dateColumns as $dateCol) {
+                    $headerValue = $worksheet->getCell($dateCol . '1')->getValue();
+                    if (preg_match('/^(\d{1,2})\s+([A-Za-z]{3})$/', $headerValue, $matches)) {
+                        $day = $matches[1];
+                        $monthName = $matches[2];
+                        $dateObj = Carbon::createFromFormat('j M Y', "$day $monthName $year");
+                        $dateValues[$dateCol] = $dateObj->format('Y-m-d');
+                    }
+                }
+            }
             
             // Start transaction
             DB::beginTransaction();
@@ -602,51 +751,61 @@ class KilometerReportController extends Controller
             $updateCount = 0;
             $errorCount = 0;
             
-            foreach ($rows as $row) {
+            // Process data rows (skip header row)
+            for ($rowIndex = 2; $rowIndex <= ($hasReferenceRow ? $highestRow - 1 : $highestRow); $rowIndex++) {
+                $routeId = $worksheet->getCell('A' . $rowIndex)->getValue();
+                $unitId = $worksheet->getCell('C' . $rowIndex)->getValue();
+                $notes = $notesColumnIndex ? $worksheet->getCell($notesColumnIndex . $rowIndex)->getValue() : null;
+                
                 // Skip empty rows
-                if (empty($row[0]) || empty($row[2]) || empty($row[4]) || $row[5] === '') {
+                if (empty($routeId) || empty($unitId)) {
                     continue;
                 }
                 
-                $routeId = $row[0];
-                $unitId = $row[2];
-                $date = $row[4];
-                $kilometers = $row[5];
-                $notes = $row[6] ?? null;
-                
-                // Validate data
-                if (!is_numeric($kilometers) || $kilometers < 0 || $kilometers > 999.9) {
-                    $errorCount++;
-                    continue;
-                }
-                
-                try {
-                    // Check if record already exists
-                    $existingReport = KilometerReport::where('unit_id', $unitId)
-                        ->where('route_id', $routeId)
-                        ->where('date', $date)
-                        ->first();
-                        
-                    if ($existingReport) {
-                        // Update existing record
-                        $existingReport->update([
-                            'kilometers' => $kilometers,
-                            'notes' => $notes,
-                        ]);
-                        $updateCount++;
-                    } else {
-                        // Create new record
-                        KilometerReport::create([
-                            'unit_id' => $unitId,
-                            'route_id' => $routeId,
-                            'date' => $date,
-                            'kilometers' => $kilometers,
-                            'notes' => $notes,
-                        ]);
-                        $importCount++;
+                // Process each date column
+                foreach ($dateColumns as $dateCol) {
+                    $kilometers = $worksheet->getCell($dateCol . $rowIndex)->getValue();
+                    $date = $dateValues[$dateCol] ?? null;
+                    
+                    // Skip if no date or no kilometers
+                    if (empty($date) || $kilometers === '' || $kilometers === null) {
+                        continue;
                     }
-                } catch (\Exception $e) {
-                    $errorCount++;
+                    
+                    // Validate data
+                    if (!is_numeric($kilometers) || $kilometers < 0 || $kilometers > 999.9) {
+                        $errorCount++;
+                        continue;
+                    }
+                    
+                    try {
+                        // Check if record already exists
+                        $existingReport = KilometerReport::where('unit_id', $unitId)
+                            ->where('route_id', $routeId)
+                            ->where('date', $date)
+                            ->first();
+                            
+                        if ($existingReport) {
+                            // Update existing record
+                            $existingReport->update([
+                                'kilometers' => $kilometers,
+                                'notes' => $notes,
+                            ]);
+                            $updateCount++;
+                        } else {
+                            // Create new record
+                            KilometerReport::create([
+                                'unit_id' => $unitId,
+                                'route_id' => $routeId,
+                                'date' => $date,
+                                'kilometers' => $kilometers,
+                                'notes' => $notes,
+                            ]);
+                            $importCount++;
+                        }
+                    } catch (\Exception $e) {
+                        $errorCount++;
+                    }
                 }
             }
             
@@ -659,7 +818,9 @@ class KilometerReportController extends Controller
             
             return redirect()->route('kilometer-reports.index', [
                 'period' => $request->period,
-                'group' => $request->group
+                'group' => $request->group,
+                'month' => $request->input('month', Carbon::now()->month),
+                'year' => $request->input('year', Carbon::now()->year)
             ])->with('success', $message);
             
         } catch (\Exception $e) {
@@ -667,7 +828,9 @@ class KilometerReportController extends Controller
             
             return redirect()->route('kilometer-reports.index', [
                 'period' => $request->period,
-                'group' => $request->group
+                'group' => $request->group,
+                'month' => $request->input('month', Carbon::now()->month),
+                'year' => $request->input('year', Carbon::now()->year)
             ])->with('error', 'Gagal mengimpor data: ' . $e->getMessage());
         }
     }

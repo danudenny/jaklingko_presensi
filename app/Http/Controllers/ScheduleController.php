@@ -142,6 +142,33 @@ class ScheduleController extends Controller
                              $schedules->whereNotNull('backup_driver_id')->pluck('backup_driver_id')->unique()->count();
         $uniqueUnitsCount = $schedules->pluck('unit_id')->unique()->count();
         
+        // Get approved leave requests for the date range
+        $leaveRequests = \App\Models\LeaveRequest::with('driver')
+            ->where('status', 'approved')
+            ->where(function($query) use ($startDate, $endDate) {
+                $query->where(function($q) use ($startDate, $endDate) {
+                    $q->where('start_date', '<=', $endDate->format('Y-m-d'))
+                      ->where('end_date', '>=', $startDate->format('Y-m-d'));
+                });
+            })
+            ->get();
+            
+        // Create a lookup array for drivers on leave by date
+        $driversOnLeave = [];
+        foreach ($leaveRequests as $leaveRequest) {
+            $leaveStart = Carbon::parse($leaveRequest->start_date);
+            $leaveEnd = Carbon::parse($leaveRequest->end_date);
+            $leavePeriod = CarbonPeriod::create($leaveStart, $leaveEnd);
+            
+            foreach ($leavePeriod as $date) {
+                $dateStr = $date->format('Y-m-d');
+                if (!isset($driversOnLeave[$dateStr])) {
+                    $driversOnLeave[$dateStr] = [];
+                }
+                $driversOnLeave[$dateStr][$leaveRequest->driver_id] = true;
+            }
+        }
+        
         // Build route-unit-driver matrix
         $routeUnitDrivers = $this->buildRouteUnitDriverMatrix($schedules, $dateRange);
         
@@ -167,6 +194,7 @@ class ScheduleController extends Controller
             'uniqueUnitsCount' => $uniqueUnitsCount,
             'holidays' => $holidays,
             'unitRenops' => $unitRenops,
+            'driversOnLeave' => $driversOnLeave,
         ]);
     }
     
@@ -227,11 +255,13 @@ class ScheduleController extends Controller
                         'shifts' => [
                             'pagi' => [
                                 'dates' => [],
-                                'backup_dates' => []
+                                'backup_dates' => [],
+                                'maintenance_dates' => []
                             ],
                             'siang' => [
                                 'dates' => [],
-                                'backup_dates' => []
+                                'backup_dates' => [],
+                                'maintenance_dates' => []
                             ]
                         ]
                     ];
@@ -241,7 +271,12 @@ class ScheduleController extends Controller
                         $date = $schedule->schedule_date->format('Y-m-d');
                         $shift = $schedule->shift;
                         
-                        $driverMatrix['shifts'][$shift]['dates'][] = $date;
+                        // Check if the schedule is in maintenance status
+                        if ($schedule->status === 'maintenance') {
+                            $driverMatrix['shifts'][$shift]['maintenance_dates'][] = $date;
+                        } else {
+                            $driverMatrix['shifts'][$shift]['dates'][] = $date;
+                        }
                     }
                     
                     // Also process backup assignments

@@ -65,7 +65,7 @@
                             <a href="{{ route('unit-problems.edit', $problem) }}" class="text-indigo-600 hover:text-indigo-900 mr-2">
                                 <i class="fas fa-edit"></i>
                             </a>
-                            <a href="{{ route('unit-problems.convert-to-maintenance', $problem) }}" class="text-green-600 hover:text-green-900 mr-2" title="Kirim ke Log Perawatan" onclick="return confirm('Apakah Anda yakin ingin mengkonversi laporan ini ke Log Perawatan?')">
+                            <a href="{{ route('unit-problems.convert-to-maintenance', ['unit_problem' => $problem->id]) }}" class="text-green-600 hover:text-green-900 mr-2" title="Kirim ke Log Perawatan" onclick="return confirm('Apakah Anda yakin ingin mengkonversi laporan ini ke Log Perawatan?')">
                                 <i class="fas fa-tools"></i>
                             </a>
                             <form class="inline-block delete-form" method="POST" action="{{ route('unit-problems.destroy', $problem) }}">

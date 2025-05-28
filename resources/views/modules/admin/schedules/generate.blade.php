@@ -51,6 +51,28 @@
             margin-top: 0.5rem;
         }
         
+        /* Custom styles for weekend days (Saturday and Sunday) */
+        .flatpickr-day.weekend {
+            background-color: #FFEDD5; /* Orange background */
+            border-color: #FDBA74;
+        }
+        
+        .flatpickr-day.weekend:hover {
+            background-color: #FED7AA;
+        }
+        
+        /* Custom styles for holidays */
+        .flatpickr-day.holiday {
+            background-color: #FEE2E2; /* Red background */
+            border-color: #FECACA;
+            color: #EF4444;
+            font-weight: bold;
+        }
+        
+        .flatpickr-day.holiday:hover {
+            background-color: #FCA5A5;
+        }
+        
         .date-preview {
             display: flex;
             align-items: center;
@@ -171,7 +193,35 @@
 @push('scripts')
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://npmcdn.com/flatpickr/dist/l10n/id.js"></script>
+
 <script>
+    // Get holiday dates from the server
+    const holidays = @json(\App\Models\Holiday::active()->get(['date', 'name'])->map(function($holiday) {
+        return [
+            'date' => $holiday->date->format('Y-m-d'),
+            'name' => $holiday->name
+        ];
+    }));
+    
+    // Create a map of holiday dates for quick lookup
+    const holidayDates = holidays.map(h => h.date);
+    
+    // Function to check if a date is a weekend (Saturday or Sunday)
+    function isWeekend(date) {
+        const day = date.getDay();
+        return day === 0 || day === 6; // 0 is Sunday, 6 is Saturday
+    }
+    
+    // Function to check if a date is a holiday
+    function isHoliday(dateStr) {
+        return holidayDates.includes(dateStr);
+    }
+    
+    // Function to get holiday info by date
+    function getHolidayInfo(dateStr) {
+        return holidays.find(h => h.date === dateStr);
+    }
     $(document).ready(function() {
         // Add form submission handler
         $('#generate-form').on('submit', function(e) {
@@ -237,12 +287,37 @@
         
         // Initialize Flatpickr with Airbnb theme
         const fp = flatpickr("#date-range", {
+            locale: "id",
             mode: "range",
             dateFormat: "Y-m-d",
             defaultDate: [$("#start_date").val(), $("#end_date").val()],
             inline: true,
             minDate: "today",
             maxRange: 30, // Maximum range of 30 days
+            onDayCreate: function(dObj, dStr, fp, dayElem) {
+                // Format date as YYYY-MM-DD for comparison using local timezone
+                const date = dayElem.dateObj;
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const dateStr = `${year}-${month}-${day}`;
+                
+                // Check if the date is a weekend
+                if (isWeekend(dayElem.dateObj)) {
+                    dayElem.classList.add('weekend');
+                }
+                
+                // Check if the date is a holiday
+                if (isHoliday(dateStr)) {
+                    dayElem.classList.add('holiday');
+                    
+                    // Add tooltip with holiday name if available
+                    const holidayInfo = getHolidayInfo(dateStr);
+                    if (holidayInfo && holidayInfo.name) {
+                        dayElem.setAttribute('title', holidayInfo.name);
+                    }
+                }
+            },
             onChange: function(selectedDates, dateStr, instance) {
                 if (selectedDates.length === 2) {
                     const startDate = selectedDates[0];

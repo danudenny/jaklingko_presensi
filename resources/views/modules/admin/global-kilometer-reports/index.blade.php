@@ -4,118 +4,16 @@
 
 @push('styles')
 <style>
-    /* Highlighted days */
-    .highlight-saturday, .highlight-sunday {
-        background-color: #fefce8 !important; /* yellow-50 - lighter yellow */
-    }
-    
-    .highlight-holiday {
-        background-color: #fef2f2 !important; /* red-50 - lighter red */
-    }
-
-    /* Low kilometers indicator */
-    .low-kilometers {
-        background-color: #fee2e2 !important; /* red-100 */
-    }
-    
-    /* Sticky columns for better navigation */
-    .sticky {
-        position: sticky !important;
-        left: 0;
-        z-index: 10;
-        background-color: white;
-    }
-
-    /* Route header styling */
-    .route-header {
-        background: linear-gradient(to right, #f3f4f6, #e5e7eb) !important;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-    
-    /* Table container */
-    #global-km-report-table {
-        overflow-x: auto;
-        scroll-behavior: smooth;
-        position: relative;
-        border-radius: 0.375rem;
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-    }
-    
-    /* Date column styling to ensure all dates have equal width */
-    .date-column {
-        min-width: 1.2rem !important;
-        max-width: 1.6rem !important;
-        width: 1.2rem !important;
-        text-align: center;
-        padding: 0 !important;
-    }
-    
-    /* Table scroll controls */
-    .table-scroll-controls {
-        display: flex;
-        justify-content: flex-end;
-        gap: 0.5rem;
-        margin-bottom: 0.5rem;
-    }
-    
-    /* Sticky scroll controls */
-    .scroll-controls-sticky {
-        position: fixed;
-        bottom: 2rem;
-        right: 2rem;
-        z-index: 50;
-        display: flex;
-        gap: 0.5rem;
-        justify-content: flex-end;
-        pointer-events: none; /* Allow clicking through the container */
-    }
-    
-    .scroll-button {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 3rem;
-        height: 3rem;
-        border-radius: 9999px;
-        background-color: #4f46e5;
-        color: white;
-        font-size: 1rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        pointer-events: auto; /* Re-enable pointer events for buttons */
-        opacity: 0.9;
-    }
-    
-    .scroll-button:hover {
-        background-color: #4338ca;
-        transform: scale(1.05);
-        opacity: 1;
-    }
-    
-    .scroll-button:focus {
-        outline: none;
-        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.5);
-    }
-    
-    .scroll-button:active {
-        transform: scale(0.95);
-    }
-    
-    /* Make sticky header work better */
-    .table-header th {
-        position: sticky;
-        top: 0;
-        background-color: #f9fafb;
-        z-index: 20;
-    }
-    
+    @import url('{{ asset('css/global-kilometer-reports.css') }}');
 </style>
 @endpush
 
 @section('content')
-<div class="w-full px-4 container-fluid" x-data="globalKilometerReport()">
+<div x-data="globalKilometerReport()" x-cloak>
+<div class="w-full px-4 container-fluid">
+    <!-- Generate Modal -->
+    
+    @include('modules.admin.global-kilometer-reports.components.generate-modal')
     <x-page-title>
         <x-slot name="title">
             <div class="flex items-center">
@@ -132,27 +30,6 @@
                     <i class="mr-2 fas fa-arrow-left"></i>
                     Kembali
                 </a>
-                <a href="{{ route('global-kilometer-reports.generate.form') }}" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600">
-                    <i class="mr-2 fas fa-sync-alt"></i>
-                    Generate Report
-                </a>
-                <div class="relative dropdown">
-                    <button class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow dropdown-toggle bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600" type="button">
-                        <i class="mr-2 fas fa-file-export"></i>
-                        Export
-                        <i class="ml-2 text-xs fas fa-chevron-down"></i>
-                    </button>
-                    <div class="absolute right-0 z-50 hidden w-48 p-2 mt-2 space-y-1 bg-white rounded-md shadow-lg dropdown-menu ring-1 ring-black ring-opacity-5">
-                        <a href="{{ route('global-kilometer-reports.export.excel', ['period' => $period, 'group' => $activeRouteGroup, 'month' => request('month', Carbon\Carbon::now()->month), 'year' => request('year', Carbon\Carbon::now()->year)]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
-                            <i class="mr-2 text-green-500 fas fa-file-excel"></i>
-                            Excel
-                        </a>
-                        <a href="{{ route('global-kilometer-reports.export.pdf', ['period' => $period, 'group' => $activeRouteGroup, 'month' => request('month', Carbon\Carbon::now()->month), 'year' => request('year', Carbon\Carbon::now()->year)]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
-                            <i class="mr-2 text-red-500 fas fa-file-pdf"></i>
-                            PDF
-                        </a>
-                    </div>
-                </div>
             </div>
         </x-slot>
     </x-page-title>
@@ -278,6 +155,12 @@
                     </span>
                 </h3>
                 <div class="flex flex-wrap gap-2 mt-2 sm:mt-0">
+                    <button type="button" 
+                        @click="openGenerateModal()" 
+                        class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600">
+                        <i class="mr-2 fas fa-sync-alt"></i>
+                        Generate
+                    </button>
                     <a href="{{ route('global-kilometer-reports.export.excel', ['period' => $period, 'group' => $activeRouteGroup, 'month' => request('month', Carbon\Carbon::now()->month), 'year' => request('year', Carbon\Carbon::now()->year)]) }}" 
                        class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600">
                         <i class="mr-2 fas fa-file-excel"></i>
@@ -288,6 +171,15 @@
                         <i class="mr-2 fas fa-file-pdf"></i>
                         Export PDF
                     </a>
+                    @if(env('APP_ENV') == 'local')
+                    <form action="{{ route('global-kilometer-reports.reset') }}" method="POST" class="inline" onsubmit="return confirm('Apakah Anda yakin ingin mereset semua data laporan kilometer global? Tindakan ini tidak dapat dibatalkan.')">
+                        @csrf
+                        <button type="submit" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600">
+                            <i class="mr-2 fas fa-trash-alt"></i>
+                            Reset Data
+                        </button>
+                    </form>
+                    @endif
                 </div>
             </div>
             
@@ -363,8 +255,15 @@
                                 </tr>
                                 @if(isset($reportsByRouteUnitDriverDate[$route->id][$unit->id]) && count($reportsByRouteUnitDriverDate[$route->id][$unit->id]) > 0)
                                     @foreach($reportsByRouteUnitDriverDate[$route->id][$unit->id] as $driverId => $driverDates)
-                                        <tr class="driver-row">
-                                            <td class="sticky left-0 z-10 px-1 py-0.5 text-x font-medium text-gray-900 bg-white border-b border-gray-200 whitespace-nowrap min-w-[6.5rem]">
+                                        @php
+                                            $driverTotalKm = 0;
+                                            foreach($driverDates as $dateData) {
+                                                $driverTotalKm += $dateData->kilometers ?? 0;
+                                            }
+                                            $rowClass = ($driverTotalKm > 0 && $driverTotalKm <= 170) ? 'driver-row bg-red-50' : 'driver-row';
+                                        @endphp
+                                        <tr class="{{ $rowClass }}">
+                                            <td class="sticky left-0 z-10 px-1 py-0.5 text-x font-medium text-gray-900 {{ ($driverTotalKm > 0 && $driverTotalKm <= 170) ? 'bg-red-50' : 'bg-white' }} border-b border-gray-200 whitespace-nowrap min-w-[6.5rem]">
                                                 <div class="flex items-center">
                                                     @php
                                                         $driverType = $drivers[$driverId]->type ?? null;
@@ -539,231 +438,11 @@
         </x-card>
     </div>
     
-    <div class="mt-6">
-        <x-card>
-            <h3 class="flex items-center mb-4 text-lg font-medium text-gray-900">
-                <i class="mr-2 text-gray-500 fas fa-info-circle"></i>
-                Keterangan
-            </h3>
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div class="p-4 rounded-lg bg-gray-50">
-                    <h4 class="mb-3 text-sm font-semibold text-gray-700 uppercase">Indikator Hari</h4>
-                    <div class="space-y-3">
-                        <div class="flex items-center">
-                            <div class="w-6 h-6 mr-3 border border-yellow-200 rounded bg-yellow-50"></div>
-                            <span class="text-sm text-gray-700">Hari Libur</span>
-                            <div class="relative w-6 h-6 ml-2 bg-yellow-50 highlight-holiday"></div>
-                        </div>
-                        <div class="flex items-center">
-                            <div class="w-6 h-6 mr-3 border border-orange-200 rounded bg-orange-50"></div>
-                            <span class="text-sm text-gray-700">Hari Sabtu/Minggu</span>
-                        </div>
-                        <div class="flex items-center">
-                            <div class="w-6 h-6 mr-3 bg-red-100 border border-red-200 rounded"></div>
-                            <span class="text-sm text-gray-700">Kilometer di bawah 150</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="p-4 rounded-lg bg-gray-50">
-                    <h4 class="mb-3 text-sm font-semibold text-gray-700 uppercase">Indikator Status</h4>
-                    <div class="space-y-3">
-                        <div class="flex items-center">
-                            <div class="flex items-center justify-center w-6 h-6 mr-3">
-                                <i class="text-yellow-500 fas fa-exclamation-triangle"></i>
-                            </div>
-                            <span class="text-sm text-gray-700">Unit dalam maintenance</span>
-                        </div>
-                        <div class="flex items-center">
-                            <div class="flex items-center justify-center w-6 h-6 mr-3">
-                                <i class="text-red-500 fas fa-exclamation-circle"></i>
-                            </div>
-                            <span class="text-sm text-gray-700">Unit tidak aktif</span>
-                        </div>
-                        <div class="flex items-center">
-                            <div class="flex items-center justify-center w-6 h-6 mr-3">
-                                <span class="text-xs text-gray-500">(2)</span>
-                            </div>
-                            <span class="text-sm text-gray-700">Jumlah driver yang berbagi kilometer</span>
-                        </div>
-                        <div class="flex items-center">
-                            <div class="flex items-center justify-center w-6 h-6 mr-3 bg-gray-100 rounded-full">
-                            </div>
-                            <span class="text-sm text-gray-700">Tidak ada kilometer</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </x-card>
-    </div>
+    @include('modules.admin.global-kilometer-reports.components.legend')
 </div>
 
 @push('scripts')
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Initialize scroll controls
-        const tableContainer = document.getElementById('global-km-report-table');
-        const scrollLeftBtn = document.getElementById('scroll-left');
-        const scrollRightBtn = document.getElementById('scroll-right');
-        
-        // Calculate a dynamic scroll step size based on table width (about 25% of visible width)
-        const calculateScrollStep = () => {
-            return Math.max(150, Math.floor(tableContainer.clientWidth * 0.25));
-        };
-        
-        // Update scroll button visibility based on scroll position
-        const updateScrollButtonVisibility = () => {
-            const maxScrollLeft = tableContainer.scrollWidth - tableContainer.clientWidth;
-            
-            // Hide left button if at leftmost position
-            if (tableContainer.scrollLeft <= 0) {
-                scrollLeftBtn.style.opacity = "0.5";
-            } else {
-                scrollLeftBtn.style.opacity = "0.9";
-            }
-            
-            // Hide right button if at rightmost position
-            if (tableContainer.scrollLeft >= maxScrollLeft - 10) {
-                scrollRightBtn.style.opacity = "0.5";
-            } else {
-                scrollRightBtn.style.opacity = "0.9";
-            }
-        };
-        
-        if (scrollLeftBtn && scrollRightBtn && tableContainer) {
-            // Initial visibility check
-            updateScrollButtonVisibility();
-            
-            // Left scroll button click handler
-            scrollLeftBtn.addEventListener('click', function() {
-                tableContainer.scrollBy({
-                    left: -calculateScrollStep(),
-                    behavior: 'smooth'
-                });
-            });
-            
-            // Right scroll button click handler
-            scrollRightBtn.addEventListener('click', function() {
-                tableContainer.scrollBy({
-                    left: calculateScrollStep(),
-                    behavior: 'smooth'
-                });
-            });
-            
-            // Update button visibility when scrolling
-            tableContainer.addEventListener('scroll', updateScrollButtonVisibility);
-            
-            // Also allow keyboard navigation
-            document.addEventListener('keydown', function(event) {
-                if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
-                    if (event.key === 'ArrowLeft') {
-                        tableContainer.scrollBy({
-                            left: -calculateScrollStep(),
-                            behavior: 'smooth'
-                        });
-                        event.preventDefault();
-                    } else if (event.key === 'ArrowRight') {
-                        tableContainer.scrollBy({
-                            left: calculateScrollStep(),
-                            behavior: 'smooth'
-                        });
-                        event.preventDefault();
-                    }
-                }
-            });
-        }
-        
-        // Initialize tooltips for holidays
-        const holidayCells = document.querySelectorAll('[data-tooltip]');
-        holidayCells.forEach(cell => {
-            cell.addEventListener('mouseenter', function() {
-                // Remove any existing tooltips first
-                document.querySelectorAll('.tooltip-holiday').forEach(el => el.remove());
-                
-                const tooltip = document.createElement('div');
-                tooltip.className = 'tooltip-holiday';
-                tooltip.innerHTML = this.getAttribute('data-tooltip');
-                
-                // Position tooltip
-                const rect = this.getBoundingClientRect();
-                tooltip.style.top = (window.scrollY + rect.top - 40) + 'px';
-                tooltip.style.left = (window.scrollX + rect.left + (rect.width/2)) + 'px';
-                
-                document.body.appendChild(tooltip);
-            });
-            
-            cell.addEventListener('mouseleave', function() {
-                document.querySelectorAll('.tooltip-holiday').forEach(el => el.remove());
-            });
-        });
-        
-        // Initialize dropdown menu
-        const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
-        
-        dropdownToggles.forEach(toggle => {
-            toggle.addEventListener('click', function() {
-                const menu = this.nextElementSibling;
-                menu.classList.toggle('hidden');
-            });
-        });
-        
-        // Close dropdowns when clicking outside
-        document.addEventListener('click', function(event) {
-            dropdownToggles.forEach(toggle => {
-                const dropdown = toggle.parentElement;
-                const menu = toggle.nextElementSibling;
-                
-                if (!dropdown.contains(event.target) && !menu.classList.contains('hidden')) {
-                    menu.classList.add('hidden');
-                }
-            });
-        });
-    });
-    
-    // Function to toggle collapsible groups (route groups and unit groups)
-    function toggleGroup(elementId) {
-        const content = document.getElementById(elementId);
-        const header = content.previousElementSibling;
-        const icon = header.querySelector('.group-toggle');
-        
-        if (content.style.display === 'none') {
-            content.style.display = 'table-row';
-            header.classList.remove('collapsed');
-            icon.classList.remove('transform', 'rotate-180');
-        } else {
-            content.style.display = 'none';
-            header.classList.add('collapsed');
-            icon.classList.add('transform', 'rotate-180');
-        }
-    }
-    
-    // Alpine.js component
-    function globalKilometerReport() {
-        return {
-            // Alpine.js component properties and methods
-            init() {
-                // Initialize all groups - collapsed by default
-                document.addEventListener('DOMContentLoaded', function() {
-                    // Initialize all nested content sections
-                    const nestedContents = document.querySelectorAll('.nested-content[id]');
-                    
-                    // Only hide unit groups by default, keep route groups expanded
-                    nestedContents.forEach(content => {
-                        if (content.id.startsWith('unit-')) {
-                            content.style.display = 'none';
-                            const header = content.previousElementSibling;
-                            if (header) {
-                                header.classList.add('collapsed');
-                                const icon = header.querySelector('.group-toggle');
-                                if (icon) {
-                                    icon.classList.add('transform', 'rotate-180');
-                                }
-                            }
-                        }
-                    });
-                });
-            }
-        }
-    }
-</script>
+<script src="{{ asset('js/global-kilometer-report/index.js') }}"></script>
 @endpush
+</div>
 @endsection

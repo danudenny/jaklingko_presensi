@@ -71,6 +71,49 @@ class LeaveRequest extends Model
 
         return true;
     }
+    
+    /**
+     * Check available backup drivers for all affected schedules with detailed information.
+     * 
+     * @return array Contains 'hasAllBackups' boolean and 'schedulesWithoutBackup' array with details
+     */
+    public function checkAvailableBackupsWithDetails()
+    {
+        $driver = $this->driver;
+        $startDate = $this->start_date;
+        $endDate = $this->end_date;
+        $hasAllBackups = true;
+        $schedulesWithoutBackup = [];
+
+        // Get all schedules for this driver within the leave period
+        $affectedSchedules = Schedule::with(['unit', 'route'])
+            ->where('driver_id', $driver->id)
+            ->where('schedule_date', '>=', $startDate)
+            ->where('schedule_date', '<=', $endDate)
+            ->get();
+
+        // Check each schedule for available backup drivers
+        foreach ($affectedSchedules as $schedule) {
+            // This method already prioritizes batangan drivers over cadangan drivers
+            $availableBackups = $schedule->findAvailableBackupDrivers();
+            
+            if ($availableBackups->isEmpty()) {
+                $hasAllBackups = false;
+                $schedulesWithoutBackup[] = [
+                    'date' => $schedule->schedule_date->format('Y-m-d'),
+                    'unit' => $schedule->unit->unit_number,
+                    'shift' => ucfirst($schedule->shift),
+                    'route' => $schedule->route->route_number . ' - ' . $schedule->route->name
+                ];
+            }
+        }
+
+        return [
+            'hasAllBackups' => $hasAllBackups,
+            'schedulesWithoutBackup' => $schedulesWithoutBackup,
+            'affectedSchedulesCount' => $affectedSchedules->count()
+        ];
+    }
 
     /**
      * Scope a query to only include pending leave requests.

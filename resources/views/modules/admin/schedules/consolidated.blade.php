@@ -277,6 +277,8 @@
                                                         @php
                                                             $isAssigned = in_array($date, $driverInfo['shifts'][$shift]['dates']);
                                                             $isBackup = in_array($date, $driverInfo['shifts'][$shift]['backup_dates']);
+                                                            $isOnLeave = isset($driversOnLeave[$date]) && isset($driversOnLeave[$date][$driverInfo['driver']->id]);
+                                                            $isInMaintenance = in_array($date, $driverInfo['shifts'][$shift]['maintenance_dates']);
                                                             
                                                             // Determine day type for highlighting
                                                             $dayName = \Carbon\Carbon::parse($date)->format('l');
@@ -308,13 +310,21 @@
                                                                 <span class="inline-flex items-center justify-center w-6 h-6 transition-all rounded-full renops-indicator" title="Unit Tidak Beroperasi (Renops)">
                                                                     <i class="text-sm fas fa-exclamation"></i>
                                                                 </span>
+                                                            @elseif($isInMaintenance)
+                                                                <span class="inline-flex items-center justify-center w-6 h-6 transition-all rounded-full bg-teal-100 text-teal-800 hover:bg-teal-200" title="Unit Dalam Perawatan">
+                                                                    <i class="text-sm fas fa-wrench"></i>
+                                                                </span>
+                                                            @elseif($isOnLeave)
+                                                                <span class="inline-flex items-center justify-center w-6 h-6 transition-all rounded-full bg-red-100 text-red-800 hover:bg-red-200" title="Pengemudi Sedang Cuti">
+                                                                    <i class="text-sm fas fa-times"></i>
+                                                                </span>
                                                             @elseif($isAssigned)
                                                                 <span class="inline-flex items-center justify-center w-6 h-6 transition-all rounded-full hover:bg-green-200 {{ $driverInfo['driver']->type == 'batangan' ? 'bg-green-100 text-green-800' : 'cadangan-checkmark' }}" title="Pengemudi Dijadwalkan">
                                                                     <i class="text-sm fas fa-check"></i>
                                                                 </span>
                                                             @elseif($isBackup)
-                                                                <span class="inline-flex items-center justify-center w-6 h-6 transition-all rounded-full bg-amber-100 text-amber-800 hover:bg-amber-200" title="Pengemudi Cadangan">
-                                                                    <i class="text-sm fas fa-question"></i>
+                                                                <span class="inline-flex items-center justify-center w-6 h-6 transition-all rounded-full bg-amber-100 text-amber-800 hover:bg-amber-200" title="Pengemudi Backup">
+                                                                    <i class="text-sm fas fa-user-shield"></i>
                                                                 </span>
                                                             @else
                                                                 <span class="inline-block w-6 h-6 transition-all border border-gray-200 rounded-full hover:bg-gray-100"></span>
