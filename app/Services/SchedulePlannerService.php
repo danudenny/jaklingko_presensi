@@ -64,6 +64,8 @@ class SchedulePlannerService
         $lastShiftByDriver = [];
         $unitAssignments = [];
         $routeAssignments = [];
+        $dailyDriverAssignments = []; // Track which drivers are assigned on each day
+        $driverShiftHistory = []; // Track shift history for each driver with dates
         
         foreach ($units as $unit) {
             if (!isset($unitAssignments[$unit->id])) {
@@ -107,6 +109,7 @@ class SchedulePlannerService
                 'afternoon' => 0
             ];
             $lastShiftByDriver[$driver->id] = null;
+            $driverShiftHistory[$driver->id] = []; // Initialize shift history
         }
         
         foreach ($cadanganDrivers as $driver) {
@@ -117,6 +120,7 @@ class SchedulePlannerService
                 'afternoon' => 0
             ];
             $lastShiftByDriver[$driver->id] = null;
+            $driverShiftHistory[$driver->id] = []; // Initialize shift history
         }
 
         $current = $start->copy();
@@ -125,6 +129,7 @@ class SchedulePlannerService
             Log::info("Processing date: $dateStr");
             
             $schedulePlan[$dateStr] = [];
+            $dailyDriverAssignments[$dateStr] = []; // Initialize empty array for tracking drivers on this day
             
             foreach ($units as $unit) {
                 if (isset($unavailableDays[$dateStr]) && in_array($unit->id, $unavailableDays[$dateStr])) {
@@ -154,7 +159,10 @@ class SchedulePlannerService
                         'pagi',
                         $driverScheduleCounts,
                         $lastShiftByDriver,
-                        $batanganSettings
+                        $batanganSettings,
+                        $dailyDriverAssignments,
+                        $dateStr,
+                        $driverShiftHistory
                     );
                     
                     Log::info("Batangan morning option for unit {$unit->id}", [
@@ -172,6 +180,14 @@ class SchedulePlannerService
                         $driverScheduleCounts[$batanganOption]['morning']++;
                         $lastShiftByDriver[$batanganOption] = 'pagi';
                         $assignedMorning = true;
+                        $dailyDriverAssignments[$dateStr][$batanganOption] = true; // Mark this driver as assigned for this day
+                        
+                        // Record shift history
+                        $driverShiftHistory[$batanganOption][] = [
+                            'date' => $dateStr,
+                            'shift' => 'pagi',
+                            'unit_id' => $unit->id
+                        ];
                     }
                     
                     if (!$assignedMorning) {
@@ -181,7 +197,10 @@ class SchedulePlannerService
                             'pagi',
                             $driverScheduleCounts,
                             $lastShiftByDriver,
-                            $cadanganSettings
+                            $cadanganSettings,
+                            $dailyDriverAssignments,
+                            $dateStr,
+                            $driverShiftHistory
                         );
                         
                         if ($cadanganOption) {
@@ -193,6 +212,14 @@ class SchedulePlannerService
                             $driverScheduleCounts[$cadanganOption]['morning']++;
                             $lastShiftByDriver[$cadanganOption] = 'pagi';
                             $assignedMorning = true;
+                            $dailyDriverAssignments[$dateStr][$cadanganOption] = true; // Mark this driver as assigned for this day
+                            
+                            // Record shift history
+                            $driverShiftHistory[$cadanganOption][] = [
+                                'date' => $dateStr,
+                                'shift' => 'pagi',
+                                'unit_id' => $unit->id
+                            ];
                         }
                     }
                 }
@@ -205,7 +232,10 @@ class SchedulePlannerService
                         'siang',
                         $driverScheduleCounts,
                         $lastShiftByDriver,
-                        $batanganSettings
+                        $batanganSettings,
+                        $dailyDriverAssignments,
+                        $dateStr,
+                        $driverShiftHistory
                     );
                     
                     if ($batanganOption) {
@@ -217,6 +247,14 @@ class SchedulePlannerService
                         $driverScheduleCounts[$batanganOption]['afternoon']++;
                         $lastShiftByDriver[$batanganOption] = 'siang';
                         $assignedAfternoon = true;
+                        $dailyDriverAssignments[$dateStr][$batanganOption] = true; // Mark this driver as assigned for this day
+                        
+                        // Record shift history
+                        $driverShiftHistory[$batanganOption][] = [
+                            'date' => $dateStr,
+                            'shift' => 'siang',
+                            'unit_id' => $unit->id
+                        ];
                     }
                     
                     if (!$assignedAfternoon) {
@@ -226,7 +264,10 @@ class SchedulePlannerService
                             'siang',
                             $driverScheduleCounts,
                             $lastShiftByDriver,
-                            $cadanganSettings
+                            $cadanganSettings,
+                            $dailyDriverAssignments,
+                            $dateStr,
+                            $driverShiftHistory
                         );
                         
                         if ($cadanganOption) {
@@ -238,6 +279,14 @@ class SchedulePlannerService
                             $driverScheduleCounts[$cadanganOption]['afternoon']++;
                             $lastShiftByDriver[$cadanganOption] = 'siang';
                             $assignedAfternoon = true;
+                            $dailyDriverAssignments[$dateStr][$cadanganOption] = true; // Mark this driver as assigned for this day
+                            
+                            // Record shift history
+                            $driverShiftHistory[$cadanganOption][] = [
+                                'date' => $dateStr,
+                                'shift' => 'siang',
+                                'unit_id' => $unit->id
+                            ];
                         }
                     }
                 }
@@ -542,7 +591,10 @@ class SchedulePlannerService
         string $shift,
         array $driverScheduleCounts,
         array $lastShiftByDriver,
-        array $settings
+        array $settings,
+        array $dailyDriverAssignments = [],
+        string $currentDate = null,
+        array $driverShiftHistory = []
     ): ?int {
         Log::info("Finding best $type driver for $shift shift", [
             'availableDrivers' => $unitDrivers,
@@ -557,6 +609,12 @@ class SchedulePlannerService
                 continue;
             }
             
+            // Skip if driver is already assigned on this day
+            if ($currentDate && isset($dailyDriverAssignments[$currentDate][$driverId])) {
+                Log::info("Driver $driverId already assigned on $currentDate, skipping");
+                continue;
+            }
+            
             $stats = $driverScheduleCounts[$driverId];
             $maxSchedules = $settings['max_schedules'] ?? ($type === 'batangan' ? 14 : 11);
             $maxConsecutiveSameShift = $settings['max_consecutive_same_shift'] ?? 2;
@@ -566,10 +624,48 @@ class SchedulePlannerService
                 continue;
             }
             
-            // Skip if this would be morning after afternoon (need rest)
-            if ($lastShiftByDriver[$driverId] === 'siang' && $shift === 'pagi') {
+            // Get yesterday's and day before yesterday's dates
+            $yesterdayDate = null;
+            $dayBeforeYesterdayDate = null;
+            if ($currentDate) {
+                $yesterdayDate = Carbon::parse($currentDate)->subDay()->format('Y-m-d');
+                $dayBeforeYesterdayDate = Carbon::parse($currentDate)->subDays(2)->format('Y-m-d');
+            }
+            
+            // Implement shift sequence rules:
+            // 1. If yesterday was 'Pagi', today can be 'Pagi' or 'Siang'
+            // 2. If yesterday was 'Siang', today should be 'Siang', cannot assign 'Pagi' shift
+            // 3. If yesterday was 'Siang', and no shift today, tomorrow can be either 'Pagi' or 'Siang'
+            
+            // Check if driver had a shift yesterday
+            $hadShiftYesterday = false;
+            $yesterdayShift = null;
+            
+            // Check if driver had a shift day before yesterday
+            $hadShiftDayBeforeYesterday = false;
+            $dayBeforeYesterdayShift = null;
+            
+            if (!empty($driverShiftHistory[$driverId])) {
+                foreach ($driverShiftHistory[$driverId] as $historyEntry) {
+                    if ($historyEntry['date'] === $yesterdayDate) {
+                        $hadShiftYesterday = true;
+                        $yesterdayShift = $historyEntry['shift'];
+                    }
+                    if ($historyEntry['date'] === $dayBeforeYesterdayDate) {
+                        $hadShiftDayBeforeYesterday = true;
+                        $dayBeforeYesterdayShift = $historyEntry['shift'];
+                    }
+                }
+            }
+            
+            // Rule 2: If yesterday was 'Siang', today should be 'Siang', cannot assign 'Pagi' shift
+            if ($hadShiftYesterday && $yesterdayShift === 'siang' && $shift === 'pagi') {
+                Log::info("Driver $driverId had 'Siang' shift yesterday, cannot assign 'Pagi' today");
                 continue;
             }
+            
+            // Rule 3: If day before yesterday was 'Siang', yesterday no shift, today can be either 'Pagi' or 'Siang'
+            // This is already handled by not having any restriction in this case
             
             // Skip if too many consecutive afternoon shifts
             if ($shift === 'siang' && $stats['afternoon'] >= $maxConsecutiveSameShift && $lastShiftByDriver[$driverId] === 'siang') {
