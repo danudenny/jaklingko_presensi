@@ -1,0 +1,101 @@
+.tooltip-holiday {
+    position: absolute;
+    transform: translateX(-50%);
+    z-index: 1000;
+    padding: 6px 10px;
+    background-color: #dc2626;
+    color: white;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    max-width: 250px;
+    text-align: center;
+    pointer-events: none;
+}
+
+.tooltip-holiday:before {
+    content: "";
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 8px 8px 0;
+    border-style: solid;
+    border-color: #dc2626 transparent transparent transparent;
+}
+
+/* Holiday indicator triangle in the corner */
+.highlight-holiday {
+    position: relative !important;
+    transition: all 0.2s;
+}
+
+.highlight-holiday:after {
+    content: "";
+    position: absolute !important;
+    top: 0;
+    right: 0;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 0 12px 12px 0;
+    border-color: transparent #ef4444 transparent transparent;
+    z-index: 10;
+    box-shadow: -1px 1px 3px rgba(239, 68, 68, 0.4);
+    pointer-events: none;
+}
+
+.highlight-holiday:hover {
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.4);
+}
+
+/* Highlighted days */
+.highlight-saturday,
+.highlight-sunday {
+    background-color: #fefce8 !important; /* yellow-50 - lighter yellow */
+}
+
+.highlight-holiday {
+    background-color: #fef2f2 !important; /* red-50 - lighter red */
+}
+
+/* Cadangan driver checkmark */
+.cadangan-checkmark {
+    background-color: #e9d5ff !important; /* purple-200 */
+    color: #7e22ce !important; /* purple-700 */
+}
+
+/* Renops indicator */
+.renops-indicator {
+    background-color: #1e40af !important; /* blue-800 */
+    color: #ffffff !important; /* white */
+    border: 2px solid #93c5fd !important; /* blue-300 */
+}
+
+/* Collapsible sections */
+.route-header,
+.unit-header {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.route-header:hover,
+.unit-header:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.route-content,
+.unit-content {
+    transition: all 0.3s ease-in-out;
+}
+
+.route-header .toggle-icon,
+.unit-header .toggle-icon {
+    transition: transform 0.3s ease;
+}
+
+.route-header.collapsed .toggle-icon,
+.unit-header.collapsed .toggle-icon {
+    transform: rotate(-90deg);
+}

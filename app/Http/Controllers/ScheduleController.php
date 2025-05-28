@@ -35,6 +35,7 @@ class ScheduleController extends Controller
         $year = $request->query('year', Carbon::now()->year);
         $period = $request->query('period', 1); // Default to first period (1-15)
         $selectedRoute = $request->query('route', null);
+        $selectedDriverType = $request->query('driver_type', null);
         $selectedDriver = $request->query('driver', null);
         $selectedUnit = $request->query('unit', null);
         $selectedShift = $request->query('shift', null);
@@ -111,6 +112,12 @@ class ScheduleController extends Controller
             $query->where('route_id', $selectedRoute);
         }
         
+        if ($selectedDriverType) {
+            $query->whereHas('driver', function($query) use ($selectedDriverType) {
+                $query->where('type', $selectedDriverType);
+            });
+        }
+        
         if ($selectedDriver) {
             $query->where(function($query) use ($selectedDriver) {
                 $query->where('driver_id', $selectedDriver)
@@ -147,6 +154,7 @@ class ScheduleController extends Controller
             'drivers' => $drivers,
             'units' => $units,
             'selectedRoute' => $selectedRoute,
+            'selectedDriverType' => $selectedDriverType,
             'selectedDriver' => $selectedDriver,
             'selectedUnit' => $selectedUnit,
             'selectedShift' => $selectedShift,
@@ -270,6 +278,7 @@ class ScheduleController extends Controller
         $year = $request->query('year', Carbon::now()->year);
         $period = $request->query('period', 1); // Default to first period (1-15)
         $selectedRoute = $request->query('route', null);
+        $selectedDriverType = $request->query('driver_type', null);
         $selectedDriver = $request->query('driver', null);
         $selectedUnit = $request->query('unit', null);
         $selectedShift = $request->query('shift', null);
@@ -329,6 +338,7 @@ class ScheduleController extends Controller
         $year = $request->query('year', Carbon::now()->year);
         $period = $request->query('period', 1); // Default to first period (1-15)
         $selectedRoute = $request->query('route', null);
+        $selectedDriverType = $request->query('driver_type', null);
         $selectedDriver = $request->query('driver', null);
         $selectedUnit = $request->query('unit', null);
         $selectedShift = $request->query('shift', null);
