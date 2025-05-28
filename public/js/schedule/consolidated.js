@@ -50,45 +50,106 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
     
+    // Drawer Functionality (Common functions for both drawers)
+    function openDrawer(drawer, overlay) {
+        drawer.classList.remove('translate-x-full');
+        overlay.classList.remove('hidden');
+        setTimeout(() => {
+            overlay.classList.add('opacity-100');
+            overlay.classList.remove('opacity-0');
+        }, 50);
+        document.body.classList.add('overflow-hidden');
+    }
+    
+    function closeDrawer(drawer, overlay) {
+        drawer.classList.add('translate-x-full');
+        overlay.classList.add('opacity-0');
+        overlay.classList.remove('opacity-100');
+        setTimeout(() => {
+            overlay.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        }, 300);
+    }
+    
     // Legends Drawer Functionality
     const showLegendsBtn = document.getElementById('show-legends-btn');
     const closeLegendsBtn = document.getElementById('close-legends-btn');
     const legendsDrawer = document.getElementById('legends-drawer');
     const legendsOverlay = document.getElementById('legends-overlay');
     
-    // Function to open the legends drawer
-    function openLegendsDrawer() {
-        legendsDrawer.classList.remove('translate-x-full');
-        legendsOverlay.classList.remove('hidden');
-        setTimeout(() => {
-            legendsOverlay.classList.add('opacity-100');
-            legendsOverlay.classList.remove('opacity-0');
-        }, 50);
-        document.body.classList.add('overflow-hidden');
-    }
-    
-    // Function to close the legends drawer
-    function closeLegendsDrawer() {
-        legendsDrawer.classList.add('translate-x-full');
-        legendsOverlay.classList.add('opacity-0');
-        legendsOverlay.classList.remove('opacity-100');
-        setTimeout(() => {
-            legendsOverlay.classList.add('hidden');
-            document.body.classList.remove('overflow-hidden');
-        }, 300);
-    }
-    
-    // Event listeners for opening and closing the drawer
+    // Event listeners for opening and closing the legends drawer
     if (showLegendsBtn) {
-        showLegendsBtn.addEventListener('click', openLegendsDrawer);
+        showLegendsBtn.addEventListener('click', () => openDrawer(legendsDrawer, legendsOverlay));
     }
     
     if (closeLegendsBtn) {
-        closeLegendsBtn.addEventListener('click', closeLegendsDrawer);
+        closeLegendsBtn.addEventListener('click', () => closeDrawer(legendsDrawer, legendsOverlay));
     }
     
     if (legendsOverlay) {
-        legendsOverlay.addEventListener('click', closeLegendsDrawer);
+        legendsOverlay.addEventListener('click', () => closeDrawer(legendsDrawer, legendsOverlay));
+    }
+    
+    // Unassigned Drivers Drawer Functionality
+    const showUnassignedBtn = document.getElementById('show-unassigned-btn');
+    const closeUnassignedBtn = document.getElementById('close-unassigned-btn');
+    const unassignedDrawer = document.getElementById('unassigned-drivers-drawer');
+    const unassignedOverlay = document.getElementById('unassigned-overlay');
+    
+    // Event listeners for opening and closing the unassigned drivers drawer
+    if (showUnassignedBtn) {
+        showUnassignedBtn.addEventListener('click', () => openDrawer(unassignedDrawer, unassignedOverlay));
+    }
+    
+    if (closeUnassignedBtn) {
+        closeUnassignedBtn.addEventListener('click', () => closeDrawer(unassignedDrawer, unassignedOverlay));
+    }
+    
+    if (unassignedOverlay) {
+        unassignedOverlay.addEventListener('click', () => closeDrawer(unassignedDrawer, unassignedOverlay));
+    }
+    
+    // Stats Drawer Functionality
+    const showStatsBtn = document.getElementById('show-stats-btn');
+    const closeStatsBtn = document.getElementById('close-stats-btn');
+    const statsDrawer = document.getElementById('stats-drawer');
+    const statsOverlay = document.getElementById('stats-overlay');
+    
+    // Event listeners for opening and closing the stats drawer
+    if (showStatsBtn) {
+        showStatsBtn.addEventListener('click', () => openDrawer(statsDrawer, statsOverlay));
+    }
+    
+    if (closeStatsBtn) {
+        closeStatsBtn.addEventListener('click', () => closeDrawer(statsDrawer, statsOverlay));
+    }
+    
+    if (statsOverlay) {
+        statsOverlay.addEventListener('click', () => closeDrawer(statsDrawer, statsOverlay));
+    }
+    
+    // Filter functionality for unassigned drivers
+    const unassignedFilterType = document.getElementById('unassigned-filter-type');
+    if (unassignedFilterType) {
+        unassignedFilterType.addEventListener('change', function() {
+            const selectedType = this.value;
+            const batanganSection = document.getElementById('unassigned-batangan-list').closest('div.mb-5');
+            const cadanganSection = document.getElementById('unassigned-cadangan-list').closest('div.mb-5');
+            
+            if (selectedType === '') {
+                // Show all
+                batanganSection.style.display = 'block';
+                cadanganSection.style.display = 'block';
+            } else if (selectedType === 'batangan') {
+                // Show only batangan
+                batanganSection.style.display = 'block';
+                cadanganSection.style.display = 'none';
+            } else if (selectedType === 'cadangan') {
+                // Show only cadangan
+                batanganSection.style.display = 'none';
+                cadanganSection.style.display = 'block';
+            }
+        });
     }
     
     // Close drawer with Escape key
@@ -203,6 +264,33 @@ document.addEventListener("DOMContentLoaded", function () {
                     document
                         .getElementById("save-changes-btn")
                         .addEventListener("click", function () {
+                            // Collect all checked checkboxes
+                            const checkedBoxes = document.querySelectorAll('input[type="checkbox"]:checked');
+                            const changes = [];
+                            
+                            checkedBoxes.forEach(checkbox => {
+                                const unitId = checkbox.getAttribute('data-unit-id');
+                                const date = checkbox.getAttribute('data-date');
+                                const shift = checkbox.getAttribute('data-shift');
+                                const type = checkbox.getAttribute('data-type');
+                                
+                                // Determine the driver type based on the checkbox type
+                                let driverType = 'batangan';
+                                if (type === 'cadangan' || type === 'empty-cadangan') {
+                                    driverType = 'cadangan';
+                                }
+                                
+                                changes.push({
+                                    unitId,
+                                    date,
+                                    shift,
+                                    driverType
+                                });
+                            });
+                            
+                            // Here you would typically send these changes to the server
+                            console.log('Schedule changes:', changes);
+                            
                             alert("Perubahan berhasil disimpan!");
                             toggleEditMode();
                         });
@@ -245,68 +333,29 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function convertToCheckboxes() {
-        const scheduleCells = document.querySelectorAll(
-            "td span.inline-flex.items-center.justify-center.w-6.h-6"
-        );
-        const emptyCells = document.querySelectorAll(
-            "td span.inline-block.w-6.h-6"
-        );
-
+        // Get all date cells (cells that can potentially have a schedule)
+        // This will include all cells in the date columns, whether they have content or not
+        const dateCells = document.querySelectorAll('tbody td:nth-child(n+5):not(:last-child)');
+        
         const scheduleMap = new Map();
 
-        scheduleCells.forEach((cell) => {
-            const isAssigned = cell.classList.contains("text-green-800");
-            const isBackup = cell.classList.contains("text-amber-800");
-            const parentTd = cell.closest("td");
-
-            parentTd.setAttribute("data-original-html", parentTd.innerHTML);
-
-            const row = parentTd.closest("tr");
-            const unitRow = findUnitRow(row);
-            const unitId = unitRow
-                ? unitRow.getAttribute("data-unit-id") ||
-                  getUnitIdFromText(unitRow.textContent)
-                : "unknown";
-            const dateIndex = Array.from(row.cells).indexOf(parentTd);
-            const dateCell = row
-                .closest("table")
-                .querySelector(
-                    "thead tr:last-child th:nth-child(" + (dateIndex + 1) + ")"
-                );
-            const dateValue = dateCell
-                ? dateCell.getAttribute("data-date") ||
-                  dateCell.textContent.trim()
-                : "unknown";
-            const shift = getShiftFromRow(row);
-
-            const checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-            checkbox.checked = isAssigned || isBackup;
-            checkbox.className =
-                "w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500";
-            checkbox.setAttribute(
-                "data-type",
-                isAssigned ? "assigned" : "backup"
-            );
-            checkbox.setAttribute("data-unit-id", unitId);
-            checkbox.setAttribute("data-date", dateValue);
-            checkbox.setAttribute("data-shift", shift);
-
-            const mapKey = `${unitId}-${dateValue}-${shift}`;
-            if (!scheduleMap.has(mapKey)) {
-                scheduleMap.set(mapKey, []);
+        dateCells.forEach((parentTd) => {
+            // Skip cells that don't have a parent row
+            if (!parentTd || !parentTd.closest('tr')) {
+                return;
             }
-            scheduleMap.get(mapKey).push(checkbox);
-
-            checkbox.addEventListener("change", function () {
-                validateScheduleConflicts(this, scheduleMap);
-            });
-            parentTd.innerHTML = "";
-            parentTd.appendChild(checkbox);
-        });
-
-        emptyCells.forEach((cell) => {
-            const parentTd = cell.closest("td");
+            
+            // Skip cells in header rows
+            if (parentTd.closest('tr.route-header') || parentTd.closest('tr.unit-header')) {
+                return;
+            }
+            
+            // Skip the total column
+            if (parentTd.cellIndex === parentTd.parentElement.cells.length - 1) {
+                return;
+            }
+            
+            // Save original HTML for reverting later
             parentTd.setAttribute("data-original-html", parentTd.innerHTML);
 
             const row = parentTd.closest("tr");
@@ -326,13 +375,79 @@ document.addEventListener("DOMContentLoaded", function () {
                   dateCell.textContent.trim()
                 : "unknown";
             const shift = getShiftFromRow(row);
+            
+            // Check if this unit is in renops for this date
+            const isUnitInRenops = checkIfUnitInRenops(unitId, dateValue);
+            
+            // Check if the driver is on leave for this date
+            const isDriverOnLeave = checkIfDriverOnLeave(row, dateValue);
+            
+            // Check if the unit is in maintenance for this date
+            const isUnitInMaintenance = checkIfUnitInMaintenance(unitId, dateValue);
+            
+            // Check current cell status
+            const hasAssignedIndicator = parentTd.querySelector('.text-green-800, .cadangan-checkmark');
+            const hasBackupIndicator = parentTd.querySelector('.text-amber-800');
+            const hasRenopsIndicator = parentTd.querySelector('.renops-indicator');
+            const hasMaintenanceIndicator = parentTd.querySelector('.text-teal-800');
+            const hasOnLeaveIndicator = parentTd.querySelector('.text-red-800');
+            
+            // If the unit is in renops, maintenance, or driver is on leave, we should disable the checkbox
+            if (isUnitInRenops || isUnitInMaintenance || isDriverOnLeave || 
+                hasRenopsIndicator || hasMaintenanceIndicator || hasOnLeaveIndicator) {
+                // For renops/maintenance/leave units, we'll display a disabled checkbox without any icon
+                const checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.checked = false;
+                checkbox.disabled = true;
+                checkbox.className =
+                    "w-5 h-5 text-gray-400 border-gray-300 rounded focus:ring-gray-300 cursor-not-allowed opacity-50";
+                checkbox.setAttribute("data-type", "disabled");
+                checkbox.setAttribute("data-unit-id", unitId);
+                checkbox.setAttribute("data-date", dateValue);
+                checkbox.setAttribute("data-shift", shift);
+                
+                parentTd.innerHTML = "";
+                parentTd.appendChild(checkbox);
+                return;
+            }
 
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
-            checkbox.checked = false;
-            checkbox.className =
-                "w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500";
-            checkbox.setAttribute("data-type", "empty");
+            checkbox.checked = hasAssignedIndicator || hasBackupIndicator;
+            
+            // Determine driver type
+            const driverTypeCell = row.querySelector('td:nth-child(3)');
+            const isCadangan = driverTypeCell && driverTypeCell.textContent.toLowerCase().includes('cadangan') || 
+                              parentTd.querySelector('.cadangan-checkmark');
+            
+            if (hasAssignedIndicator) {
+                if (isCadangan) {
+                    // Purple for cadangan drivers
+                    checkbox.className = "w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500";
+                    checkbox.setAttribute("data-type", "cadangan");
+                } else {
+                    // Green for batangan drivers
+                    checkbox.className = "w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500";
+                    checkbox.setAttribute("data-type", "assigned");
+                }
+            } else if (hasBackupIndicator) {
+                // Amber/orange for backup drivers
+                checkbox.className = "w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500";
+                checkbox.setAttribute("data-type", "backup");
+            } else {
+                // Empty cell - style based on driver type
+                if (isCadangan) {
+                    // Purple for cadangan drivers
+                    checkbox.className = "w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500";
+                    checkbox.setAttribute("data-type", "empty-cadangan");
+                } else {
+                    // Green for batangan drivers
+                    checkbox.className = "w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500";
+                    checkbox.setAttribute("data-type", "empty-assigned");
+                }
+            }
+            
             checkbox.setAttribute("data-unit-id", unitId);
             checkbox.setAttribute("data-date", dateValue);
             checkbox.setAttribute("data-shift", shift);
@@ -387,31 +502,168 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function findUnitRow(row) {
-        let currentRow = row;
-        while (currentRow) {
-            if (currentRow.classList.contains("bg-blue-50")) {
-                return currentRow;
+        if (!row) return null;
+        
+        let current = row;
+        while (current) {
+            // Check for both class name and bg-blue-50 class which is used for unit headers
+            if (current.classList && 
+                (current.classList.contains("unit-header") || current.classList.contains("bg-blue-50"))) {
+                return current;
             }
-            currentRow = currentRow.previousElementSibling;
+            current = current.previousElementSibling;
         }
         return null;
     }
-
+    
     function getUnitIdFromText(text) {
-        const unitMatch = text.match(/Unit\s+(\d+)/i);
-        return unitMatch ? unitMatch[1] : "unknown";
+        if (!text) return "unknown";
+        
+        const match = text.match(/Unit\s+#?(\d+)/i);
+        return match ? match[1] : "unknown";
+    }
+    
+    function getShiftFromRow(row) {
+        if (!row) return "unknown";
+        
+        // Try to get the shift from the text content of the shift column
+        const shiftCell = row.querySelector('td:nth-child(4)');
+        if (shiftCell) {
+            const shiftText = shiftCell.textContent.trim().toLowerCase();
+            if (shiftText.includes('pagi')) return 'pagi';
+            if (shiftText.includes('siang')) return 'siang';
+        }
+        
+        // If that fails, try to infer from the row's position or other attributes
+        return row.classList && row.classList.contains('morning-shift') ? 'pagi' : 'siang';
     }
 
-    function getShiftFromRow(row) {
-        const shiftCell = row.querySelector("td:nth-child(4)");
-        if (shiftCell) {
-            if (shiftCell.textContent.includes("Pagi")) {
-                return "pagi";
-            } else if (shiftCell.textContent.includes("Siang")) {
-                return "siang";
+    // Helper function to check if a unit is in renops for a specific date
+    function checkIfUnitInRenops(unitId, dateValue) {
+        if (!unitId || !dateValue) return false;
+        
+        // Find all renops indicators in the table
+        const renopsIndicators = document.querySelectorAll('.renops-indicator');
+        if (!renopsIndicators || renopsIndicators.length === 0) return false;
+        
+        // Check if any of them are for this unit and date
+        for (const indicator of renopsIndicators) {
+            if (!indicator) continue;
+            
+            const cell = indicator.closest('td');
+            if (!cell) continue;
+            
+            const row = cell.closest('tr');
+            if (!row) continue;
+            
+            const unitRow = findUnitRow(row);
+            if (!unitRow) continue;
+            
+            const indicatorUnitId = unitRow.getAttribute('data-unit-id') || getUnitIdFromText(unitRow.textContent);
+            if (!indicatorUnitId) continue;
+            
+            // If this indicator is for the same unit
+            if (indicatorUnitId === unitId) {
+                // Check if it's for the same date
+                if (!row.cells) continue;
+                
+                const dateIndex = Array.from(row.cells).indexOf(cell);
+                const table = row.closest('table');
+                if (!table) continue;
+                
+                const dateCell = table.querySelector(`thead tr:last-child th:nth-child(${dateIndex + 1})`);
+                if (!dateCell) continue;
+                
+                const indicatorDate = dateCell.getAttribute('data-date') || dateCell.textContent.trim();
+                
+                if (indicatorDate === dateValue) {
+                    return true;
+                }
             }
         }
-        return "unknown";
+        
+        return false;
+    }
+    
+    // Helper function to check if a driver is on leave for a specific date
+    function checkIfDriverOnLeave(row, dateValue) {
+        if (!row || !dateValue) return false;
+        
+        // Find all on-leave indicators in this row
+        const onLeaveIndicators = row.querySelectorAll('.text-red-800');
+        if (!onLeaveIndicators || onLeaveIndicators.length === 0) return false;
+        
+        // Check if any of them are for this date
+        for (const indicator of onLeaveIndicators) {
+            if (!indicator) continue;
+            
+            const cell = indicator.closest('td');
+            if (!cell) continue;
+            
+            if (!row.cells) continue;
+            
+            const dateIndex = Array.from(row.cells).indexOf(cell);
+            const table = row.closest('table');
+            if (!table) continue;
+            
+            const dateCell = table.querySelector(`thead tr:last-child th:nth-child(${dateIndex + 1})`);
+            if (!dateCell) continue;
+            
+            const indicatorDate = dateCell.getAttribute('data-date') || dateCell.textContent.trim();
+            
+            if (indicatorDate === dateValue) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    // Helper function to check if a unit is in maintenance for a specific date
+    function checkIfUnitInMaintenance(unitId, dateValue) {
+        if (!unitId || !dateValue) return false;
+        
+        // Find all maintenance indicators in the table
+        const maintenanceIndicators = document.querySelectorAll('.text-teal-800');
+        if (!maintenanceIndicators || maintenanceIndicators.length === 0) return false;
+        
+        // Check if any of them are for this unit and date
+        for (const indicator of maintenanceIndicators) {
+            if (!indicator) continue;
+            
+            const cell = indicator.closest('td');
+            if (!cell) continue;
+            
+            const row = cell.closest('tr');
+            if (!row) continue;
+            
+            const unitRow = findUnitRow(row);
+            if (!unitRow) continue;
+            
+            const indicatorUnitId = unitRow.getAttribute('data-unit-id') || getUnitIdFromText(unitRow.textContent);
+            if (!indicatorUnitId) continue;
+            
+            // If this indicator is for the same unit
+            if (indicatorUnitId === unitId) {
+                // Check if it's for the same date
+                if (!row.cells) continue;
+                
+                const dateIndex = Array.from(row.cells).indexOf(cell);
+                const table = row.closest('table');
+                if (!table) continue;
+                
+                const dateCell = table.querySelector(`thead tr:last-child th:nth-child(${dateIndex + 1})`);
+                if (!dateCell) continue;
+                
+                const indicatorDate = dateCell.getAttribute('data-date') || dateCell.textContent.trim();
+                
+                if (indicatorDate === dateValue) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
     }
 
     function validateScheduleConflicts(checkbox, scheduleMap) {

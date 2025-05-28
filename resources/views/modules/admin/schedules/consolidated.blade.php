@@ -34,6 +34,16 @@
                     <i class="mr-2 fas fa-edit"></i>
                     <span id="edit-btn-text">Edit Jadwal</span>
                 </button>
+                <button id="show-unassigned-btn" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600">
+                    <i class="mr-2 fas fa-user-slash"></i>
+                    Pengemudi Belum Terjadwal
+                </button>
+                
+                <button id="show-stats-btn" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600">
+                    <i class="mr-2 fas fa-chart-bar"></i>
+                    Statistik
+                </button>
+                
                 <div class="relative dropdown">
                     <button class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow dropdown-toggle bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600" type="button">
                         <i class="mr-2 fas fa-file-export"></i>
@@ -71,7 +81,7 @@
     
     <div class="p-6 bg-white rounded-lg shadow-md">
         <!-- Statistics -->
-        @include('modules.admin.schedules.components.stats')
+        <!-- @include('modules.admin.schedules.components.stats') -->
 
         <!-- Filter Controls -->
         @include('modules.admin.schedules.components.filters')
@@ -367,6 +377,12 @@
 
         <!-- Legend -->
         @include('modules.admin.schedules.components.legends')
+        
+        <!-- Unassigned Drivers -->
+        @include('modules.admin.schedules.components.unassigned-drivers')
+        
+        <!-- Stats Drawer -->
+        @include('modules.admin.schedules.components.stats-drawer')
     </div>
 </div>
 @endsection

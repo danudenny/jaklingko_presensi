@@ -110,7 +110,15 @@ class ScheduleGeneratorService
 
             // Optimize the plan to ensure constraints are met
             try {
-                $optimizedPlan = $this->schedulePlannerService->optimizeSchedulePlan($schedulePlan);
+                $optimizedPlan = $this->schedulePlannerService->optimizeSchedulePlan(
+                    $schedulePlan,
+                    $startDate->format('Y-m-d'),
+                    $endDate->format('Y-m-d'),
+                    $this->units,
+                    $this->batanganDrivers,
+                    $this->cadanganDrivers,
+                    $this->unitDayOffs
+                );
                 
                 if (empty($optimizedPlan)) {
                     $results['messages'][] = "No valid schedules could be created. Check that units and drivers exist.";
@@ -119,7 +127,20 @@ class ScheduleGeneratorService
                 }
                 
                 // Create actual schedules from the plan
-                $this->schedulePlannerService->createSchedulesFromPlan($optimizedPlan);
+                $scheduleResults = $this->schedulePlannerService->createSchedulesFromPlan(
+                    $optimizedPlan,
+                    $startDate->format('Y-m-d'),
+                    $endDate->format('Y-m-d'),
+                    $this->units,
+                    $this->batanganDrivers,
+                    $this->cadanganDrivers,
+                    $this->unitDayOffs
+                );
+                
+                // Update results with schedule creation results
+                $this->success += $scheduleResults['success'];
+                $this->failed += $scheduleResults['failed'];
+                $this->messages = array_merge($this->messages, $scheduleResults['messages']);
             } catch (\Exception $e) {
                 $results['messages'][] = "Error generating schedules: " . $e->getMessage();
                 Log::error("Error in schedule generation: " . $e->getMessage(), [

@@ -172,6 +172,32 @@ class ScheduleController extends Controller
         // Build route-unit-driver matrix
         $routeUnitDrivers = $this->buildRouteUnitDriverMatrix($schedules, $dateRange);
         
+        // Get unassigned drivers for the period
+        $assignedDriverIds = $schedules->pluck('driver_id')->unique()->toArray();
+        $assignedBackupDriverIds = $schedules->whereNotNull('backup_driver_id')->pluck('backup_driver_id')->unique()->toArray();
+        $allAssignedDriverIds = array_unique(array_merge($assignedDriverIds, $assignedBackupDriverIds));
+        
+        // Get all active drivers not in the assigned list
+        $unassignedDrivers = Driver::where('status', 'aktif')
+            ->whereNotIn('id', $allAssignedDriverIds)
+            ->get();
+            
+        // Split by driver type
+        $unassignedBatanganDrivers = $unassignedDrivers->where('type', 'batangan');
+        $unassignedCadanganDrivers = $unassignedDrivers->where('type', 'cadangan');
+        
+        // For each unassigned driver, get their total schedule counts for the month
+        foreach ($unassignedDrivers as $driver) {
+            $monthlySchedules = Schedule::where('driver_id', $driver->id)
+                ->whereYear('schedule_date', $year)
+                ->whereMonth('schedule_date', $month)
+                ->get();
+                
+            $driver->total_schedules = $monthlySchedules->count();
+            $driver->total_morning = $monthlySchedules->where('shift', 'morning')->count();
+            $driver->total_afternoon = $monthlySchedules->where('shift', 'evening')->count();
+        }
+        
         return view('modules.admin.schedules.consolidated', [
             'month' => $month,
             'year' => $year,
@@ -195,6 +221,8 @@ class ScheduleController extends Controller
             'holidays' => $holidays,
             'unitRenops' => $unitRenops,
             'driversOnLeave' => $driversOnLeave,
+            'unassignedBatanganDrivers' => $unassignedBatanganDrivers,
+            'unassignedCadanganDrivers' => $unassignedCadanganDrivers,
         ]);
     }
     
