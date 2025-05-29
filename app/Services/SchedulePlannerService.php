@@ -734,42 +734,56 @@ class SchedulePlannerService
         array $unitDayOffs = []
     ): array {
         $dayOffAssignments = [];
-
+        $unitDriverMap = [];
+        
         foreach ($batanganDrivers as $driver) {
             $driverUnits = $driver->units;
             if ($driverUnits->isEmpty()) {
                 continue;
             }
-
+            
             $primaryUnit = $driverUnits->first();
+            $unitId = $primaryUnit->id;
+            
+            if (!isset($unitDriverMap[$unitId])) {
+                $unitDriverMap[$unitId] = [];
+            }
+            
+            $unitDriverMap[$unitId][] = $driver->id;
+        }
+        
+        foreach ($unitDriverMap as $unitId => $driverIds) {
+            if (empty($driverIds)) {
+                continue;
+            }
+            $driverId = $driverIds[0];
+            
             $availableDays = [];
             for ($day = 0; $day < $totalDays; $day++) {
                 $currentDate = Carbon::now()->addDays($day)->format('Y-m-d');
-
-                if (isset($unitDayOffs[$currentDate]) && in_array($primaryUnit->id, $unitDayOffs[$currentDate])) {
+                
+                if (isset($unitDayOffs[$currentDate]) && in_array($unitId, $unitDayOffs[$currentDate])) {
                     continue;
                 }
-
+                
                 $availableDays[] = $day;
             }
-
+            
             $daysOffNeeded = min(self::MIN_DAYS_OFF_PER_PERIOD, count($availableDays));
-
+            
             if ($daysOffNeeded > 0) {
                 $dayOffIndices = [];
                 $interval = max(1, floor(count($availableDays) / $daysOffNeeded));
-
+                
                 for ($i = 0; $i < $daysOffNeeded; $i++) {
                     $dayIndex = $availableDays[min($i * $interval, count($availableDays) - 1)];
                     $dayOffIndices[] = $dayIndex;
                 }
-
-                $dayOffAssignments[$driver->id] = $dayOffIndices;
-
-                Log::info("Assigned day-offs for batangan driver {$driver->id}: " . implode(', ', $dayOffIndices));
+                
+                $dayOffAssignments[$driverId] = $dayOffIndices;                
             }
         }
-
+        
         return $dayOffAssignments;
     }
 
