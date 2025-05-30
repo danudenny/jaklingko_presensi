@@ -597,4 +597,188 @@ class ScheduleController extends Controller
             return back()->withErrors(['generation' => 'An error occurred while generating schedules: ' . $e->getMessage()]);
         }
     }
+
+    public function update(Request $request): JsonResponse
+    {
+        try {            
+            $unitId = $request->input('unitId');
+            $additions = $request->input('additions', []);
+            $removals = $request->input('removals', []);
+            $month = $request->input('month');
+            $year = $request->input('year');
+            $period = $request->input('period');
+            
+            if (empty($unitId) || (empty($additions) && empty($removals)) || empty($month) || empty($year) || empty($period)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Missing required fields'
+                ], 400);
+            }
+            
+            DB::beginTransaction();
+            
+            $unit = Unit::findOrFail($unitId);
+            $route = $unit->routes->first();
+            
+            if (!$route) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unit tidak memiliki rute yang terkait'
+                ], 400);
+            }
+            
+            if ($period == 1) {
+                $startDate = Carbon::createFromDate($year, $month, 1);
+                $endDate = Carbon::createFromDate($year, $month, 15);
+            } else {
+                $startDate = Carbon::createFromDate($year, $month, 16);
+                $endDate = Carbon::createFromDate($year, $month)->endOfMonth();
+            }
+            
+            $additionDates = [];
+            $additionShifts = [];
+            $removalDates = [];
+            $removalShifts = [];
+            
+            foreach ($additions as $addition) {
+                if (!empty($addition['date']) && !empty($addition['shift'])) {
+                    $date = $addition['date'];
+                    
+                    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                        try {
+                            if (preg_match('/^(\d{1,2})/', $date, $matches)) {
+                                $day = str_pad($matches[1], 2, '0', STR_PAD_LEFT);
+                                $formattedDate = Carbon::createFromDate($year, $month, $day)->format('Y-m-d');
+                                $date = $formattedDate;                                
+                            }
+                        } catch (\Exception $e) {
+                            continue;
+                        }
+                    }
+                    
+                    $additionDates[] = $date;
+                    $additionShifts[$date] = $addition['shift'];
+                }
+            }
+            
+            foreach ($removals as $removal) {
+                if (!empty($removal['date']) && !empty($removal['shift'])) {
+                    $date = $removal['date'];
+                    
+                    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                        try {
+                            if (preg_match('/^(\d{1,2})/', $date, $matches)) {
+                                $day = str_pad($matches[1], 2, '0', STR_PAD_LEFT);
+                                $formattedDate = Carbon::createFromDate($year, $month, $day)->format('Y-m-d');
+                                $date = $formattedDate;                                
+                            }
+                        } catch (\Exception $e) {
+                            continue;
+                        }
+                    }
+                    
+                    $removalDates[] = $date;
+                    $removalShifts[$date] = $removal['shift'];
+                    $removalDrivers[$date] = $removal['driverId'] ?? null;
+                }
+            }
+            
+            $deleted = 0;
+            if (!empty($removalDates)) {
+                $query = Schedule::where('unit_id', $unitId);
+                
+                $query->where(function($q) use ($removalDates, $removalShifts, $removalDrivers) {
+                    foreach ($removalDates as $date) {
+                        $shift = $removalShifts[$date] ?? null;
+                        $driverId = $removalDrivers[$date] ?? null;
+                        if ($shift) {
+                            $q->orWhere(function($subq) use ($date, $shift, $driverId) {
+                                $subq->where('schedule_date', $date)
+                                    ->where('shift', $shift);
+                                
+                                // If driver ID is provided, use it to make the deletion more specific
+                                if ($driverId) {
+                                    $subq->where('driver_id', $driverId);
+                                }
+                            });
+                        }
+                    }
+                });
+                
+                $sql = $query->toSql();
+                $bindings = $query->getBindings();
+                
+                $deleted = $query->delete();
+            }
+            
+            $deletedForAdditions = 0;
+            if (!empty($additionDates)) {
+                $query = Schedule::where('unit_id', $unitId);
+                
+                $query->where(function($q) use ($additionDates, $additionShifts) {
+                    foreach ($additionDates as $date) {
+                        $shift = $additionShifts[$date] ?? null;
+                        if ($shift) {
+                            $q->orWhere(function($subq) use ($date, $shift) {
+                                $subq->where('schedule_date', $date)
+                                    ->where('shift', $shift);
+                            });
+                        }
+                    }
+                });
+                
+                $sql = $query->toSql();
+                $bindings = $query->getBindings();
+                
+                $deletedForAdditions = $query->delete();
+            }
+            
+            $created = 0;
+            foreach ($additions as $addition) {
+                if (!empty($addition['date']) && !empty($addition['shift']) && !empty($addition['driverId'])) {
+                    $date = $addition['date'];
+                    
+                    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                        try {
+                            if (preg_match('/^(\d{1,2})/', $date, $matches)) {
+                                $day = str_pad($matches[1], 2, '0', STR_PAD_LEFT);
+                                $formattedDate = Carbon::createFromDate($year, $month, $day)->format('Y-m-d');
+                                $date = $formattedDate;
+                            }
+                        } catch (\Exception $e) {
+                            continue;
+                        }
+                    }
+                    
+                    Schedule::create([
+                        'unit_id' => $unitId,
+                        'route_id' => $route->id,
+                        'driver_id' => $addition['driverId'],
+                        'schedule_date' => $date,
+                        'shift' => $addition['shift'],
+                    ]);
+                    
+                    $created++;
+                }
+            }
+            
+            DB::commit();
+            
+            return response()->json([
+                'success' => true,
+                'message' => "Jadwal berhasil diperbarui. Menambahkan {$created} jadwal baru dan menghapus " . ($deleted + $deletedForAdditions) . " jadwal yang ada.",
+                'data' => [
+                    'created' => $created,
+                    'deleted' => $deleted + $deletedForAdditions
+                ]
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan saat memperbarui jadwal: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

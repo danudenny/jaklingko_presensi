@@ -141,6 +141,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/generate', [ScheduleController::class, 'generateForm'])->name('generate.form');
         Route::post('/generate', [ScheduleController::class, 'generate'])->name('generate');
         Route::post('/reset-all', [ScheduleController::class, 'resetAll'])->name('reset-all');
+        Route::post('/update', [ScheduleController::class, 'update'])->name('update');
     });
 
     // Leave Request routes

@@ -6,12 +6,15 @@
 <style>
     @import url('{{ asset('css/schedule/consolidated.css') }}');
 </style>
+<meta name="csrf-token" content="{{ csrf_token() }}">
 @endpush
 
 @section('content')
 @push('scripts')
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script src="{{ asset('js/schedule/consolidated.js') }}"></script>
+<script src="{{ asset('js/schedule/editor.js') }}"></script>
+<script src="{{ asset('js/schedule/toast.js') }}"></script>
 @endpush
 <div class="w-full px-4 container-fluid">
     <x-page-title>
