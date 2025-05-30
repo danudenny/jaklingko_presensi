@@ -10,6 +10,7 @@ use App\Models\Route;
 use App\Models\Schedule;
 use App\Models\Unit;
 use App\Models\UnitRenops;
+use App\Models\LeaveRequest;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
@@ -22,25 +23,17 @@ use Illuminate\Support\Facades\Log;
 
 class ScheduleController extends Controller
 {
-    /**
-     * Display a consolidated schedule view organized by routes, units and drivers
-     * 
-     * @param Request $request
-     * @return \Illuminate\View\View
-     */
     public function index(Request $request)
     {
-        // Get selected month, year and period from request or use current date
         $month = $request->query('month', Carbon::now()->month);
         $year = $request->query('year', Carbon::now()->year);
-        $period = $request->query('period', 1); // Default to first period (1-15)
+        $period = $request->query('period', 1);
         $selectedRoute = $request->query('route', null);
         $selectedDriverType = $request->query('driver_type', null);
         $selectedDriver = $request->query('driver', null);
         $selectedUnit = $request->query('unit', null);
         $selectedShift = $request->query('shift', null);
         
-        // Calculate date range for the selected period
         if ($period == 1) {
             $startDate = Carbon::createFromDate($year, $month, 1);
             $endDate = Carbon::createFromDate($year, $month, 15);
@@ -49,7 +42,6 @@ class ScheduleController extends Controller
             $endDate = Carbon::createFromDate($year, $month)->endOfMonth();
         }
         
-        // Create array of dates in the range
         $dateRange = [];
         $currentDate = clone $startDate;
         
@@ -58,26 +50,18 @@ class ScheduleController extends Controller
             $currentDate->addDay();
         }
         
-        // Get holidays in the date range
         $holidaysCollection = Holiday::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->get();
             
-        // Format the dates properly for use in the view
         $holidays = [];
         foreach ($holidaysCollection as $holiday) {
             $formattedDate = $holiday->date->format('Y-m-d');
             $holidays[$formattedDate] = $holiday->name;
         }
-        
-        // Log the holidays for debugging
-        \Illuminate\Support\Facades\Log::info('Holidays loaded for schedule display:', $holidays);
-        
-        // Get units in renops (not operating) for the date range
+                
         $unitRenopsCollection = UnitRenops::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->get();
             
-        // Format the unit renops data for easy lookup in the view
-        // Structure: [date][unit_id] = true
         $unitRenops = [];
         foreach ($unitRenopsCollection as $renop) {
             $formattedDate = $renop->date->format('Y-m-d');
@@ -87,10 +71,6 @@ class ScheduleController extends Controller
             $unitRenops[$formattedDate][$renop->unit_id] = true;
         }
         
-        // Log the unit renops for debugging
-        \Illuminate\Support\Facades\Log::info('Unit renops loaded for schedule display:', ['count' => count($unitRenopsCollection)]);
-
-        // Get all routes, drivers and units to build the dropdown filters
         $routes = Route::orderBy('route_number')->get();
         $drivers = Driver::where('status', 'aktif')
             ->orderByRaw('CASE WHEN type = "batangan" THEN 0 ELSE 1 END')
@@ -100,14 +80,12 @@ class ScheduleController extends Controller
             ->orderBy('unit_number')
             ->get();
         
-        // Build query for schedules based on filters
         $query = Schedule::with(['driver', 'backupDriver', 'route', 'unit'])
             ->whereBetween('schedule_date', [
                 $startDate->format('Y-m-d'),
                 $endDate->format('Y-m-d')
             ]);
             
-        // Apply filters if selected
         if ($selectedRoute) {
             $query->where('route_id', $selectedRoute);
         }
@@ -133,17 +111,14 @@ class ScheduleController extends Controller
             $query->where('shift', $selectedShift);
         }
             
-        // Get schedules
         $schedules = $query->get();
         
-        // Calculate statistics
         $totalAssignments = $schedules->count();
         $uniqueDriversCount = $schedules->pluck('driver_id')->unique()->count() + 
                              $schedules->whereNotNull('backup_driver_id')->pluck('backup_driver_id')->unique()->count();
         $uniqueUnitsCount = $schedules->pluck('unit_id')->unique()->count();
         
-        // Get approved leave requests for the date range
-        $leaveRequests = \App\Models\LeaveRequest::with('driver')
+        $leaveRequests = LeaveRequest::with('driver')
             ->where('status', 'approved')
             ->where(function($query) use ($startDate, $endDate) {
                 $query->where(function($q) use ($startDate, $endDate) {
@@ -153,7 +128,6 @@ class ScheduleController extends Controller
             })
             ->get();
             
-        // Create a lookup array for drivers on leave by date
         $driversOnLeave = [];
         foreach ($leaveRequests as $leaveRequest) {
             $leaveStart = Carbon::parse($leaveRequest->start_date);
@@ -169,24 +143,19 @@ class ScheduleController extends Controller
             }
         }
         
-        // Build route-unit-driver matrix
         $routeUnitDrivers = $this->buildRouteUnitDriverMatrix($schedules, $dateRange);
         
-        // Get unassigned drivers for the period
         $assignedDriverIds = $schedules->pluck('driver_id')->unique()->toArray();
         $assignedBackupDriverIds = $schedules->whereNotNull('backup_driver_id')->pluck('backup_driver_id')->unique()->toArray();
         $allAssignedDriverIds = array_unique(array_merge($assignedDriverIds, $assignedBackupDriverIds));
         
-        // Get all active drivers not in the assigned list
         $unassignedDrivers = Driver::where('status', 'aktif')
             ->whereNotIn('id', $allAssignedDriverIds)
             ->get();
             
-        // Split by driver type
         $unassignedBatanganDrivers = $unassignedDrivers->where('type', 'batangan');
         $unassignedCadanganDrivers = $unassignedDrivers->where('type', 'cadangan');
         
-        // For each unassigned driver, get their total schedule counts for the month
         foreach ($unassignedDrivers as $driver) {
             $monthlySchedules = Schedule::where('driver_id', $driver->id)
                 ->whereYear('schedule_date', $year)
@@ -194,9 +163,11 @@ class ScheduleController extends Controller
                 ->get();
                 
             $driver->total_schedules = $monthlySchedules->count();
-            $driver->total_morning = $monthlySchedules->where('shift', 'morning')->count();
-            $driver->total_afternoon = $monthlySchedules->where('shift', 'evening')->count();
+            $driver->total_morning = $monthlySchedules->where('shift', 'pagi')->count();
+            $driver->total_afternoon = $monthlySchedules->where('shift', 'siang')->count();
         }
+
+        // We don't need this mapping anymore since we're handling backup drivers in the buildRouteUnitDriverMatrix method
         
         return view('modules.admin.schedules.consolidated', [
             'month' => $month,
@@ -244,6 +215,9 @@ class ScheduleController extends Controller
         $units = Unit::whereIn('id', $unitIds)->orderBy('unit_number')->get();
         $routes = Route::whereIn('id', $routeIds)->orderBy('route_number')->get();
         
+        // Get all active drivers for reference
+        $allActiveDrivers = Driver::where('status', 'aktif')->get();
+        
         // Group schedules by route, unit, driver and shift
         foreach ($routes as $route) {
             $routeMatrix = [
@@ -267,13 +241,46 @@ class ScheduleController extends Controller
                 
                 $unitSchedules = $routeSchedules->where('unit_id', $unit->id);
                 if ($unitSchedules->isEmpty()) {
+                    // Even if there are no schedules, we still want to include all drivers assigned to this unit
+                    $unitDrivers = $allActiveDrivers->filter(function($driver) use ($unit) {
+                        return $driver->units->contains('id', $unit->id);
+                    });
+                    
+                    foreach ($unitDrivers as $driver) {
+                        $driverMatrix = [
+                            'driver' => $driver,
+                            'shifts' => [
+                                'pagi' => [
+                                    'dates' => [],
+                                    'backup_dates' => [],
+                                    'maintenance_dates' => []
+                                ],
+                                'siang' => [
+                                    'dates' => [],
+                                    'backup_dates' => [],
+                                    'maintenance_dates' => []
+                                ]
+                            ]
+                        ];
+                        $unitMatrix['drivers'][] = $driverMatrix;
+                    }
+                    
+                    $routeMatrix['units'][] = $unitMatrix;
                     continue;
                 }
                 
-                // Group by driver
-                $driverIds = $unitSchedules->pluck('driver_id')->unique();
+                // Get all drivers assigned to this unit
+                $unitDrivers = $allActiveDrivers->filter(function($driver) use ($unit) {
+                    return $driver->units->contains('id', $unit->id);
+                });
                 
-                foreach ($driverIds as $driverId) {
+                // Get all driver IDs with schedules for this unit
+                $driverIdsWithSchedules = $unitSchedules->pluck('driver_id')->unique()->toArray();
+                $backupDriverIdsWithSchedules = $unitSchedules->whereNotNull('backup_driver_id')
+                    ->pluck('backup_driver_id')->unique()->toArray();
+                
+                // Process drivers with schedules first
+                foreach ($driverIdsWithSchedules as $driverId) {
                     $driverSchedules = $unitSchedules->where('driver_id', $driverId);
                     $driver = $driverSchedules->first()->driver;
                     
@@ -315,6 +322,69 @@ class ScheduleController extends Controller
                         
                         $driverMatrix['shifts'][$shift]['backup_dates'][] = $date;
                     }
+                    
+                    $unitMatrix['drivers'][] = $driverMatrix;
+                }
+                
+                // Process backup drivers who have backup assignments
+                foreach ($backupDriverIdsWithSchedules as $backupDriverId) {
+                    // Skip if already processed as a regular driver
+                    if (in_array($backupDriverId, $driverIdsWithSchedules)) {
+                        continue;
+                    }
+                    
+                    $backupDriver = $allActiveDrivers->firstWhere('id', $backupDriverId);
+                    if (!$backupDriver) continue;
+                    
+                    $backupSchedules = $unitSchedules->where('backup_driver_id', $backupDriverId);
+                    
+                    $driverMatrix = [
+                        'driver' => $backupDriver,
+                        'shifts' => [
+                            'pagi' => [
+                                'dates' => [],
+                                'backup_dates' => [],
+                                'maintenance_dates' => []
+                            ],
+                            'siang' => [
+                                'dates' => [],
+                                'backup_dates' => [],
+                                'maintenance_dates' => []
+                            ]
+                        ]
+                    ];
+                    
+                    foreach ($backupSchedules as $schedule) {
+                        $date = $schedule->schedule_date->format('Y-m-d');
+                        $shift = $schedule->shift;
+                        $driverMatrix['shifts'][$shift]['backup_dates'][] = $date;
+                    }
+                    
+                    $unitMatrix['drivers'][] = $driverMatrix;
+                }
+                
+                // Add drivers assigned to this unit but without any schedules
+                foreach ($unitDrivers as $driver) {
+                    // Skip if already processed
+                    if (in_array($driver->id, $driverIdsWithSchedules) || in_array($driver->id, $backupDriverIdsWithSchedules)) {
+                        continue;
+                    }
+                    
+                    $driverMatrix = [
+                        'driver' => $driver,
+                        'shifts' => [
+                            'pagi' => [
+                                'dates' => [],
+                                'backup_dates' => [],
+                                'maintenance_dates' => []
+                            ],
+                            'siang' => [
+                                'dates' => [],
+                                'backup_dates' => [],
+                                'maintenance_dates' => []
+                            ]
+                        ]
+                    ];
                     
                     $unitMatrix['drivers'][] = $driverMatrix;
                 }

@@ -83,17 +83,14 @@ class Schedule extends Model
 
         // First try to find batangan drivers
         $batanganDrivers = Driver::batangan()
-            ->active()
+            ->where('status', 'aktif')
             ->whereHas('units', function ($query) {
                 $query->where('units.id', $this->unit_id);
             })
             ->whereDoesntHave('schedules', function ($query) use ($date) {
                 $query->where('schedule_date', $date);
             })
-            ->get()
-            ->filter(function ($driver) use ($date, $shift) {
-                return $driver->isAvailableFor($date, $shift);
-            });
+            ->get();
 
         if ($batanganDrivers->isNotEmpty()) {
             return $batanganDrivers;
@@ -101,17 +98,14 @@ class Schedule extends Model
 
         // If no batangan drivers are available, try cadangan drivers
         $cadanganDrivers = Driver::cadangan()
-            ->active()
+            ->where('status', 'aktif')
             ->whereHas('units', function ($query) {
                 $query->where('units.id', $this->unit_id);
             })
             ->whereDoesntHave('schedules', function ($query) use ($date) {
                 $query->where('schedule_date', $date);
             })
-            ->get()
-            ->filter(function ($driver) use ($date, $shift) {
-                return $driver->isAvailableFor($date, $shift);
-            });
+            ->get();
 
         return $cadanganDrivers;
     }

@@ -33,10 +33,6 @@
                     <i class="mr-2 fas fa-calendar-plus"></i>
                     Buat Jadwal
                 </a>
-                <button id="edit-schedule-btn" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-500 hover:to-orange-600">
-                    <i class="mr-2 fas fa-edit"></i>
-                    <span id="edit-btn-text">Edit Jadwal</span>
-                </button>
                 <button id="show-unassigned-btn" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600">
                     <i class="mr-2 fas fa-user-slash"></i>
                     Pengemudi Belum Terjadwal

@@ -5,7 +5,96 @@
 @push('styles')
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/airbnb.css">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <style>
+        /* Select2 custom styling to match default inputs */
+        .select2-container--default .select2-selection--single {
+            height: 38px;
+            padding: 0.375rem 0.75rem;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            border: 1px solid #D1D5DB;
+            border-radius: 0.375rem;
+        }
+        
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            line-height: 1.25rem;
+            padding-left: 0;
+            color: #111827;
+        }
+        
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 36px;
+        }
+        
+        .select2-container--default .select2-search--dropdown .select2-search__field {
+            border: 1px solid #D1D5DB;
+            border-radius: 0.375rem;
+            padding: 0.375rem 0.75rem;
+        }
+        
+        .select2-dropdown {
+            border: 1px solid #D1D5DB;
+            border-radius: 0.375rem;
+        }
+        
+        .select2-results__option {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+        }
+        
+        .select2-container--default .select2-results__option--highlighted[aria-selected] {
+            background-color: #4F46E5;
+        }
+        
+        /* Loading indicator styles */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        
+        .loading-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .loading-spinner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        
+        .spinner {
+            width: 3rem;
+            height: 3rem;
+            border: 4px solid #E5E7EB;
+            border-top: 4px solid #4F46E5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Original styles */
         .days-count {
             display: inline-flex;
             align-items: center;
@@ -43,6 +132,14 @@
 
 @section('content')
 <div class="container mx-auto py-6">
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p class="text-gray-700 font-medium">Memproses pengajuan cuti...</p>
+        </div>
+    </div>
+    
     <x-page-title>
         <x-slot name="title">Tambah Pengajuan Cuti</x-slot>
         <x-slot name="actions">
@@ -56,14 +153,14 @@
     <x-flash-message />
 
     <x-card>
-        <form action="{{ route('leave-requests.store') }}" method="POST" enctype="multipart/form-data">
+        <form action="{{ route('leave-requests.store') }}" method="POST" enctype="multipart/form-data" id="leave-request-form">
             @csrf
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Driver -->
                 <div>
                     <label for="driver_id" class="block text-sm font-medium text-gray-700">Pengemudi</label>
-                    <select id="driver_id" name="driver_id" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md @error('driver_id') border-red-500 @enderror">
+                    <select id="driver_id" name="driver_id" class="select2-driver mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md @error('driver_id') border-red-500 @enderror">
                         <option value="">Pilih Pengemudi</option>
                         @foreach($drivers as $driver)
                             <option value="{{ $driver->id }}" {{ old('driver_id') == $driver->id ? 'selected' : '' }}>
@@ -189,8 +286,37 @@
 
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Form submission loading indicator
+        const form = document.getElementById('leave-request-form');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        
+        if (form) {
+            form.addEventListener('submit', function() {
+                // Validate form before showing loading indicator
+                if (form.checkValidity()) {
+                    loadingOverlay.classList.add('active');
+                }
+            });
+        }
+        
+        // Initialize Select2 for driver select
+        $('.select2-driver').select2({
+            placeholder: 'Cari pengemudi...',
+            allowClear: true,
+            width: '100%',
+            language: {
+                noResults: function() {
+                    return "Tidak ada pengemudi yang ditemukan";
+                },
+                searching: function() {
+                    return "Mencari...";
+                }
+            }
+        });
+        
         // Initialize flatpickr for date range
         const dateRangePicker = flatpickr("#date-range", {
             mode: "range",
