@@ -251,40 +251,39 @@
 
                                     @foreach($unitGroup['drivers'] as $driverInfo)
                                         @foreach(['pagi', 'siang'] as $shift)
-                                            @if(!empty($driverInfo['shifts'][$shift]['dates']) || !empty($driverInfo['shifts'][$shift]['backup_dates']))
-                                                <tr class="transition-colors hover:bg-gray-50">
-                                                    <td class="px-3 py-2 text-xs text-right text-gray-500"></td>
-                                                    <td class="px-3 py-2 text-xs text-right text-gray-500"></td>
-                                                    <td class="px-3 py-3 text-sm">
-                                                        <div class="flex items-center">
-                                                            <div class="flex-shrink-0">
-                                                                <span class="inline-flex items-center justify-center h-7 w-7 rounded-full {{ $driverInfo['driver']->type == 'batangan' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-700' }}">
-                                                                    <i class="text-xs fas fa-user"></i>
-                                                                </span>
-                                                            </div>
-                                                            <div class="ml-3">
-                                                                <a href="{{ route('drivers.show', $driverInfo['driver']->id) }}" class="font-medium text-gray-800 hover:text-indigo-600 hover:underline">{{ $driverInfo['driver']->name }}</a>
-                                                                <p class="text-xs {{ $driverInfo['driver']->type == 'batangan' ? 'text-emerald-600' : 'text-gray-500' }}">
-                                                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full {{ $driverInfo['driver']->type == 'batangan' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-800' }} text-xxs font-medium">
-                                                                        {{ ucfirst($driverInfo['driver']->type) }}
-                                                                    </span>
-                                                                </p>
-                                                            </div>
+                                            <tr class="transition-colors hover:bg-gray-50">
+                                                <td class="px-3 py-2 text-xs text-right text-gray-500"></td>
+                                                <td class="px-3 py-2 text-xs text-right text-gray-500"></td>
+                                                <td class="px-3 py-3 text-sm">
+                                                    <div class="flex items-center">
+                                                        <div class="flex-shrink-0">
+                                                            <span class="inline-flex items-center justify-center h-7 w-7 rounded-full {{ $driverInfo['driver']->type == 'batangan' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-700' }}">
+                                                                <i class="text-xs fas fa-user"></i>
+                                                            </span>
                                                         </div>
-                                                    </td>
-                                                    <td class="px-3 py-3 text-sm">
-                                                        @if($shift == 'pagi')
-                                                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                                <i class="mr-1 text-blue-600 fas fa-sun"></i>
-                                                                Pagi
-                                                            </span>
-                                                        @else
-                                                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                                                                <i class="mr-1 fas fa-moon text-amber-600"></i>
-                                                                Siang
-                                                            </span>
-                                                        @endif
-                                                    </td>
+                                                        <div class="ml-3">
+                                                            <a href="{{ route('drivers.show', $driverInfo['driver']->id) }}" class="font-medium text-gray-800 hover:text-indigo-600 hover:underline">{{ $driverInfo['driver']->name }}</a>
+                                                            <p class="text-xs {{ $driverInfo['driver']->type == 'batangan' ? 'text-emerald-600' : 'text-gray-500' }}">
+                                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full {{ $driverInfo['driver']->type == 'batangan' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-800' }} text-xxs font-medium">
+                                                                    {{ ucfirst($driverInfo['driver']->type) }}
+                                                                </span>
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td class="px-3 py-3 text-sm">
+                                                    @if($shift == 'pagi')
+                                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                            <i class="mr-1 text-blue-600 fas fa-sun"></i>
+                                                            Pagi
+                                                        </span>
+                                                    @else
+                                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                                            <i class="mr-1 fas fa-moon text-amber-600"></i>
+                                                            Siang
+                                                        </span>
+                                                    @endif
+                                                </td>
 
                                                     @foreach($dateRange as $date)
                                                         @php
@@ -359,7 +358,6 @@
                                                         </div>
                                                     </td>
                                                 </tr>
-                                            @endif
                                         @endforeach
                                     @endforeach
                                 </tbody> <!-- Close unit-content -->
