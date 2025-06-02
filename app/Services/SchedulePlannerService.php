@@ -803,7 +803,50 @@ class SchedulePlannerService
         array $schedulePlan
     ): array {
         $priorityDrivers = [];
+        
+        // Count assigned days for each driver type to ensure balanced distribution
+        $batanganAssignmentCounts = [];
+        $cadanganAssignmentCounts = [];
+        
+        // Calculate current assignment counts for all drivers
+        foreach ($batanganDrivers as $driver) {
+            $batanganAssignmentCounts[$driver->id] = 0;
+            if (isset($schedulePlan[$driver->id])) {
+                foreach ($schedulePlan[$driver->id] as $day => $assignedShift) {
+                    if ($assignedShift !== self::SHIFT_NONE) {
+                        $batanganAssignmentCounts[$driver->id]++;
+                    }
+                }
+            }
+        }
+        
+        foreach ($cadanganDrivers as $driver) {
+            $cadanganAssignmentCounts[$driver->id] = 0;
+            if (isset($schedulePlan[$driver->id])) {
+                foreach ($schedulePlan[$driver->id] as $day => $assignedShift) {
+                    if ($assignedShift !== self::SHIFT_NONE) {
+                        $cadanganAssignmentCounts[$driver->id]++;
+                    }
+                }
+            }
+        }
+        
+        // Calculate the average assignment counts for both driver types
+        $avgBatanganAssignments = count($batanganAssignmentCounts) > 0 ? 
+            array_sum($batanganAssignmentCounts) / count($batanganAssignmentCounts) : 0;
+        $avgCadanganAssignments = count($cadanganAssignmentCounts) > 0 ? 
+            array_sum($cadanganAssignmentCounts) / count($cadanganAssignmentCounts) : 0;
+        
+        // Target ratio: batangan drivers should get approximately 30% more assignments than cadangan
+        $targetBatanganToCadanganRatio = 1.3;
+        $currentRatio = $avgBatanganAssignments > 0 && $avgCadanganAssignments > 0 ? 
+            $avgBatanganAssignments / $avgCadanganAssignments : $targetBatanganToCadanganRatio;
+        
+        // Adjust priorities based on the current ratio vs target ratio
+        $batanganPriorityMultiplier = $currentRatio < $targetBatanganToCadanganRatio ? 0.7 : 1.0;
+        $cadanganPriorityMultiplier = $currentRatio > $targetBatanganToCadanganRatio ? 0.7 : 1.0;
 
+        // Process batangan drivers
         foreach ($batanganDrivers as $driver) {
             if (!isset($driverUnitAssignments[$driver->id]) ||
                 !in_array($unitId, $driverUnitAssignments[$driver->id])) {
@@ -819,15 +862,24 @@ class SchedulePlannerService
                 $schedulePlan[$driver->id][$dayIndex] !== self::SHIFT_NONE) {
                 continue;
             }
+            
+            // Adjust priority based on current assignment count
+            // Lower priority (better) for drivers with fewer assignments
+            $assignmentCount = $batanganAssignmentCounts[$driver->id] ?? 0;
+            $assignmentFactor = max(0.5, 1 - ($assignmentCount / 15)); // Normalize to a factor between 0.5 and 1
+            
+            $adjustedPriority = self::PRIORITY_BATANGAN * $batanganPriorityMultiplier * $assignmentFactor;
 
             $priorityDrivers[] = [
                 'driver_id' => $driver->id,
                 'type' => 'batangan',
-                'priority' => self::PRIORITY_BATANGAN,
-                'unit_id' => $unitId
+                'priority' => $adjustedPriority,
+                'unit_id' => $unitId,
+                'assignments' => $assignmentCount
             ];
         }
 
+        // Process cadangan drivers
         foreach ($cadanganDrivers as $driver) {
             if (!isset($driverUnitAssignments[$driver->id]) ||
                 !in_array($unitId, $driverUnitAssignments[$driver->id])) {
@@ -840,25 +892,26 @@ class SchedulePlannerService
             }
             
             $assignmentsToThisUnit = 0;
-            $totalAssignments = 0;
+            $totalAssignments = $cadanganAssignmentCounts[$driver->id] ?? 0;
             
             if (isset($this->cadanganDriverUnitAssignments[$driver->id])) {
                 foreach ($this->cadanganDriverUnitAssignments[$driver->id] as $day => $assignedUnitId) {
-                    if ($assignedUnitId !== null) {
-                        $totalAssignments++;
-                        if ($assignedUnitId === $unitId) {
-                            $assignmentsToThisUnit++;
-                        }
+                    if ($assignedUnitId !== null && $assignedUnitId === $unitId) {
+                        $assignmentsToThisUnit++;
                     }
                 }
             }
             
-            $adjustedPriority = self::PRIORITY_CADANGAN;
-            $adjustedPriority -= (10 - min(10, $totalAssignments)) * 0.1;
+            // Base priority for cadangan drivers
+            $adjustedPriority = self::PRIORITY_CADANGAN * $cadanganPriorityMultiplier;
             
+            // Adjust based on total assignments (higher assignments = higher priority number = lower actual priority)
+            $adjustedPriority += ($totalAssignments * 0.2);
+            
+            // Adjust based on unit consistency
             if ($totalAssignments > 0) {
                 $unitRatio = $assignmentsToThisUnit / $totalAssignments;
-                $adjustedPriority -= (1 - $unitRatio) * 0.5;
+                $adjustedPriority -= (1 - $unitRatio) * 0.5; // Favor consistent unit assignments
             }
 
             $priorityDrivers[] = [
@@ -871,6 +924,7 @@ class SchedulePlannerService
             ];
         }
 
+        // Sort by priority (lower number = higher priority)
         usort($priorityDrivers, function($a, $b) {
             return $a['priority'] <=> $b['priority'];
         });
@@ -900,76 +954,211 @@ class SchedulePlannerService
                 if (isset($unitDayOffs[$currentDate]) && in_array($unit->id, $unitDayOffs[$currentDate])) {
                     continue;
                 }
-
-                foreach ([self::SHIFT_PAGI, self::SHIFT_SIANG] as $shift) {
-                    if (!empty($unitCoverage[$unit->id][$currentDate][$shift])) {
-                        continue;
-                    }
-
-                    $priorityDrivers = $this->getPriorityOrderedDrivers(
-                        $unit->id,
-                        $shift,
-                        $day,
-                        $batanganDrivers,
-                        $cadanganDrivers,
-                        $driverUnitAssignments,
-                        $batanganDayOffs,
-                        $schedulePlan
-                    );
-
-                    foreach ($priorityDrivers as $driverInfo) {
-                        $driverId = $driverInfo['driver_id'];
-                        $driverType = $driverInfo['type'];
-                        $canAssign = true;
-                        if ($day > 0) {
-                            $previousShift = $schedulePlan[$driverId][$day - 1] ?? self::SHIFT_NONE;
-                            $previousShiftCode = $this->shiftToShiftCode($previousShift);
-                            $currentShiftCode = $this->shiftToShiftCode($shift);
-
-                            $validNextShifts = $this->transitionRules[$previousShiftCode] ?? [];
-                            if (!in_array($currentShiftCode, $validNextShifts)) {
-                                $canAssign = false;
-                            }
-                        }
-
-                        if ($canAssign) {
-                            $schedulePlan[$driverId][$day] = $shift;
-                            $unitCoverage[$unit->id][$currentDate][$shift][] = $driverId;
+                
+                // Check if both shifts need to be filled for this unit and day
+                $pagiEmpty = empty($unitCoverage[$unit->id][$currentDate][self::SHIFT_PAGI]);
+                $siangEmpty = empty($unitCoverage[$unit->id][$currentDate][self::SHIFT_SIANG]);
+                
+                // Skip if both shifts are already filled
+                if (!$pagiEmpty && !$siangEmpty) {
+                    continue;
+                }
+                
+                // If one shift is filled but the other isn't, we need to prioritize filling the empty one
+                // to ensure paired shifts
+                if (!$pagiEmpty && $siangEmpty) {
+                    $this->assignShiftForUnit($unit, $currentDate, self::SHIFT_SIANG, $day, $batanganDrivers, $cadanganDrivers, 
+                        $driverUnitAssignments, $batanganDayOffs, $schedulePlan, $unitCoverage, $assignmentLog);
+                } else if ($pagiEmpty && !$siangEmpty) {
+                    $this->assignShiftForUnit($unit, $currentDate, self::SHIFT_PAGI, $day, $batanganDrivers, $cadanganDrivers, 
+                        $driverUnitAssignments, $batanganDayOffs, $schedulePlan, $unitCoverage, $assignmentLog);
+                } else {
+                    // Both shifts are empty, try to assign both shifts together
+                    // First try to find a pair of drivers (one for each shift) that can be assigned together
+                    $pagiAssigned = $this->assignShiftForUnit($unit, $currentDate, self::SHIFT_PAGI, $day, $batanganDrivers, $cadanganDrivers, 
+                        $driverUnitAssignments, $batanganDayOffs, $schedulePlan, $unitCoverage, $assignmentLog);
+                    
+                    if ($pagiAssigned) {
+                        // If pagi was assigned, now try to assign siang
+                        $siangAssigned = $this->assignShiftForUnit($unit, $currentDate, self::SHIFT_SIANG, $day, $batanganDrivers, $cadanganDrivers, 
+                            $driverUnitAssignments, $batanganDayOffs, $schedulePlan, $unitCoverage, $assignmentLog);
+                        
+                        // If we couldn't assign siang, we should consider unassigning pagi to maintain paired shifts
+                        if (!$siangAssigned && !empty($unitCoverage[$unit->id][$currentDate][self::SHIFT_PAGI])) {
+                            $pagiDriverId = $unitCoverage[$unit->id][$currentDate][self::SHIFT_PAGI][0];
+                            $pagiDriverType = $this->getDriverTypeById($pagiDriverId, $batanganDrivers, $cadanganDrivers);
                             
-                            if ($driverType === 'cadangan') {
-                                $this->cadanganDriverUnitAssignments[$driverId][$day] = $unit->id;
-                            }
-
-                            $logMessage = "PRIORITY ASSIGNMENT: {$driverType} driver {$driverId} assigned to Unit {$unit->unit_number} on {$currentDate} {$shift} shift";
-
-                            if ($driverType === 'cadangan') {
-                                $batanganOnDayOff = false;
-                                foreach ($batanganDrivers as $batanganDriver) {
-                                    if (isset($driverUnitAssignments[$batanganDriver->id]) &&
-                                        in_array($unit->id, $driverUnitAssignments[$batanganDriver->id]) &&
-                                        $this->isBatanganDriverOnDayOff($batanganDriver->id, $day, $batanganDayOffs)) {
-                                        $batanganOnDayOff = true;
-                                        $logMessage .= " (covering for batangan driver {$batanganDriver->id} day-off)";
-                                        break;
-                                    }
+                            // Only unassign if this is not a critical assignment
+                            if ($pagiDriverType !== 'critical') {
+                                // Unassign the pagi driver
+                                $schedulePlan[$pagiDriverId][$day] = self::SHIFT_NONE;
+                                $unitCoverage[$unit->id][$currentDate][self::SHIFT_PAGI] = [];
+                                
+                                if ($pagiDriverType === 'cadangan') {
+                                    $this->cadanganDriverUnitAssignments[$pagiDriverId][$day] = null;
                                 }
+                                
+                                $logMessage = "UNASSIGNED: {$pagiDriverType} driver {$pagiDriverId} unassigned from Unit {$unit->unit_number} on {$currentDate} pagi shift to maintain paired shifts";
+                                Log::info($logMessage);
+                                $assignmentLog[] = $logMessage;
                             }
-
-                            Log::info($logMessage);
-                            $assignmentLog[] = $logMessage;
-                            break;
                         }
-                    }
-
-                    if (empty($unitCoverage[$unit->id][$currentDate][$shift])) {
-                        $gapMessage = "COVERAGE GAP: No available driver for Unit {$unit->unit_number} on {$currentDate} {$shift} shift";
-                        $assignmentLog[] = $gapMessage;
                     }
                 }
             }
         }
 
         return $assignmentLog;
+    }
+    
+    /**
+     * Helper method to assign a driver to a specific shift
+     */
+    protected function assignShiftForUnit(
+        $unit, 
+        $currentDate, 
+        $shift, 
+        $day, 
+        $batanganDrivers, 
+        $cadanganDrivers, 
+        $driverUnitAssignments, 
+        $batanganDayOffs, 
+        &$schedulePlan, 
+        &$unitCoverage, 
+        &$assignmentLog
+    ): bool {
+        if (!empty($unitCoverage[$unit->id][$currentDate][$shift])) {
+            return true; // Already assigned
+        }
+        
+        // Calculate current assignment counts for batangan and cadangan drivers
+        $batanganAssignmentCounts = [];
+        $cadanganAssignmentCounts = [];
+        
+        foreach ($batanganDrivers as $driver) {
+            $batanganAssignmentCounts[$driver->id] = 0;
+            if (isset($schedulePlan[$driver->id])) {
+                foreach ($schedulePlan[$driver->id] as $dayShift) {
+                    if ($dayShift !== self::SHIFT_NONE) {
+                        $batanganAssignmentCounts[$driver->id]++;
+                    }
+                }
+            }
+        }
+        
+        foreach ($cadanganDrivers as $driver) {
+            $cadanganAssignmentCounts[$driver->id] = 0;
+            if (isset($schedulePlan[$driver->id])) {
+                foreach ($schedulePlan[$driver->id] as $dayShift) {
+                    if ($dayShift !== self::SHIFT_NONE) {
+                        $cadanganAssignmentCounts[$driver->id]++;
+                    }
+                }
+            }
+        }
+        
+        // Find the minimum assignment count for batangan drivers
+        $minBatanganAssignments = !empty($batanganAssignmentCounts) ? min($batanganAssignmentCounts) : 0;
+        $maxCadanganAssignments = !empty($cadanganAssignmentCounts) ? max($cadanganAssignmentCounts) : 0;
+        
+        // If the minimum batangan assignment count is less than the maximum cadangan assignment count,
+        // prioritize batangan drivers even more
+        $forceBatanganPriority = $minBatanganAssignments < $maxCadanganAssignments;
+        
+        $priorityDrivers = $this->getPriorityOrderedDrivers(
+            $unit->id,
+            $shift,
+            $day,
+            $batanganDrivers,
+            $cadanganDrivers,
+            $driverUnitAssignments,
+            $batanganDayOffs,
+            $schedulePlan
+        );
+        
+        // If we need to force batangan priority, filter out cadangan drivers if there are valid batangan drivers
+        if ($forceBatanganPriority) {
+            $batanganPriorityDrivers = array_filter($priorityDrivers, function($driver) {
+                return $driver['type'] === 'batangan';
+            });
+            
+            // Only use batangan drivers if there are any available
+            if (!empty($batanganPriorityDrivers)) {
+                $priorityDrivers = $batanganPriorityDrivers;
+            }
+        }
+
+        foreach ($priorityDrivers as $driverInfo) {
+            $driverId = $driverInfo['driver_id'];
+            $driverType = $driverInfo['type'];
+            $canAssign = true;
+            
+            if ($day > 0) {
+                $previousShift = $schedulePlan[$driverId][$day - 1] ?? self::SHIFT_NONE;
+                $previousShiftCode = $this->shiftToShiftCode($previousShift);
+                $currentShiftCode = $this->shiftToShiftCode($shift);
+
+                $validNextShifts = $this->transitionRules[$previousShiftCode] ?? [];
+                if (!in_array($currentShiftCode, $validNextShifts)) {
+                    $canAssign = false;
+                }
+            }
+
+            if ($canAssign) {
+                $schedulePlan[$driverId][$day] = $shift;
+                $unitCoverage[$unit->id][$currentDate][$shift][] = $driverId;
+                
+                if ($driverType === 'cadangan') {
+                    $this->cadanganDriverUnitAssignments[$driverId][$day] = $unit->id;
+                }
+
+                $logMessage = "PRIORITY ASSIGNMENT: {$driverType} driver {$driverId} assigned to Unit {$unit->unit_number} on {$currentDate} {$shift} shift";
+
+                if ($driverType === 'cadangan') {
+                    $batanganOnDayOff = false;
+                    foreach ($batanganDrivers as $batanganDriver) {
+                        if (isset($driverUnitAssignments[$batanganDriver->id]) &&
+                            in_array($unit->id, $driverUnitAssignments[$batanganDriver->id]) &&
+                            $this->isBatanganDriverOnDayOff($batanganDriver->id, $day, $batanganDayOffs)) {
+                            $batanganOnDayOff = true;
+                            $logMessage .= " (covering for batangan driver {$batanganDriver->id} day-off)";
+                            break;
+                        }
+                    }
+                }
+
+                Log::info($logMessage);
+                $assignmentLog[] = $logMessage;
+                return true;
+            }
+        }
+
+        if (empty($unitCoverage[$unit->id][$currentDate][$shift])) {
+            $gapMessage = "COVERAGE GAP: No available driver for Unit {$unit->unit_number} on {$currentDate} {$shift} shift";
+            $assignmentLog[] = $gapMessage;
+            return false;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Helper method to get driver type by ID
+     */
+    protected function getDriverTypeById($driverId, $batanganDrivers, $cadanganDrivers) {
+        foreach ($batanganDrivers as $driver) {
+            if ($driver->id === $driverId) {
+                return 'batangan';
+            }
+        }
+        
+        foreach ($cadanganDrivers as $driver) {
+            if ($driver->id === $driverId) {
+                return 'cadangan';
+            }
+        }
+        
+        return 'unknown';
     }
 
     public function optimizeSchedulePlan(
