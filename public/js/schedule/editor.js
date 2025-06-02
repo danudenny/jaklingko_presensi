@@ -227,12 +227,15 @@ function saveUnitChanges(unitId) {
 
         // Only process if all required data is present
         if (date && shift && driverId) {
+            // Ensure driverId is properly parsed as an integer
+            const parsedDriverId = parseInt(driverId, 10);
+            
             if (isChecked) {
                 // Add to changes if checkbox is checked
                 changes.push({
                     date,
                     shift,
-                    driverId,
+                    driverId: parsedDriverId,
                     action: "add",
                 });
             } else if (originallyChecked) {
@@ -240,7 +243,7 @@ function saveUnitChanges(unitId) {
                 removals.push({
                     date,
                     shift,
-                    driverId, // Include driverId in removals
+                    driverId: parsedDriverId, // Include driverId in removals
                     action: "remove",
                 });
             }

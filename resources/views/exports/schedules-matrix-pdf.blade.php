@@ -82,12 +82,30 @@
             position: relative;
         }
         .checkbox.checked {
-            background-color: #4CAF50;
+            background-color: #4CAF50; /* Green for regular drivers */
             border-color: #4CAF50;
         }
         .checkbox.backup {
-            background-color: #FFC107;
-            border-color: #FFC107;
+            background-color: #9C27B0; /* Purple for backup drivers */
+            border-color: #9C27B0;
+        }
+        .checkbox.cadangan {
+            background-color: #FF9800; /* Orange for cadangan drivers */
+            border-color: #FF9800;
+        }
+        .checkbox.renops {
+            background-color: #2196F3; /* Blue for renops units */
+            border-color: #2196F3;
+        }
+        .checkbox.on-leave {
+            background-color: #F44336; /* Red for on leave drivers */
+            border-color: #F44336;
+        }
+        .cadangan-driver {
+            background-color: #E6E6FA; /* Light lavender for cadangan drivers */
+        }
+        .unit-renops {
+            background-color: #FFEBEE; /* Light red for unit renops */
         }
         .driver-type {
             font-size: 7px;
@@ -197,8 +215,11 @@
         <p><strong>Informasi Matrix:</strong></p>
         <p>Matrix ini menampilkan jadwal pengemudi untuk {{ $periodText }}.</p>
         <div class="legend">
-            <div class="legend-item"><span class="legend-color assigned"></span> Pengemudi yang dijadwalkan</div>
-            <div class="legend-item"><span class="legend-color backup"></span> Pengemudi cadangan</div>
+            <div class="legend-item"><span class="legend-color" style="display: inline-block; width: 10px; height: 10px; background-color: #4CAF50; border: 1px solid #4CAF50;"></span> Pengemudi tetap</div>
+            <div class="legend-item"><span class="legend-color" style="display: inline-block; width: 10px; height: 10px; background-color: #FF9800; border: 1px solid #FF9800;"></span> Pengemudi cadangan</div>
+            <div class="legend-item"><span class="legend-color" style="display: inline-block; width: 10px; height: 10px; background-color: #2196F3; border: 1px solid #2196F3;"></span> Unit renops</div>
+            <div class="legend-item"><span class="legend-color" style="display: inline-block; width: 10px; height: 10px; background-color: #9C27B0; border: 1px solid #9C27B0;"></span> Pengemudi backup</div>
+            <div class="legend-item"><span class="legend-color" style="display: inline-block; width: 10px; height: 10px; background-color: #F44336; border: 1px solid #F44336;"></span> Pengemudi cuti</div>
         </div>
         <p>Shift Pagi ditampilkan dengan warna <span class="shift-pagi">biru</span> dan Shift Siang dengan warna <span class="shift-siang">oranye</span>.</p>
     </div>
@@ -229,7 +250,7 @@
                 
                 @foreach($driverShifts as $driverId => $shifts)
                     @foreach($shifts as $shiftName => $shiftData)
-                        <tr>
+                        <tr class="{{ $shiftData['driver']->type === 'cadangan' ? 'cadangan-driver' : '' }} {{ $unit->is_renops ? 'unit-renops' : '' }}">
                             <td class="info-cell unit-cell">
                                 @if($isFirstInGroup)
                                     <strong>{{ $unit->unit_number }}</strong>
@@ -258,7 +279,18 @@
                             @foreach($dateRange as $date)
                                 <td>
                                     @if(in_array($date, $shiftData['dates'] ?? []))
-                                        <div class="checkbox checked"></div>
+                                        @php
+                                            $checkboxClass = 'checked';
+                                            // Apply different colors based on driver type and unit properties
+                                            if ($shiftData['driver']->type === 'cadangan') {
+                                                $checkboxClass = 'cadangan';
+                                            } elseif ($unit->is_renops) {
+                                                $checkboxClass = 'renops';
+                                            } elseif ($shiftData['driver']->status === 'cuti' || $shiftData['driver']->status === 'on_leave') {
+                                                $checkboxClass = 'on-leave';
+                                            }
+                                        @endphp
+                                        <div class="checkbox {{ $checkboxClass }}"></div>
                                     @elseif(in_array($date, $shiftData['backup_dates'] ?? []))
                                         <div class="checkbox backup"></div>
                                     @else

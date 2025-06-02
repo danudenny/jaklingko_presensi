@@ -88,6 +88,7 @@ class SchedulesMatrixPdfExport
                 $this->startDate->format('Y-m-d'), 
                 $this->endDate->format('Y-m-d')
             ])
+            ->where('status', 'scheduled') // Only include schedules with status = 'scheduled'
             ->get();
     }
     

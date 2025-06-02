@@ -131,6 +131,11 @@ class UnitRenopsObserver
                 $originalStatus = $schedule->status;
                 $note = "Changed from {$originalStatus} to renops on " . now()->format('Y-m-d H:i:s');
                 
+                // If the original status was 'scheduled', decrement the driver's schedule count
+                if ($originalStatus === 'scheduled' && $schedule->driver_id) {
+                    $this->decrementDriverScheduleCount($schedule);
+                }
+                
                 // Update the schedule status instead of deleting
                 $schedule->status = 'renops';
                 if (property_exists($schedule, 'notes') || isset($schedule->notes)) {
@@ -138,6 +143,34 @@ class UnitRenopsObserver
                 }
                 $schedule->save();
             }
+        }
+    }
+    
+    /**
+     * Recalculate the schedule count for a driver when a schedule is changed to 'renops'
+     *
+     * @param  \App\Models\Schedule  $schedule
+     * @return void
+     */
+    private function decrementDriverScheduleCount($schedule)
+    {
+        $date = $schedule->schedule_date;
+        $driverId = $schedule->driver_id;
+        
+        // Determine the period based on the date
+        $day = $date->day;
+        $periodStart = $day <= 15 ? $date->copy()->startOfMonth() : $date->copy()->startOfMonth()->addDays(15);
+        $periodEnd = $day <= 15 ? $date->copy()->startOfMonth()->addDays(14) : $date->copy()->endOfMonth();
+        
+        // Use the new recalculateScheduleCount method to accurately count only 'scheduled' status schedules
+        $history = \App\Models\DriverScheduleHistory::recalculateScheduleCount(
+            $driverId,
+            $periodStart->format('Y-m-d'),
+            $periodEnd->format('Y-m-d')
+        );
+        
+        if ($history) {
+            Log::info("Recalculated schedule count for Driver #{$driverId} in period {$periodStart->format('Y-m-d')} to {$periodEnd->format('Y-m-d')}. New count: {$history->total_schedules}");
         }
     }
     

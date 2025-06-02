@@ -15,6 +15,24 @@
 <script src="{{ asset('js/schedule/consolidated.js') }}"></script>
 <script src="{{ asset('js/schedule/editor.js') }}"></script>
 <script src="{{ asset('js/schedule/toast.js') }}"></script>
+<script>
+    // Function to show loading overlay when exporting PDF
+    function showLoadingOverlay(message = 'Loading...') {
+        const overlay = document.getElementById('loading-overlay');
+        const messageElement = overlay.querySelector('div > div:last-child');
+        
+        // Update message if provided
+        if (messageElement && message) {
+            messageElement.textContent = message;
+        }
+        
+        // Show the overlay
+        overlay.classList.remove('hidden');
+        
+        // Return true to allow the link's default action to proceed
+        return true;
+    }
+</script>
 @endpush
 <div class="w-full px-4 container-fluid">
     <x-page-title>
@@ -54,11 +72,11 @@
                             <i class="mr-2 text-green-500 fas fa-file-excel"></i>
                             Excel
                         </a>
-                        <a href="{{ route('schedules.export.pdf', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver_type' => $selectedDriverType, 'driver' => $selectedDriver, 'unit' => $selectedUnit, 'shift' => $selectedShift]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
+                        <a href="{{ route('schedules.export.pdf', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver_type' => $selectedDriverType, 'driver' => $selectedDriver, 'unit' => $selectedUnit, 'shift' => $selectedShift]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900" onclick="showLoadingOverlay('Mengeksport PDF...')">
                             <i class="mr-2 text-red-500 fas fa-file-pdf"></i>
                             PDF
                         </a>
-                        <a href="{{ route('schedules.export.matrix-pdf', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver_type' => $selectedDriverType, 'driver' => $selectedDriver, 'unit' => $selectedUnit, 'shift' => $selectedShift]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900">
+                        <a href="{{ route('schedules.export.matrix-pdf', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver_type' => $selectedDriverType, 'driver' => $selectedDriver, 'unit' => $selectedUnit, 'shift' => $selectedShift]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900" onclick="showLoadingOverlay('Mengeksport Matrix PDF...')">
                             <i class="mr-2 text-purple-500 fas fa-table"></i>
                             Matrix PDF
                         </a>
@@ -380,6 +398,16 @@
         
         <!-- Stats Drawer -->
         @include('modules.admin.schedules.components.stats-drawer')
+    </div>
+    
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+        <div class="p-6 bg-white rounded-lg shadow-xl">
+            <div class="flex items-center space-x-4">
+                <div class="w-12 h-12 border-4 border-t-4 border-gray-200 rounded-full loader border-t-indigo-500 animate-spin"></div>
+                <div class="text-xl font-medium text-gray-700">Mengeksport PDF...</div>
+            </div>
+        </div>
     </div>
 </div>
 @endsection

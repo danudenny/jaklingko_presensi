@@ -113,10 +113,13 @@ class ScheduleController extends Controller
             
         $schedules = $query->get();
         
-        $totalAssignments = $schedules->count();
-        $uniqueDriversCount = $schedules->pluck('driver_id')->unique()->count() + 
-                             $schedules->whereNotNull('backup_driver_id')->pluck('backup_driver_id')->unique()->count();
-        $uniqueUnitsCount = $schedules->pluck('unit_id')->unique()->count();
+        // Filter schedules to only include those with status = 'scheduled'
+        $scheduledSchedules = $schedules->where('status', 'scheduled');
+        
+        $totalAssignments = $scheduledSchedules->count();
+        $uniqueDriversCount = $scheduledSchedules->pluck('driver_id')->unique()->count() + 
+                             $scheduledSchedules->whereNotNull('backup_driver_id')->pluck('backup_driver_id')->unique()->count();
+        $uniqueUnitsCount = $scheduledSchedules->pluck('unit_id')->unique()->count();
         
         $leaveRequests = LeaveRequest::with('driver')
             ->where('status', 'approved')
@@ -449,8 +452,8 @@ class ScheduleController extends Controller
             $query->where('shift', $selectedShift);
         }
             
-        // Get schedules
-        $schedules = $query->get();
+        // Get schedules - only include those with status = 'scheduled'
+        $schedules = $query->where('status', 'scheduled')->get();
         
         $monthName = Carbon::createFromDate($year, $month, 1)->format('F');
         $filename = "jadwal-{$monthName}-{$year}-periode-{$period}";
@@ -509,8 +512,8 @@ class ScheduleController extends Controller
             $query->where('shift', $selectedShift);
         }
             
-        // Get schedules
-        $schedules = $query->get();
+        // Get schedules - only include those with status = 'scheduled'
+        $schedules = $query->where('status', 'scheduled')->get();
         
         $export = new SchedulesPdfExport($schedules);
         return $export->download();
@@ -568,7 +571,8 @@ class ScheduleController extends Controller
         // Get schedules
         $schedules = $query->get();
         
-        $export = new SchedulesMatrixPdfExport($schedules);
+        // Pass the correct parameters to the SchedulesMatrixPdfExport constructor: month, year, period
+        $export = new SchedulesMatrixPdfExport($month, $year, $period);
         return $export->download();
     }
 
@@ -707,6 +711,7 @@ class ScheduleController extends Controller
             
             $additionDates = [];
             $additionShifts = [];
+            $additionDrivers = [];
             $removalDates = [];
             $removalShifts = [];
             
@@ -728,6 +733,7 @@ class ScheduleController extends Controller
                     
                     $additionDates[] = $date;
                     $additionShifts[$date] = $addition['shift'];
+                    $additionDrivers[$date] = $addition['driverId'] ?? null;
                 }
             }
             
@@ -785,13 +791,19 @@ class ScheduleController extends Controller
             if (!empty($additionDates)) {
                 $query = Schedule::where('unit_id', $unitId);
                 
-                $query->where(function($q) use ($additionDates, $additionShifts) {
+                $query->where(function($q) use ($additionDates, $additionShifts, $additionDrivers) {
                     foreach ($additionDates as $date) {
                         $shift = $additionShifts[$date] ?? null;
+                        $driverId = $additionDrivers[$date] ?? null;
                         if ($shift) {
-                            $q->orWhere(function($subq) use ($date, $shift) {
+                            $q->orWhere(function($subq) use ($date, $shift, $driverId) {
                                 $subq->where('schedule_date', $date)
                                     ->where('shift', $shift);
+                                    
+                                // If driver ID is provided, use it to make the deletion more specific
+                                if ($driverId) {
+                                    $subq->where('driver_id', $driverId);
+                                }
                             });
                         }
                     }
@@ -826,6 +838,7 @@ class ScheduleController extends Controller
                         'driver_id' => $addition['driverId'],
                         'schedule_date' => $date,
                         'shift' => $addition['shift'],
+                        'status' => 'scheduled',
                     ]);
                     
                     $created++;

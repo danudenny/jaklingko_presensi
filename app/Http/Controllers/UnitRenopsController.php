@@ -180,6 +180,10 @@ class UnitRenopsController extends Controller
                         'holiday_id' => $holidayId
                     ]
                 );
+                
+                // Remove any existing schedules for this unit on this date
+                // This ensures that when a unit is marked as not operating, all its schedules are removed
+                $this->removeSchedulesForUnitOnDate($unitId, $date);
             }
 
             DB::commit();
@@ -381,6 +385,33 @@ class UnitRenopsController extends Controller
                 ->first();
 
             if ($existingRenops) {
+                // Find any schedules for this unit on this date that were marked as 'renops'
+                $schedules = \App\Models\Schedule::where('unit_id', $unitId)
+                    ->where('schedule_date', $date->format('Y-m-d'))
+                    ->where('status', 'renops')
+                    ->get();
+                
+                // Restore these schedules to 'scheduled' status
+                foreach ($schedules as $schedule) {
+                    $schedule->status = 'scheduled';
+                    $schedule->save();
+                    
+                    // Recalculate the driver's schedule count
+                    $driverId = $schedule->driver_id;
+                    if ($driverId) {
+                        $day = $date->day;
+                        $periodStart = $day <= 15 ? $date->copy()->startOfMonth() : $date->copy()->startOfMonth()->addDays(15);
+                        $periodEnd = $day <= 15 ? $date->copy()->startOfMonth()->addDays(14) : $date->copy()->endOfMonth();
+                        
+                        // Use the recalculateScheduleCount method to update counts
+                        \App\Models\DriverScheduleHistory::recalculateScheduleCount(
+                            $driverId,
+                            $periodStart->format('Y-m-d'),
+                            $periodEnd->format('Y-m-d')
+                        );
+                    }
+                }
+                
                 // Remove the unit from renops (this will trigger the observer)
                 $existingRenops->delete();
                 
@@ -388,7 +419,7 @@ class UnitRenopsController extends Controller
 
                 return response()->json([
                     'success' => true,
-                    'message' => "Unit {$unitNumber} removed from renops plan for {$date->format('Y-m-d')}. This unit is now available for scheduling.",
+                    'message' => "Unit {$unitNumber} removed from renops plan for {$date->format('Y-m-d')}. This unit is now available for scheduling and any affected schedules have been restored.",
                     'status' => 'removed'
                 ]);
             } else {
@@ -485,39 +516,77 @@ class UnitRenopsController extends Controller
      * 
      * @param string $dayType The day type (saturday, sunday, holiday)
      * @param int|null $routeId Optional route ID to filter units by route
-     * @return int The maximum number of units that can be unavailable
      */
-    private function getMaxLimit(string $dayType, ?int $routeId = null): int
+    private function getMaxLimit(string $dayType): int
     {
         $settings = RenopsSettings::getCurrentSettings();
+        $defaultPercentage = 100; // Default to 100% if no setting is found
         
-        // Start with active units query
-        $query = Unit::active();
+        if ($dayType === 'saturday') {
+            return (int)($settings->saturday_percentage ?? $defaultPercentage);
+        } elseif ($dayType === 'sunday') {
+            return (int)($settings->sunday_percentage ?? $defaultPercentage);
+        } else { // holiday
+            return (int)($settings->holiday_percentage ?? $defaultPercentage);
+        }
+    }
+    
+    /**
+     * Remove all schedules for a specific unit on a specific date
+     * 
+     * @param int $unitId The ID of the unit
+     * @param Carbon $date The date to remove schedules for
+     * @return int The number of schedules removed
+     */
+    private function removeSchedulesForUnitOnDate(int $unitId, Carbon $date): int
+    {
+        // Find all schedules for this unit on this date
+        $schedules = \App\Models\Schedule::where('unit_id', $unitId)
+            ->whereDate('schedule_date', $date->format('Y-m-d'))
+            ->get();
+            
+        $count = $schedules->count();
         
-        // If route is specified, filter units by that route
-        if ($routeId) {
-            $query->whereHas('routes', function($q) use ($routeId) {
-                $q->where('routes.id', $routeId);
-            });
+        // Delete each schedule and handle related records
+        foreach ($schedules as $schedule) {
+            // If there's a backup driver assigned, we need to update their schedule history
+            if ($schedule->backup_driver_id) {
+                // Find and update the backup driver's schedule history
+                $periodStart = $date->copy()->startOfMonth()->format('Y-m-d');
+                $periodEnd = $date->copy()->endOfMonth()->format('Y-m-d');
+                
+                $history = \App\Models\DriverScheduleHistory::where('driver_id', $schedule->backup_driver_id)
+                    ->where('period_start_date', $periodStart)
+                    ->where('period_end_date', $periodEnd)
+                    ->first();
+                    
+                if ($history && $history->total_schedules > 0) {
+                    $history->total_schedules -= 1;
+                    $history->target_met = $history->total_schedules >= $history->target_count;
+                    $history->save();
+                }
+                
+                // Delete any driver history records for the backup driver
+                \App\Models\DriverHistory::where('driver_id', $schedule->backup_driver_id)
+                    ->where('unit_id', $schedule->unit_id)
+                    ->where('shift', $schedule->shift)
+                    ->whereDate('start_date', $date->format('Y-m-d'))
+                    ->where('as_backup', true)
+                    ->delete();
+            }
+            
+            // Delete any driver history records for the main driver
+            \App\Models\DriverHistory::where('driver_id', $schedule->driver_id)
+                ->where('unit_id', $schedule->unit_id)
+                ->where('shift', $schedule->shift)
+                ->whereDate('start_date', $date->format('Y-m-d'))
+                ->delete();
+                
+            // Delete the schedule
+            $schedule->delete();
         }
         
-        // Count all units (both pool and non-pool) for the threshold calculation
-        // This ensures we consider all units for a route, regardless of ownership
-        $totalUnits = $query->count();
-        
-        // Apply the threshold based on day type to get units that should be operating
-        $threshold = $settings->getThresholdForDayType($dayType) / 100;
-        $unitsToOperate = (int) ceil($totalUnits * $threshold);
-        
-        // Calculate units that can be unavailable (total - operating)
-        $unitsCanBeUnavailable = $totalUnits - $unitsToOperate;
-        
-        // Ensure at least one unit per route is operational
-        if ($routeId && $unitsCanBeUnavailable >= $totalUnits) {
-            $unitsCanBeUnavailable = $totalUnits - 1;
-        }
-        
-        return max(0, $unitsCanBeUnavailable);
+        return $count;
     }
     
     /**
