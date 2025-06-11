@@ -61,9 +61,11 @@
         @include('components.sidebar-item', [
             'route' => 'users.index',
             'icon' => 'users',
-            'text' => 'Users'
+            'text' => 'Pengguna'
         ])
         @endif
+
+        <hr class="my-2 border-gray-700">
 
         @include('components.sidebar-item', [
             'route' => 'drivers.index',
@@ -83,12 +85,39 @@
             'text' => 'Rute'
         ])
 
+        @include('components.sidebar-item', [
+            'route' => 'holidays.index',
+            'icon' => 'calendar-xmark',
+            'text' => 'Hari Libur'
+        ])
+
+        <hr class="my-2 border-gray-700">
+
+        @include('components.sidebar-item', [
+            'route' => 'renops.index',
+            'icon' => 'car-tunnel',
+            'text' => 'Renops'
+        ])
+
         @include('components.sidebar-item-pulse', [
             'route' => 'schedules.index',
             'icon' => 'calendar-day',
             'text' => 'Jadwal'
         ])
 
+        @include('components.sidebar-item', [
+            'route' => 'kilometer-reports.index',
+            'icon' => 'tachometer-alt',
+            'text' => 'Laporan Kilometer'
+        ])
+
+        @include('components.sidebar-item', [
+            'route' => 'global-kilometer-reports.index',
+            'icon' => 'users-gear',
+            'text' => 'Laporan Kilometer Global'
+        ])
+
+        <hr class="my-2 border-gray-700">
         @include('components.sidebar-item', [
             'route' => 'leave-requests.index',
             'icon' => 'person-walking-arrow-right',
@@ -107,29 +136,7 @@
             'text' => 'Log Perawatan'
         ])
 
-        @include('components.sidebar-item', [
-            'route' => 'holidays.index',
-            'icon' => 'calendar-xmark',
-            'text' => 'Hari Libur'
-        ])
-
-        @include('components.sidebar-item', [
-            'route' => 'kilometer-reports.index',
-            'icon' => 'tachometer-alt',
-            'text' => 'Laporan Kilometer'
-        ])
-
-        @include('components.sidebar-item', [
-            'route' => 'global-kilometer-reports.index',
-            'icon' => 'users-gear',
-            'text' => 'Laporan Kilometer Global'
-        ])
-
-        @include('components.sidebar-item', [
-            'route' => 'renops.index',
-            'icon' => 'car-tunnel',
-            'text' => 'Renops'
-        ])
+        
     </nav>
 
     <!-- Logout -->
