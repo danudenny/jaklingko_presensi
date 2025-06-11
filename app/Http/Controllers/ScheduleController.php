@@ -632,7 +632,7 @@ class ScheduleController extends Controller
             'start_date' => 'required|date',
             'end_date'   => 'required|date|after_or_equal:start_date',
             'route_id' => 'required|exists:routes,id',
-            'unit_id' => 'required|exists:units,id'
+            'unit_id' => 'nullable|exists:units,id'
         ]);
 
         $scheduleService = new ScheduleGeneratorService();

@@ -52,21 +52,8 @@
         }
         
         /* Custom styles for weekend days (Saturday and Sunday) */
-        .flatpickr-day.weekend {
-            background-color: #FFEDD5; /* Orange background */
-            border-color: #FDBA74;
-        }
-        
         .flatpickr-day.weekend:hover {
             background-color: #FED7AA;
-        }
-        
-        /* Custom styles for holidays */
-        .flatpickr-day.holiday {
-            background-color: #FEE2E2; /* Red background */
-            border-color: #FECACA;
-            color: #EF4444;
-            font-weight: bold;
         }
         
         .flatpickr-day.holiday:hover {
@@ -130,15 +117,21 @@
 
                     <!-- Unit Selection -->
                     <div>
-                        <label for="unit_id" class="block mb-1 text-sm font-medium text-gray-700">Unit</label>
+                        <label for="unit_id" class="block mb-1 text-sm font-medium text-gray-700">
+                            Unit 
+                            <span class="text-xs font-normal text-gray-500">(Opsional)</span>
+                        </label>
                         <div class="relative">
                             <select id="unit_id" name="unit_id" class="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 text-base border-gray-300 rounded-md @error('unit_id') border-red-500 @enderror">
-                                <option value="">Pilih Unit</option>
+                                <option value="">Semua Unit dalam Rute</option>
                             </select>
                             <div x-show="loading" class="absolute right-2 top-2">
                                 <i class="text-indigo-500 fas fa-spinner fa-spin"></i>
                             </div>
                         </div>
+                        <p class="mt-1 text-xs text-gray-500">
+                            Pilih unit spesifik atau biarkan kosong untuk membuat jadwal semua unit dalam rute
+                        </p>
                         @error('unit_id')
                             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                         @enderror
@@ -175,25 +168,6 @@
                                 </span>
                             </div>
                         </div>
-                        
-                        <div class="flex flex-wrap gap-2 mt-3">
-                            <button type="button" data-days="0" class="date-preset">
-                                <i class="mr-1 fas fa-calendar-day"></i>
-                                Hari Ini
-                            </button>
-                            <button type="button" data-days="7" class="date-preset">
-                                <i class="mr-1 fas fa-calendar-week"></i>
-                                7 Hari Kedepan
-                            </button>
-                            <button type="button" data-days="15" class="date-preset">
-                                <i class="mr-1 fas fa-calendar-alt"></i>
-                                15 Hari Kedepan
-                            </button>
-                            <button type="button" data-days="30" class="date-preset">
-                                <i class="mr-1 fas fa-calendar"></i>
-                                30 Hari Kedepan
-                            </button>
-                        </div>
 
                         @error('start_date')
                             <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
@@ -210,12 +184,12 @@
                         <input type="checkbox" id="clear_existing" name="clear_existing" value="1" class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
                         <label for="clear_existing" class="ml-2 text-sm text-gray-700">
                             Hapus jadwal yang sudah ada untuk periode yang sama
-                            <span class="text-xs text-gray-500 block">Centang jika ingin mengganti jadwal yang sudah ada</span>
+                            <span class="block text-xs text-gray-500">Centang jika ingin mengganti jadwal yang sudah ada</span>
                         </label>
                     </div>
                 </div>
 
-                <div class="flex justify-end mt-6">
+                <div class="flex items-center justify-end mt-6">
                     <button type="submit" id="submit-button" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                         <i class="mr-2 fas fa-calendar-plus" id="button-icon"></i>
                         <span id="button-text">Buat Jadwal</span>
@@ -223,6 +197,12 @@
                             <i class="fas fa-spinner fa-spin"></i>
                         </span>
                     </button>
+                    
+                    <!-- Generation Type Indicator -->
+                    <div id="generation-type" class="hidden px-3 py-2 ml-4 text-xs border border-blue-200 rounded-md bg-blue-50">
+                        <i class="mr-1 text-blue-500 fas fa-info-circle"></i>
+                        <span id="generation-type-text"></span>
+                    </div>
                 </div>
             </form>
         </div>
@@ -274,7 +254,7 @@
                 e.preventDefault();
                 return false;
             }
-            
+
             // Calculate the difference in days
             const start = new Date(startDate);
             const end = new Date(endDate);
@@ -601,7 +581,8 @@
     // Alpine.js function to get units for selected route
     function getUnitsForRoute(routeId) {
         if (!routeId) {
-            document.getElementById('unit_id').innerHTML = '<option value="">Pilih Unit</option>';
+            document.getElementById('unit_id').innerHTML = '<option value="">Semua Unit dalam Rute</option>';
+            updateGenerationTypeIndicator('', '');
             return;
         }
 
@@ -617,11 +598,14 @@
         .then(data => {
             if (data.success) {
                 const unitSelect = document.getElementById('unit_id');
-                unitSelect.innerHTML = '<option value="">Pilih Unit</option>';
+                unitSelect.innerHTML = '<option value="">Semua Unit dalam Rute</option>';
                 data.data.forEach(unit => {
                     const option = new Option(`${unit.unit_number} - ${unit.plate_number}`, unit.id);
                     unitSelect.add(option);
                 });
+                
+                // Update generation type indicator
+                updateGenerationTypeIndicator(routeId, '');
             }
         })
         .catch(error => {
@@ -633,17 +617,53 @@
         });
     }
 
+    // Function to update generation type indicator
+    function updateGenerationTypeIndicator(routeId, unitId) {
+        const indicator = document.getElementById('generation-type');
+        const text = document.getElementById('generation-type-text');
+        
+        if (!routeId) {
+            indicator.classList.add('hidden');
+            return;
+        }
+        
+        if (unitId) {
+            text.textContent = 'Mode: Unit Spesifik - Jadwal akan dibuat untuk unit yang dipilih saja';
+            indicator.classList.remove('hidden');
+            // Remove blue classes and add green classes
+            indicator.classList.remove('bg-blue-50', 'border-blue-200');
+            indicator.classList.add('bg-green-50', 'border-green-200');
+            // Update icon color
+            const icon = indicator.querySelector('i');
+            if (icon) {
+                icon.classList.remove('text-blue-500');
+                icon.classList.add('text-green-500');
+            }
+        } else {
+            text.textContent = 'Mode: Seluruh Rute - Jadwal akan dibuat untuk semua unit dalam rute';
+            indicator.classList.remove('hidden');
+            // Remove green classes and add blue classes
+            indicator.classList.remove('bg-green-50', 'border-green-200');
+            indicator.classList.add('bg-blue-50', 'border-blue-200');
+            // Update icon color
+            const icon = indicator.querySelector('i');
+            if (icon) {
+                icon.classList.remove('text-green-500');
+                icon.classList.add('text-blue-500');
+            }
+        }
+    }
+
     $(document).ready(function() {
         // Add form validation
         $('#generate-form').on('submit', function(e) {
-            // Validate route and unit selection
+            // Validate route selection
             const routeId = $('#route_id').val();
-            const unitId = $('#unit_id').val();
             const startDate = $('#start_date').val();
             const endDate = $('#end_date').val();
             
-            if (!routeId || !unitId) {
-                toastr.error('Silakan pilih rute dan unit terlebih dahulu.', 'Error');
+            if (!routeId) {
+                toastr.error('Silakan pilih rute terlebih dahulu.', 'Error');
                 e.preventDefault();
                 return false;
             }
@@ -666,21 +686,33 @@
             $('#loading-spinner').removeClass('hidden');
             $('#submit-button').attr('disabled', true).addClass('opacity-75');
             
-            // Show toast notification
+            // Show toast notification with generation type info
+            const unitId = $('#unit_id').val();
+            const generationType = unitId ? 'unit spesifik' : 'seluruh rute';
+            
             toastr.info(
-                `Memproses pembuatan jadwal untuk ${diffDays} hari dari ${formatDisplayDate(start)} hingga ${formatDisplayDate(end)}. ` +
+                `Memproses pembuatan jadwal ${generationType} untuk ${diffDays} hari dari ${formatDisplayDate(start)} hingga ${formatDisplayDate(end)}. ` +
                 `Proses ini mungkin memerlukan waktu beberapa saat.`,
                 'Memproses Jadwal'
             );
             
             // Log form submission for debugging
             console.log('Form submitted with dates:', {
+                route_id: routeId,
+                unit_id: unitId || 'all_units_in_route',
                 start_date: startDate,
-                end_date: endDate
+                end_date: endDate,
+                generation_type: generationType
             });
             
-            // Allow form to submit normally - this will redirect to the date selection page
             return true;
+        });
+        
+        // Add event listener for unit selection changes
+        $('#unit_id').on('change', function() {
+            const routeId = $('#route_id').val();
+            const unitId = $(this).val();
+            updateGenerationTypeIndicator(routeId, unitId);
         });
 
         // ...existing initialization code...

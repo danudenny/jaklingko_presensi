@@ -72,13 +72,9 @@
                             <i class="mr-2 text-green-500 fas fa-file-excel"></i>
                             Excel
                         </a>
-                        <a href="{{ route('schedules.export.pdf', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver_type' => $selectedDriverType, 'driver' => $selectedDriver, 'unit' => $selectedUnit, 'shift' => $selectedShift]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900" onclick="showLoadingOverlay('Mengeksport PDF...')">
+                        <a href="{{ route('schedules.export.matrix-pdf', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver_type' => $selectedDriverType, 'driver' => $selectedDriver, 'unit' => $selectedUnit, 'shift' => $selectedShift]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900" onclick="showLoadingOverlay('Mengeksport Matrix PDF...')">
                             <i class="mr-2 text-red-500 fas fa-file-pdf"></i>
                             PDF
-                        </a>
-                        <a href="{{ route('schedules.export.matrix-pdf', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver_type' => $selectedDriverType, 'driver' => $selectedDriver, 'unit' => $selectedUnit, 'shift' => $selectedShift]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900" onclick="showLoadingOverlay('Mengeksport Matrix PDF...')">
-                            <i class="mr-2 text-purple-500 fas fa-table"></i>
-                            Matrix PDF
                         </a>
                         @if(app()->environment('local'))
                         <div class="my-1 border-t border-gray-100"></div>
@@ -337,11 +333,11 @@
                                                                     <i class="text-sm fas fa-exclamation"></i>
                                                                 </span>
                                                             @elseif($isInMaintenance)
-                                                                <span class="inline-flex items-center justify-center w-6 h-6 transition-all rounded-full bg-teal-100 text-teal-800 hover:bg-teal-200" title="Unit Dalam Perawatan">
+                                                                <span class="inline-flex items-center justify-center w-6 h-6 text-teal-800 transition-all bg-teal-100 rounded-full hover:bg-teal-200" title="Unit Dalam Perawatan">
                                                                     <i class="text-sm fas fa-wrench"></i>
                                                                 </span>
                                                             @elseif($isOnLeave)
-                                                                <span class="inline-flex items-center justify-center w-6 h-6 transition-all rounded-full bg-red-100 text-red-800 hover:bg-red-200" title="Pengemudi Sedang Cuti">
+                                                                <span class="inline-flex items-center justify-center w-6 h-6 text-red-800 transition-all bg-red-100 rounded-full hover:bg-red-200" title="Pengemudi Sedang Cuti">
                                                                     <i class="text-sm fas fa-times"></i>
                                                                 </span>
                                                             @elseif($isAssigned)
@@ -401,7 +397,7 @@
     </div>
     
     <!-- Loading Overlay -->
-    <div id="loading-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+    <div id="loading-overlay" class="fixed inset-0 z-50 flex items-center justify-center hidden bg-black bg-opacity-50">
         <div class="p-6 bg-white rounded-lg shadow-xl">
             <div class="flex items-center space-x-4">
                 <div class="w-12 h-12 border-4 border-t-4 border-gray-200 rounded-full loader border-t-indigo-500 animate-spin"></div>

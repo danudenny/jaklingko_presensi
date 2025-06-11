@@ -48,83 +48,134 @@ class ScheduleGeneratorService
                 ];
             }
 
-            $unit = $validationResult['unit'];
             $route = $validationResult['route'];
             $dateRange = $validationResult['dateRange'];
+            $targetUnits = $validationResult['units']; // This will be array of units
 
-            // Get available drivers for this unit
-            $availableDrivers = $this->getAvailableDrivers($unitId);
+            Log::info("Starting schedule generation for route {$routeId}" . ($unitId ? " and unit {$unitId}" : " (all units)"));
 
-            if ($availableDrivers->isEmpty()) {
-                return [
-                    'success' => false,
-                    'message' => 'Tidak ada driver aktif yang terdaftar untuk unit ini',
-                    'data' => []
-                ];
-            }
+            // Generate schedules for each target unit
+            $allGeneratedSchedules = [];
+            $allSkippedDates = [];
+            $allErrors = [];
+            $allValidationIssues = [];
+            $unitResults = [];
 
-            // Analyze workload distribution
-            $workloadAnalysis = $this->analyzeWorkloadDistribution($unitId, $dateRange, $availableDrivers);
-            Log::info('Workload analysis', $workloadAnalysis);
+            foreach ($targetUnits as $unit) {
+                Log::info("=== PROCESSING UNIT {$unit->id} ({$unit->unit_number}) ===");
+                
+                // Get available drivers for this unit
+                $availableDrivers = $this->getAvailableDrivers($unit->id);
 
-            // Generate schedules for each date
-            $generatedSchedules = [];
-            $skippedDates = [];
-            $errors = [];
-            $validationIssues = [];
-
-            foreach ($dateRange as $date) {
-                try {
-                    $dateString = $date->format('Y-m-d');
-                    
-                    $dateSchedules = $this->generateSchedulesForDate(
-                        $routeId, 
-                        $unitId, 
-                        $date, 
-                        $availableDrivers,
-                        $dateRange
-                    );
-
-                    // Validate schedule integrity after generation
-                    $integrityIssues = $this->validateScheduleIntegrity($unitId, $dateString);
-                    if (!empty($integrityIssues)) {
-                        $validationIssues[$dateString] = $integrityIssues;
-                        Log::warning("Schedule integrity issues for {$dateString}: " . implode(', ', $integrityIssues));
-                    }
-
-                    if (!empty($dateSchedules)) {
-                        $generatedSchedules = array_merge($generatedSchedules, $dateSchedules);
-                    } else {
-                        $skippedDates[] = $dateString;
-                    }
-                } catch (Exception $e) {
-                    $errors[] = "Error untuk tanggal {$date->format('Y-m-d')}: " . $e->getMessage();
-                    Log::error("Schedule generation error for date {$date->format('Y-m-d')}: " . $e->getMessage());
+                if ($availableDrivers->isEmpty()) {
+                    $unitResults[$unit->id] = [
+                        'success' => false,
+                        'message' => "Tidak ada driver aktif yang terdaftar untuk unit {$unit->unit_number}",
+                        'unit_info' => [
+                            'id' => $unit->id,
+                            'unit_number' => $unit->unit_number,
+                            'status' => $unit->status
+                        ]
+                    ];
+                    continue;
                 }
-            }
 
-            DB::commit();
+                // Analyze workload distribution for this unit
+                $workloadAnalysis = $this->analyzeWorkloadDistribution($unit->id, $dateRange, $availableDrivers);
+                Log::info("Workload analysis for unit {$unit->id}", $workloadAnalysis);
 
-            // Calculate coverage statistics
-            $coverageStats = $this->calculateCoverageStatistics($unitId, $dateRange);
+                // Generate schedules for each date for this unit
+                $unitGeneratedSchedules = [];
+                $unitSkippedDates = [];
+                $unitErrors = [];
+                $unitValidationIssues = [];
 
-            return [
-                'success' => true,
-                'message' => 'Jadwal berhasil dibuat menggunakan pattern 15 hari dengan driver cadangan sebagai backup',
-                'data' => [
-                    'generated_schedules' => count($generatedSchedules),
-                    'skipped_dates' => $skippedDates,
-                    'errors' => $errors,
-                    'validation_issues' => $validationIssues,
-                    'schedules' => $generatedSchedules,
+                foreach ($dateRange as $date) {
+                    try {
+                        $dateString = $date->format('Y-m-d');
+                        
+                        $dateSchedules = $this->generateSchedulesForDate(
+                            $routeId, 
+                            $unit->id, 
+                            $date, 
+                            $availableDrivers,
+                            $dateRange
+                        );
+
+                        // Validate schedule integrity after generation
+                        $integrityIssues = $this->validateScheduleIntegrity($unit->id, $dateString);
+                        if (!empty($integrityIssues)) {
+                            $unitValidationIssues[$dateString] = $integrityIssues;
+                            Log::warning("Schedule integrity issues for unit {$unit->id} on {$dateString}: " . implode(', ', $integrityIssues));
+                        }
+
+                        if (!empty($dateSchedules)) {
+                            $unitGeneratedSchedules = array_merge($unitGeneratedSchedules, $dateSchedules);
+                        } else {
+                            $unitSkippedDates[] = $dateString;
+                        }
+                    } catch (Exception $e) {
+                        $unitErrors[] = "Error untuk unit {$unit->unit_number} tanggal {$date->format('Y-m-d')}: " . $e->getMessage();
+                        Log::error("Schedule generation error for unit {$unit->id} date {$date->format('Y-m-d')}: " . $e->getMessage());
+                    }
+                }
+
+                // Calculate coverage statistics for this unit
+                $coverageStats = $this->calculateCoverageStatistics($unit->id, $dateRange);
+
+                // Store unit results
+                $unitResults[$unit->id] = [
+                    'success' => true,
+                    'unit_info' => [
+                        'id' => $unit->id,
+                        'unit_number' => $unit->unit_number,
+                        'status' => $unit->status
+                    ],
+                    'generated_schedules' => count($unitGeneratedSchedules),
+                    'skipped_dates' => $unitSkippedDates,
+                    'errors' => $unitErrors,
+                    'validation_issues' => $unitValidationIssues,
+                    'schedules' => $unitGeneratedSchedules,
                     'coverage_stats' => $coverageStats,
                     'pattern_info' => [
                         'total_days' => count($dateRange),
                         'pattern_cycles' => ceil(count($dateRange) / 15),
                         'batangan_drivers_used' => $availableDrivers->where('type', self::DRIVER_TYPE_BATANGAN)->count(),
                         'cadangan_drivers_used' => $availableDrivers->where('type', self::DRIVER_TYPE_CADANGAN)->count(),
+                        'unit_pattern_offset' => $this->getUnitPatternOffset($unit->id)
+                    ]
+                ];
+
+                // Merge into global results
+                $allGeneratedSchedules = array_merge($allGeneratedSchedules, $unitGeneratedSchedules);
+                $allSkippedDates = array_merge($allSkippedDates, $unitSkippedDates);
+                $allErrors = array_merge($allErrors, $unitErrors);
+                $allValidationIssues = array_merge($allValidationIssues, $unitValidationIssues);
+            }
+
+            DB::commit();
+
+            $successMessage = $unitId 
+                ? "Jadwal berhasil dibuat untuk unit {$unitId} menggunakan pattern 15 hari dengan driver cadangan sebagai backup"
+                : "Jadwal berhasil dibuat untuk " . count($targetUnits) . " unit dalam route {$routeId} menggunakan pattern 15 hari dengan unit-based rotation";
+
+            return [
+                'success' => true,
+                'message' => $successMessage,
+                'data' => [
+                    'generated_schedules' => count($allGeneratedSchedules),
+                    'processed_units' => count($targetUnits),
+                    'skipped_dates' => $allSkippedDates,
+                    'errors' => $allErrors,
+                    'validation_issues' => $allValidationIssues,
+                    'schedules' => $allGeneratedSchedules,
+                    'unit_results' => $unitResults,
+                    'pattern_info' => [
+                        'total_days' => count($dateRange),
+                        'pattern_cycles' => ceil(count($dateRange) / 15),
                         'pattern_type' => '15-day fixed pattern for batangan drivers + cadangan backup',
                         'coverage_strategy' => 'Multi-phase: 1) Batangan pattern, 2) Cadangan backup, 3) Batangan fallback',
+                        'unit_rotation' => 'Enabled - each unit has different pattern offset to reduce conflicts',
                         'max_shifts_per_day' => 2,
                         'conflict_prevention' => 'Enabled'
                     ]
@@ -147,25 +198,13 @@ class ScheduleGeneratorService
      * Validate input parameters
      *
      * @param int $routeId
-     * @param int $unitId
+     * @param int|null $unitId Optional - if null, validates route and gets all units
      * @param string $startDate
      * @param string $endDate
      * @return array
      */
-    private function validateInput(int $routeId, int $unitId, string $startDate, string $endDate): array
+    private function validateInput(int $routeId, ?int $unitId, string $startDate, string $endDate): array
     {
-        // Validate unit exists
-        $unit = Unit::where('id', $unitId)
-            ->where('status', self::STATUS_AKTIF)
-            ->first();
-
-        if (!$unit) {
-            return [
-                'valid' => false,
-                'message' => 'Unit tidak ditemukan atau tidak aktif'
-            ];
-        }
-
         // Validate route exists
         $route = Route::find($routeId);
         if (!$route) {
@@ -175,13 +214,44 @@ class ScheduleGeneratorService
             ];
         }
 
-        // Validate unit has this route
-        $hasRoute = $unit->routes()->where('routes.id', $routeId)->exists();
-        if (!$hasRoute) {
-            return [
-                'valid' => false,
-                'message' => 'Unit tidak memiliki akses ke route yang dipilih'
-            ];
+        // Get target units
+        if ($unitId !== null) {
+            // Validate specific unit exists
+            $unit = Unit::where('id', $unitId)
+                ->where('status', self::STATUS_AKTIF)
+                ->first();
+
+            if (!$unit) {
+                return [
+                    'valid' => false,
+                    'message' => 'Unit tidak ditemukan atau tidak aktif'
+                ];
+            }
+
+            // Validate unit has this route
+            $hasRoute = $unit->routes()->where('routes.id', $routeId)->exists();
+            if (!$hasRoute) {
+                return [
+                    'valid' => false,
+                    'message' => 'Unit tidak memiliki akses ke route yang dipilih'
+                ];
+            }
+
+            $targetUnits = collect([$unit]);
+        } else {
+            // Get all active units for this route
+            $targetUnits = Unit::where('status', self::STATUS_AKTIF)
+                ->whereHas('routes', function($query) use ($routeId) {
+                    $query->where('routes.id', $routeId);
+                })
+                ->get();
+
+            if ($targetUnits->isEmpty()) {
+                return [
+                    'valid' => false,
+                    'message' => 'Tidak ada unit aktif yang terdaftar untuk route ini'
+                ];
+            }
         }
 
         // Validate date range
@@ -200,8 +270,8 @@ class ScheduleGeneratorService
             
             return [
                 'valid' => true,
-                'unit' => $unit,
                 'route' => $route,
+                'units' => $targetUnits,
                 'dateRange' => $dateRange
             ];
 
@@ -1144,19 +1214,33 @@ class ScheduleGeneratorService
 
     /**
      * Delete existing schedules for the given parameters before generating new ones
+     * Can clear for specific unit or all units in the route
      *
      * @param int $routeId
-     * @param int $unitId
+     * @param int|null $unitId Optional - if null, clears for all units in the route
      * @param string $startDate
      * @param string $endDate
      * @return int Number of deleted schedules
      */
-    public function clearExistingSchedules(int $routeId, int $unitId, string $startDate, string $endDate): int
+    public function clearExistingSchedules(int $routeId, ?int $unitId, string $startDate, string $endDate): int
     {
-        return Schedule::where('route_id', $routeId)
-            ->where('unit_id', $unitId)
-            ->whereBetween('schedule_date', [$startDate, $endDate])
-            ->delete();
+        $query = Schedule::where('route_id', $routeId)
+            ->whereBetween('schedule_date', [$startDate, $endDate]);
+        
+        if ($unitId !== null) {
+            $query->where('unit_id', $unitId);
+        } else {
+            // Clear for all units in this route
+            $unitIds = Unit::where('status', self::STATUS_AKTIF)
+                ->whereHas('routes', function($q) use ($routeId) {
+                    $q->where('routes.id', $routeId);
+                })
+                ->pluck('id');
+            
+            $query->whereIn('unit_id', $unitIds);
+        }
+        
+        return $query->delete();
     }
 
     /**
@@ -1385,5 +1469,83 @@ class ScheduleGeneratorService
             : 0;
 
         return $stats;
+    }
+
+    /**
+     * Calculate coverage statistics for multiple units
+     *
+     * @param array $unitIds Array of unit IDs
+     * @param array $dateRange
+     * @return array
+     */
+    public function calculateMultiUnitCoverageStatistics(array $unitIds, array $dateRange): array
+    {
+        $overallStats = [
+            'total_days' => count($dateRange),
+            'total_units' => count($unitIds),
+            'total_possible_shifts' => count($dateRange) * count($unitIds) * 2, // 2 shifts per day per unit
+            'total_generated_shifts' => 0,
+            'coverage_percentage' => 0,
+            'unit_breakdown' => []
+        ];
+
+        foreach ($unitIds as $unitId) {
+            $unitStats = $this->calculateCoverageStatistics($unitId, $dateRange);
+            $overallStats['unit_breakdown'][$unitId] = $unitStats;
+            $overallStats['total_generated_shifts'] += $unitStats['total_schedules'] ?? 0;
+        }
+
+        if ($overallStats['total_possible_shifts'] > 0) {
+            $overallStats['coverage_percentage'] = round(
+                ($overallStats['total_generated_shifts'] / $overallStats['total_possible_shifts']) * 100, 
+                2
+            );
+        }
+
+        return $overallStats;
+    }
+
+    /**
+     * Get summary for route-wide schedule generation
+     *
+     * @param int $routeId
+     * @param array $unitResults
+     * @param array $dateRange
+     * @return array
+     */
+    public function getRouteGenerationSummary(int $routeId, array $unitResults, array $dateRange): array
+    {
+        $summary = [
+            'route_id' => $routeId,
+            'total_units_processed' => count($unitResults),
+            'successful_units' => 0,
+            'failed_units' => 0,
+            'total_schedules_generated' => 0,
+            'total_errors' => 0,
+            'units_with_issues' => 0,
+            'pattern_offset_distribution' => []
+        ];
+
+        foreach ($unitResults as $unitId => $result) {
+            if ($result['success']) {
+                $summary['successful_units']++;
+                $summary['total_schedules_generated'] += $result['generated_schedules'];
+                
+                // Track pattern offset distribution
+                if (isset($result['pattern_info']['unit_pattern_offset'])) {
+                    $offset = $result['pattern_info']['unit_pattern_offset'];
+                    $summary['pattern_offset_distribution'][$offset] = ($summary['pattern_offset_distribution'][$offset] ?? 0) + 1;
+                }
+            } else {
+                $summary['failed_units']++;
+            }
+
+            if (!empty($result['errors']) || !empty($result['validation_issues'])) {
+                $summary['units_with_issues']++;
+                $summary['total_errors'] += count($result['errors'] ?? []);
+            }
+        }
+
+        return $summary;
     }
 }

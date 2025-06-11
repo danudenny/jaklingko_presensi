@@ -42,41 +42,41 @@
 @endpush
 
 @section('content')
-<div class="container mx-auto px-4 py-6">
-    <div class="flex justify-between items-center mb-6">
+<div class="container px-4 py-6 mx-auto">
+    <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-800">Rencana Operasi Unit</h1>
-        <a href="{{ route('renops.settings') }}" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-            <i class="fas fa-cog mr-2"></i> Pengaturan
+        <a href="{{ route('renops.settings') }}" class="px-4 py-2 font-bold text-white bg-blue-600 rounded hover:bg-blue-700">
+            <i class="mr-2 fas fa-cog"></i> Pengaturan
         </a>
     </div>
 
-    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div class="p-6 mb-6 bg-white rounded-lg shadow-md">
         <form id="date-form" action="{{ route('renops.index') }}" method="GET" class="mb-4">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                    <label for="date" class="block text-sm font-medium text-gray-700 mb-1">Tanggal</label>
-                    <input type="text" id="date" name="date" value="{{ $date->format('Y-m-d') }}" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    <label for="date" class="block mb-1 text-sm font-medium text-gray-700">Tanggal</label>
+                    <input type="text" id="date" name="date" value="{{ $date->format('Y-m-d') }}" class="block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                 </div>
                 <div class="flex items-end">
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                        <i class="fas fa-search mr-2"></i> Cari
+                    <button type="submit" class="px-4 py-2 font-bold text-white bg-blue-600 rounded hover:bg-blue-700">
+                        <i class="mr-2 fas fa-search"></i> Cari
                     </button>
                 </div>
             </div>
         </form>
 
         @if(isset($error))
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+            <div class="relative px-4 py-3 mb-4 text-red-700 bg-red-100 border border-red-400 rounded" role="alert">
                 <span class="block sm:inline">{{ $error }}</span>
             </div>
         @endif
 
         @if($dayType)
             <div class="mb-4">
-                <div class="bg-blue-50 border-l-4 border-blue-400 p-4">
+                <div class="p-4 border-l-4 border-blue-400 bg-blue-50">
                     <div class="flex">
                         <div class="flex-shrink-0">
-                            <i class="fas fa-info-circle text-blue-400"></i>
+                            <i class="text-blue-400 fas fa-info-circle"></i>
                         </div>
                         <div class="ml-3">
                             <p class="text-sm text-blue-700">
@@ -97,30 +97,30 @@
             </div>
 
             <div class="mb-4">
-                <div class="flex justify-between items-center mb-2">
+                <div class="flex items-center justify-between mb-2">
                     <div class="flex items-center">
                         <h2 class="text-lg font-semibold text-gray-800">Pilih Unit</h2>
                         @if(isset($settings) && $settings->isAutomatic())
                             <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                <i class="fas fa-robot mr-1"></i> Mode Otomatis
+                                <i class="mr-1 fas fa-robot"></i> Mode Otomatis
                             </span>
                         @else
                             <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                <i class="fas fa-hand-pointer mr-1"></i> Mode Manual
+                                <i class="mr-1 fas fa-hand-pointer"></i> Mode Manual
                             </span>
                         @endif
                     </div>
                     <div class="flex items-center">
-                        <span class="text-sm text-gray-600 mr-2">Terpilih: <span id="selected-count">{{ $currentCount ?? 0 }}</span> / <span>{{ $maxLimit }}</span></span>
+                        <span class="mr-2 text-sm text-gray-600">Terpilih: <span id="selected-count">{{ $currentCount ?? 0 }}</span> / <span>{{ $maxLimit }}</span></span>
                         <div class="progress-container">
-                            <div class="progress-bar bg-blue-600" style="width: {{ ($currentCount / $maxLimit) * 100 }}%"></div>
+                            <div class="bg-blue-600 progress-bar" style="width: {{ ($currentCount / $maxLimit) * 100 }}%"></div>
                         </div>
                     </div>
                 </div>
 
-                <div class="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 mb-4">
+                <div class="flex flex-col mb-4 space-y-2 md:flex-row md:space-y-0 md:space-x-2">
                     <div class="md:w-1/4">
-                        <label for="route-filter" class="block text-sm font-medium text-gray-700 mb-1">Filter Rute</label>
+                        <label for="route-filter" class="block mb-1 text-sm font-medium text-gray-700">Filter Rute</label>
                         <select id="route-filter"
                                 class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
                             <option value="">Semua Rute</option>
@@ -130,7 +130,7 @@
                         </select>
                     </div>
                     <div class="md:w-1/4">
-                        <label for="pool-filter" class="block text-sm font-medium text-gray-700 mb-1">Status Unit</label>
+                        <label for="pool-filter" class="block mb-1 text-sm font-medium text-gray-700">Status Unit</label>
                         <select id="pool-filter"
                                 class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
                             <option value="">Semua Unit</option>
@@ -139,10 +139,10 @@
                         </select>
                     </div>
                     <div class="relative flex-1">
-                        <label for="unit-search" class="block text-sm font-medium text-gray-700 mb-1">Cari Unit</label>
+                        <label for="unit-search" class="block mb-1 text-sm font-medium text-gray-700">Cari Unit</label>
                         <div class="relative">
                             <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                                <i class="fas fa-search text-gray-400"></i>
+                                <i class="text-gray-400 fas fa-search"></i>
                             </div>
                             <input type="text" id="unit-search" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 p-2.5" placeholder="Cari unit...">
                         </div>
@@ -150,10 +150,10 @@
                 </div>
 
                 @if(isset($settings) && $settings->isAutomatic())
-                    <div class="bg-green-50 border-l-4 border-green-400 p-4 mb-4">
+                    <div class="p-4 mb-4 border-l-4 border-green-400 bg-green-50">
                         <div class="flex">
                             <div class="flex-shrink-0">
-                                <i class="fas fa-robot text-green-400"></i>
+                                <i class="text-green-400 fas fa-robot"></i>
                             </div>
                             <div class="ml-3">
                                 <p class="text-sm text-green-700">
@@ -162,9 +162,9 @@
                                 </p>
                                 <div class="flex items-center mt-3">
                                     <button type="button" id="generate-automatic" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-1.5 px-3 rounded-md mr-3">
-                                        <i class="fas fa-magic mr-1"></i> Generate Otomatis
+                                        <i class="mr-1 fas fa-magic"></i> Generate Otomatis
                                     </button>
-                                    <a href="{{ route('renops.settings') }}" class="text-sm text-green-700 font-medium underline">
+                                    <a href="{{ route('renops.settings') }}" class="text-sm font-medium text-green-700 underline">
                                         Buka Pengaturan
                                     </a>
                                 </div>
@@ -172,9 +172,9 @@
                         </div>
                     </div>
 
-                    <div id="units-container" class="max-h-96 overflow-y-auto">
+                    <div id="units-container" class="overflow-y-auto max-h-96">
                 @else
-                    <div id="units-container" class="max-h-96 overflow-y-auto">
+                    <div id="units-container" class="overflow-y-auto max-h-96">
                 @endif
                     @php
                         // Group units by routes
@@ -206,16 +206,16 @@
                     <!-- Units grouped by routes with accordion -->
                     @foreach($unitsByRoute as $routeGroup)
                         <div class="mb-6" x-data="{ open: true }">
-                            <h3 @click="open = !open" class="text-md font-semibold text-gray-800 bg-gray-100 p-2 rounded mb-3 cursor-pointer hover:bg-gray-200 transition duration-150 flex justify-between items-center">
+                            <h3 @click="open = !open" class="flex items-center justify-between p-2 mb-3 font-semibold text-gray-800 transition duration-150 bg-gray-100 rounded cursor-pointer text-md hover:bg-gray-200">
                                 <div>
-                                    <i class="fas fa-route mr-2"></i> Rute {{ $routeGroup['route']->route_number }} - {{ $routeGroup['route']->name }}
-                                    <span class="text-sm font-normal text-gray-600 ml-2">({{ count($routeGroup['units']) }} Unit)</span>
+                                    <i class="mr-2 fas fa-route"></i> Rute {{ $routeGroup['route']->route_number }} - {{ $routeGroup['route']->name }}
+                                    <span class="ml-2 text-sm font-normal text-gray-600">({{ count($routeGroup['units']) }} Unit)</span>
                                 </div>
                                 <div>
                                     <i class="fas" :class="{'fa-chevron-down': open, 'fa-chevron-right': !open}"></i>
                                 </div>
                             </h3>
-                            <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                            <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                                 @foreach($routeGroup['units'] as $unit)
                                     <div class="unit-card border rounded-lg p-3 {{ !$unit->is_pool ? 'border-dashed border-orange-300 bg-orange-50 non-pool-unit' : (isset($settings) && $settings->isAutomatic() ? '' : 'cursor-pointer hover:bg-gray-50') }} {{ in_array($unit->id, $renopsUnits ?? []) ? 'selected' : '' }}"
                                          data-unit-id="{{ $unit->id }}"
@@ -223,14 +223,14 @@
                                          data-plate-number="{{ $unit->plate_number }}"
                                          data-is-pool="{{ $unit->is_pool ? 'true' : 'false' }}"
                                          data-route-ids="{{ $unit->routes->pluck('id')->implode(',') }}">
-                                        <div class="flex justify-between items-start">
+                                        <div class="flex items-start justify-between">
                                             <div>
                                                 <h3 class="font-semibold text-gray-800">{{ $unit->unit_number }}</h3>
                                                 <p class="text-sm text-gray-600">{{ $unit->plate_number }}</p>
                                                 <div class="flex items-center mt-1">
                                                     @if(!$unit->is_pool)
                                                         <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 mr-1">
-                                                            <i class="fas fa-exclamation-triangle text-xs mr-1"></i> Non-Pool
+                                                            <i class="mr-1 text-xs fas fa-exclamation-triangle"></i> Non-Pool
                                                         </span>
                                                     @endif
                                                 </div>
@@ -248,16 +248,16 @@
                     <!-- Units without routes with accordion -->
                     @if(count($unitsWithoutRoute) > 0)
                         <div class="mb-6" x-data="{ open: true }">
-                            <h3 @click="open = !open" class="text-md font-semibold text-gray-800 bg-gray-100 p-2 rounded mb-3 cursor-pointer hover:bg-gray-200 transition duration-150 flex justify-between items-center">
+                            <h3 @click="open = !open" class="flex items-center justify-between p-2 mb-3 font-semibold text-gray-800 transition duration-150 bg-gray-100 rounded cursor-pointer text-md hover:bg-gray-200">
                                 <div>
-                                    <i class="fas fa-question-circle mr-2"></i> Unit Tanpa Rute
-                                    <span class="text-sm font-normal text-gray-600 ml-2">({{ count($unitsWithoutRoute) }} Unit)</span>
+                                    <i class="mr-2 fas fa-question-circle"></i> Unit Tanpa Rute
+                                    <span class="ml-2 text-sm font-normal text-gray-600">({{ count($unitsWithoutRoute) }} Unit)</span>
                                 </div>
                                 <div>
                                     <i class="fas" :class="{'fa-chevron-down': open, 'fa-chevron-right': !open}"></i>
                                 </div>
                             </h3>
-                            <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                            <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                                 @foreach($unitsWithoutRoute as $unit)
                                     <div class="unit-card border rounded-lg p-3 {{ !$unit->is_pool ? 'border-dashed border-orange-300 bg-orange-50 non-pool-unit' : (isset($settings) && $settings->isAutomatic() ? '' : 'cursor-pointer hover:bg-gray-50') }} {{ in_array($unit->id, $renopsUnits ?? []) ? 'selected' : '' }}"
                                          data-unit-id="{{ $unit->id }}"
@@ -265,18 +265,18 @@
                                          data-plate-number="{{ $unit->plate_number }}"
                                          data-is-pool="{{ $unit->is_pool ? 'true' : 'false' }}"
                                          data-route-ids="">
-                                        <div class="flex justify-between items-start">
+                                        <div class="flex items-start justify-between">
                                             <div>
                                                 <h3 class="font-semibold text-gray-800">{{ $unit->unit_number }}</h3>
                                                 <p class="text-sm text-gray-600">{{ $unit->plate_number }}</p>
                                                 <div class="flex items-center mt-1">
                                                     @if(!$unit->is_pool)
                                                         <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 mr-1">
-                                                            <i class="fas fa-exclamation-triangle text-xs mr-1"></i> Non-Pool
+                                                            <i class="mr-1 text-xs fas fa-exclamation-triangle"></i> Non-Pool
                                                         </span>
                                                     @endif
                                                     <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 mr-1">
-                                                        <i class="fas fa-exclamation-circle text-xs mr-1"></i> Tanpa Rute
+                                                        <i class="mr-1 text-xs fas fa-exclamation-circle"></i> Tanpa Rute
                                                     </span>
                                                 </div>
                                             </div>
@@ -290,17 +290,9 @@
                         </div>
                     @endif
 
-            <div class="flex justify-end space-x-2">
-                <button type="button" id="delete-plan" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-                    <i class="fas fa-trash-alt mr-2"></i> Hapus Rencana
-                </button>
-                <button type="button" id="save-changes" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-                    <i class="fas fa-save mr-2"></i> Simpan Perubahan
-                </button>
-            </div>
         @else
-            <div class="text-center py-8">
-                <i class="fas fa-calendar-times text-gray-400 text-5xl mb-4"></i>
+            <div class="py-8 text-center">
+                <i class="mb-4 text-5xl text-gray-400 fas fa-calendar-times"></i>
                 <p class="text-gray-600">Silakan pilih tanggal akhir pekan atau hari libur untuk mengelola rencana operasi unit.</p>
             </div>
         @endif
@@ -308,10 +300,10 @@
 </div>
 
 <!-- Notification Modal -->
-<div id="notification-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50" x-data="{ show: false, type: 'success', title: '', message: '', confirmCallback: null, cancelCallback: null, showCancel: false }" x-show="show" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @click.away="show = false">
-    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+<div id="notification-modal" class="fixed inset-0 z-50 hidden w-full h-full overflow-y-auto bg-gray-600 bg-opacity-50" x-data="{ show: false, type: 'success', title: '', message: '', confirmCallback: null, cancelCallback: null, showCancel: false }" x-show="show" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @click.away="show = false">
+    <div class="relative p-5 mx-auto bg-white border rounded-md shadow-lg top-20 w-96">
         <div class="mt-3">
-            <div class="flex justify-between items-center pb-3">
+            <div class="flex items-center justify-between pb-3">
                 <h3 class="text-lg font-medium" :class="{
                     'text-green-700': type === 'success',
                     'text-red-700': type === 'error',
@@ -322,15 +314,15 @@
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="mt-2 px-7 py-3">
+            <div class="py-3 mt-2 px-7">
                 <div class="flex items-center justify-center">
-                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full mb-4" :class="{
+                    <div class="flex items-center justify-center flex-shrink-0 w-12 h-12 mx-auto mb-4 rounded-full" :class="{
                         'bg-green-100': type === 'success',
                         'bg-red-100': type === 'error',
                         'bg-blue-100': type === 'info',
                         'bg-yellow-100': type === 'warning',
                     }">
-                        <i class="fas text-2xl" :class="{
+                        <i class="text-2xl fas" :class="{
                             'fa-check text-green-600': type === 'success',
                             'fa-times text-red-600': type === 'error',
                             'fa-info-circle text-blue-600': type === 'info',
@@ -340,9 +332,9 @@
                 </div>
                 <p class="text-sm text-center text-gray-700" x-text="message"></p>
             </div>
-            <div class="flex justify-end px-7 py-3 border-t">
+            <div class="flex justify-end py-3 border-t px-7">
                 <template x-if="showCancel">
-                    <button type="button" @click="cancelCallback ? cancelCallback() : (show = false)" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded mr-2">
+                    <button type="button" @click="cancelCallback ? cancelCallback() : (show = false)" class="px-4 py-2 mr-2 font-bold text-white bg-gray-500 rounded hover:bg-gray-600">
                         Batal
                     </button>
                 </template>
@@ -360,44 +352,44 @@
 </div>
 
 <!-- Modal for date range selection -->
-<div id="period-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
-    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+<div id="period-modal" class="fixed inset-0 z-50 hidden w-full h-full overflow-y-auto bg-gray-600 bg-opacity-50">
+    <div class="relative p-5 mx-auto bg-white border rounded-md shadow-lg top-20 w-96">
         <div class="mt-3">
-            <div class="flex justify-between items-center pb-3">
+            <div class="flex items-center justify-between pb-3">
                 <h3 class="text-lg font-medium text-gray-900">Pilih Periode Generasi</h3>
                 <button type="button" id="close-modal" class="text-gray-400 hover:text-gray-500">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="mt-2 px-7 py-3">
+            <div class="py-3 mt-2 px-7">
                 <div class="mb-4">
-                    <label for="month-picker" class="block text-sm font-medium text-gray-700 mb-1">Bulan</label>
-                    <input type="month" id="month-picker" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    <label for="month-picker" class="block mb-1 text-sm font-medium text-gray-700">Bulan</label>
+                    <input type="month" id="month-picker" class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                 </div>
                 <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Periode</label>
+                    <label class="block mb-2 text-sm font-medium text-gray-700">Periode</label>
                     <div class="space-y-2">
                         <div class="flex items-center">
-                            <input type="radio" id="period-first" name="period" value="first" class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" checked>
-                            <label for="period-first" class="ml-2 block text-sm text-gray-700">Periode Pertama (1-15)</label>
+                            <input type="radio" id="period-first" name="period" value="first" class="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" checked>
+                            <label for="period-first" class="block ml-2 text-sm text-gray-700">Periode Pertama (1-15)</label>
                         </div>
                         <div class="flex items-center">
-                            <input type="radio" id="period-second" name="period" value="second" class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500">
-                            <label for="period-second" class="ml-2 block text-sm text-gray-700">Periode Kedua (16-akhir bulan)</label>
+                            <input type="radio" id="period-second" name="period" value="second" class="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500">
+                            <label for="period-second" class="block ml-2 text-sm text-gray-700">Periode Kedua (16-akhir bulan)</label>
                         </div>
                         <div class="flex items-center">
-                            <input type="radio" id="period-full" name="period" value="full" class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500">
-                            <label for="period-full" class="ml-2 block text-sm text-gray-700">Bulan Penuh</label>
+                            <input type="radio" id="period-full" name="period" value="full" class="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500">
+                            <label for="period-full" class="block ml-2 text-sm text-gray-700">Bulan Penuh</label>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="flex justify-end px-7 py-3 border-t">
-                <button type="button" id="cancel-generate" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded mr-2">
+            <div class="flex justify-end py-3 border-t px-7">
+                <button type="button" id="cancel-generate" class="px-4 py-2 mr-2 font-bold text-white bg-gray-500 rounded hover:bg-gray-600">
                     Batal
                 </button>
-                <button type="button" id="confirm-generate" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-                    <i class="fas fa-check mr-2"></i> Generate
+                <button type="button" id="confirm-generate" class="px-4 py-2 font-bold text-white bg-green-600 rounded hover:bg-green-700">
+                    <i class="mr-2 fas fa-check"></i> Generate
                 </button>
             </div>
         </div>
@@ -813,7 +805,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             button.disabled = true;
-            button.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Menyimpan...';
+            button.innerHTML = '<i class="mr-2 fas fa-circle-notch fa-spin"></i> Menyimpan...';
             
             fetch(`/renops/${this.config.date}`, {
                 method: 'PUT',
@@ -836,14 +828,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else {
                     this.notification.error('Gagal', data.message || 'Gagal memperbarui rencana operasi unit.');
                     button.disabled = false;
-                    button.innerHTML = '<i class="fas fa-save mr-2"></i> Simpan Perubahan';
+                    button.innerHTML = '<i class="mr-2 fas fa-save"></i> Simpan Perubahan';
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
                 this.notification.error('Terjadi Kesalahan', 'Terjadi kesalahan saat memperbarui rencana operasi unit.');
                 button.disabled = false;
-                button.innerHTML = '<i class="fas fa-save mr-2"></i> Simpan Perubahan';
+                button.innerHTML = '<i class="mr-2 fas fa-save"></i> Simpan Perubahan';
             });
         },
         
@@ -853,7 +845,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             this.notification.confirm('Konfirmasi Hapus', 'Apakah Anda yakin ingin menghapus rencana operasi ini?', function() {
                 button.disabled = true;
-                button.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Menghapus...';
+                button.innerHTML = '<i class="mr-2 fas fa-circle-notch fa-spin"></i> Menghapus...';
                 
                 fetch(`/renops/${self.config.date}`, {
                     method: 'DELETE',
@@ -870,14 +862,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         self.notification.error('Gagal', data.message || 'Gagal menghapus rencana operasi unit.');
                         button.disabled = false;
-                        button.innerHTML = '<i class="fas fa-trash-alt mr-2"></i> Hapus Rencana';
+                        button.innerHTML = '<i class="mr-2 fas fa-trash-alt"></i> Hapus Rencana';
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
                     self.notification.error('Terjadi Kesalahan', 'Terjadi kesalahan saat menghapus rencana operasi unit.');
                     button.disabled = false;
-                    button.innerHTML = '<i class="fas fa-trash-alt mr-2"></i> Hapus Rencana';
+                    button.innerHTML = '<i class="mr-2 fas fa-trash-alt"></i> Hapus Rencana';
                 });
             });
         },
@@ -934,7 +926,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 function() {
                     // Disable button and show loading state
                     button.disabled = true;
-                    button.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Memproses...';
+                    button.innerHTML = '<i class="mr-2 fas fa-circle-notch fa-spin"></i> Memproses...';
                     
                     // Close the modal
                     self.elements.periodModal.classList.add('hidden');
@@ -972,13 +964,13 @@ document.addEventListener('DOMContentLoaded', function() {
                             self.notification.error('Gagal', data.message || 'Gagal membuat rencana operasi otomatis.');
                         }
                         button.disabled = false;
-                        button.innerHTML = '<i class="fas fa-check mr-2"></i> Generate';
+                        button.innerHTML = '<i class="mr-2 fas fa-check"></i> Generate';
                     })
                     .catch(error => {
                         console.error('Error:', error);
                         self.notification.error('Terjadi Kesalahan', 'Terjadi kesalahan saat membuat rencana operasi otomatis.');
                         button.disabled = false;
-                        button.innerHTML = '<i class="fas fa-check mr-2"></i> Generate';
+                        button.innerHTML = '<i class="mr-2 fas fa-check"></i> Generate';
                     });
                 }
             );
