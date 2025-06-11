@@ -2,1189 +2,1388 @@
 
 namespace App\Services;
 
-use App\Models\Driver;
-use App\Models\DriverHistory;
-use App\Models\DriverScheduleHistory;
-use App\Models\Route;
 use App\Models\Schedule;
 use App\Models\Unit;
-use App\Models\Holiday;
-use App\Models\RenopsSettings;
+use App\Models\Driver;
+use App\Models\Route;
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
+use Carbon\CarbonPeriod;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Exception;
 
 class ScheduleGeneratorService
 {
-    protected $routes;
-    protected $units;
-    protected $batanganDrivers;
-    protected $cadanganDrivers;
-    protected $messages = [];
-    protected $success = 0;
-    protected $failed = 0;
-    protected $periodDays = 15;
-    protected $weekendDriversPool = []; // Track drivers allocated for weekend shifts
-    protected $renopsSettings; // Renops settings from database
-    protected $driverScheduleSettings = []; // Driver schedule settings by type
-    protected $batanganSettings; // Batangan driver settings
-    protected $cadanganSettings; // Cadangan driver settings
-    protected $unitDayOffs = []; // Cache of unit day offs from unit_renops table
-    protected $driverUnitMap = []; // Map of driver assignments to units for quick lookup
-    protected $unitAssignmentsCache = []; // Cache of unit assignments for quick lookup
-    protected $routeAssignmentsCache = []; // Cache of route assignments for quick lookup
-    protected $existingSchedulesCache = []; // Cache of existing schedules for the period
-    protected $leaveRequestsCache = []; // Cache of leave requests for the period
+    const BATANGAN_MAX_SHIFTS = 14;
+    const CADANGAN_MAX_SHIFTS = 11;
+    const SHIFT_PAGI = 'pagi';
+    const SHIFT_SIANG = 'siang';
+    const DRIVER_TYPE_BATANGAN = 'batangan';
+    const DRIVER_TYPE_CADANGAN = 'cadangan';
+    const STATUS_AKTIF = 'aktif';
+    const SCHEDULE_STATUS_SCHEDULED = 'scheduled';
 
-    protected $utilityService;
-    protected $driverSelectionService;
-    protected $schedulePlannerService;
-
-    public function __construct(
-        ScheduleGeneratorUtilityService $utilityService,
-        DriverSelectionService $driverSelectionService,
-        SchedulePlannerService $schedulePlannerService
-    ) {
-        $this->utilityService = $utilityService;
-        $this->driverSelectionService = $driverSelectionService;
-        $this->schedulePlannerService = $schedulePlannerService;
-    }
-
-    public function generateSchedules(string $startDate, string $endDate): array
+    /**
+     * Generate schedules for a given route and date range
+     * Can generate for specific unit or all units in the route
+     *
+     * @param int $routeId
+     * @param int|null $unitId Optional - if null, generates for all units in the route
+     * @param string $startDate
+     * @param string $endDate
+     * @return array
+     */
+    public function generateSchedules(int $routeId, ?int $unitId, string $startDate, string $endDate): array
     {
-        $startTime = microtime(true);
-        $startDate = Carbon::parse($startDate)->startOfDay();
-        $endDate = Carbon::parse($endDate)->endOfDay();
-
         try {
-            // Initialize results array
-            $results = [
-                'success' => 0,
-                'failed' => 0,
-                'messages' => []
-            ];
+            DB::beginTransaction();
 
-            // Load all necessary data
-            $this->loadData($results);
-
-            if ($this->units->isEmpty()) {
-                $results['messages'][] = "No units available for scheduling. Cannot generate schedules.";
-                return $results;
+            // Validate input
+            $validationResult = $this->validateInput($routeId, $unitId, $startDate, $endDate);
+            if (!$validationResult['valid']) {
+                return [
+                    'success' => false,
+                    'message' => $validationResult['message'],
+                    'data' => []
+                ];
             }
 
-            if ($this->batanganDrivers->isEmpty() && $this->cadanganDrivers->isEmpty()) {
-                $results['messages'][] = "No drivers available for scheduling. Cannot generate schedules.";
-                return $results;
+            $unit = $validationResult['unit'];
+            $route = $validationResult['route'];
+            $dateRange = $validationResult['dateRange'];
+
+            // Get available drivers for this unit
+            $availableDrivers = $this->getAvailableDrivers($unitId);
+
+            if ($availableDrivers->isEmpty()) {
+                return [
+                    'success' => false,
+                    'message' => 'Tidak ada driver aktif yang terdaftar untuk unit ini',
+                    'data' => []
+                ];
             }
 
-            // Load settings
-            $this->renopsSettings = RenopsSettings::getCurrentSettings();
-            $this->utilityService->loadDriverScheduleSettings(
-                $this->driverScheduleSettings,
-                $this->batanganSettings,
-                $this->cadanganSettings,
-                $this->messages
-            );
+            // Analyze workload distribution
+            $workloadAnalysis = $this->analyzeWorkloadDistribution($unitId, $dateRange, $availableDrivers);
+            Log::info('Workload analysis', $workloadAnalysis);
 
-            // Preload all necessary data
-            $this->utilityService->preloadUnitDayOffs($startDate, $endDate, $this->unitDayOffs);
-            $this->utilityService->precacheUnitAssignments(
-                $this->units,
-                $this->batanganDrivers,
-                $this->cadanganDrivers,
-                $this->unitAssignmentsCache
-            );
+            // Generate schedules for each date
+            $generatedSchedules = [];
+            $skippedDates = [];
+            $errors = [];
+            $validationIssues = [];
 
-            // Generate initial schedule plan
-            $schedulePlan = $this->schedulePlannerService->generateSchedulePlan(
-                $startDate->format('Y-m-d'),
-                $endDate->format('Y-m-d'),
-                $this->units,
-                $this->batanganDrivers,
-                $this->cadanganDrivers,
-                $this->batanganSettings,
-                $this->cadanganSettings,
-                $this->unitDayOffs
-            );
+            foreach ($dateRange as $date) {
+                try {
+                    $dateString = $date->format('Y-m-d');
+                    
+                    $dateSchedules = $this->generateSchedulesForDate(
+                        $routeId, 
+                        $unitId, 
+                        $date, 
+                        $availableDrivers,
+                        $dateRange
+                    );
 
-            // Optimize the plan to ensure constraints are met
-            try {
-                $optimizedPlan = $this->schedulePlannerService->optimizeSchedulePlan(
-                    $schedulePlan,
-                    $startDate->format('Y-m-d'),
-                    $endDate->format('Y-m-d'),
-                    $this->units,
-                    $this->batanganDrivers,
-                    $this->cadanganDrivers,
-                    $this->unitDayOffs
-                );
-                
-                if (empty($optimizedPlan)) {
-                    $results['messages'][] = "No valid schedules could be created. Check that units and drivers exist.";
-                    Log::warning("Schedule generation produced empty plan");
-                    return $results;
+                    // Validate schedule integrity after generation
+                    $integrityIssues = $this->validateScheduleIntegrity($unitId, $dateString);
+                    if (!empty($integrityIssues)) {
+                        $validationIssues[$dateString] = $integrityIssues;
+                        Log::warning("Schedule integrity issues for {$dateString}: " . implode(', ', $integrityIssues));
+                    }
+
+                    if (!empty($dateSchedules)) {
+                        $generatedSchedules = array_merge($generatedSchedules, $dateSchedules);
+                    } else {
+                        $skippedDates[] = $dateString;
+                    }
+                } catch (Exception $e) {
+                    $errors[] = "Error untuk tanggal {$date->format('Y-m-d')}: " . $e->getMessage();
+                    Log::error("Schedule generation error for date {$date->format('Y-m-d')}: " . $e->getMessage());
                 }
-                
-                // Create actual schedules from the plan
-                $scheduleResults = $this->schedulePlannerService->createSchedulesFromPlan(
-                    $optimizedPlan,
-                    $startDate->format('Y-m-d'),
-                    $endDate->format('Y-m-d'),
-                    $this->units,
-                    $this->batanganDrivers,
-                    $this->cadanganDrivers,
-                    $this->unitDayOffs
-                );
-                
-                // Update results with schedule creation results
-                $this->success += $scheduleResults['success'];
-                $this->failed += $scheduleResults['failed'];
-                $this->messages = array_merge($this->messages, $scheduleResults['messages']);
-            } catch (\Exception $e) {
-                $results['messages'][] = "Error generating schedules: " . $e->getMessage();
-                Log::error("Error in schedule generation: " . $e->getMessage(), [
-                    'trace' => $e->getTraceAsString()
-                ]);
-                return $results;
             }
 
-            $endTime = microtime(true);
-            $executionTime = round($endTime - $startTime, 2);
+            DB::commit();
 
-            $results['success'] = $this->success;
-            $results['failed'] = $this->failed;
-            $results['messages'] = $this->messages;
-            $results['messages'][] = "Schedule generation completed in {$executionTime} seconds.";
-
-            return $results;
-        } catch (\Exception $e) {
-            $this->messages[] = "Error generating schedules: " . $e->getMessage();
-            Log::error("Error generating schedules: " . $e->getMessage());
-            Log::error($e->getTraceAsString());
+            // Calculate coverage statistics
+            $coverageStats = $this->calculateCoverageStatistics($unitId, $dateRange);
 
             return [
-                'success' => $this->success,
-                'failed' => $this->failed,
-                'messages' => $this->messages
+                'success' => true,
+                'message' => 'Jadwal berhasil dibuat menggunakan pattern 15 hari dengan driver cadangan sebagai backup',
+                'data' => [
+                    'generated_schedules' => count($generatedSchedules),
+                    'skipped_dates' => $skippedDates,
+                    'errors' => $errors,
+                    'validation_issues' => $validationIssues,
+                    'schedules' => $generatedSchedules,
+                    'coverage_stats' => $coverageStats,
+                    'pattern_info' => [
+                        'total_days' => count($dateRange),
+                        'pattern_cycles' => ceil(count($dateRange) / 15),
+                        'batangan_drivers_used' => $availableDrivers->where('type', self::DRIVER_TYPE_BATANGAN)->count(),
+                        'cadangan_drivers_used' => $availableDrivers->where('type', self::DRIVER_TYPE_CADANGAN)->count(),
+                        'pattern_type' => '15-day fixed pattern for batangan drivers + cadangan backup',
+                        'coverage_strategy' => 'Multi-phase: 1) Batangan pattern, 2) Cadangan backup, 3) Batangan fallback',
+                        'max_shifts_per_day' => 2,
+                        'conflict_prevention' => 'Enabled'
+                    ]
+                ]
+            ];
+
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Schedule generation failed: ' . $e->getMessage());
+            
+            return [
+                'success' => false,
+                'message' => 'Terjadi kesalahan saat membuat jadwal: ' . $e->getMessage(),
+                'data' => []
+            ];
+        }
+    }
+
+    /**
+     * Validate input parameters
+     *
+     * @param int $routeId
+     * @param int $unitId
+     * @param string $startDate
+     * @param string $endDate
+     * @return array
+     */
+    private function validateInput(int $routeId, int $unitId, string $startDate, string $endDate): array
+    {
+        // Validate unit exists
+        $unit = Unit::where('id', $unitId)
+            ->where('status', self::STATUS_AKTIF)
+            ->first();
+
+        if (!$unit) {
+            return [
+                'valid' => false,
+                'message' => 'Unit tidak ditemukan atau tidak aktif'
             ];
         }
 
-        $results = [
-            'success' => 0,
-            'failed' => 0,
-            'messages' => []
-        ];
-
-        $this->loadData($results);
-
-        $this->generateBatanganSchedulePlan($startDate, $endDate);
-
-        if ($this->units->isEmpty()) {
-            $results['messages'][] = "No units available for scheduling. Cannot generate schedules.";
-            return $results;
+        // Validate route exists
+        $route = Route::find($routeId);
+        if (!$route) {
+            return [
+                'valid' => false,
+                'message' => 'Route tidak ditemukan'
+            ];
         }
 
-        if ($this->batanganDrivers->isEmpty() && $this->cadanganDrivers->isEmpty()) {
-            $results['messages'][] = "No drivers available for scheduling. Cannot generate schedules.";
-            return $results;
+        // Validate unit has this route
+        $hasRoute = $unit->routes()->where('routes.id', $routeId)->exists();
+        if (!$hasRoute) {
+            return [
+                'valid' => false,
+                'message' => 'Unit tidak memiliki akses ke route yang dipilih'
+            ];
         }
 
-        $this->renopsSettings = RenopsSettings::getCurrentSettings();
-        $this->utilityService->loadDriverScheduleSettings(
-            $this->driverScheduleSettings,
-            $this->batanganSettings,
-            $this->cadanganSettings,
-            $this->messages
-        );
-
-        $this->utilityService->preloadUnitDayOffs($startDate, $endDate, $this->unitDayOffs);
-        $this->utilityService->precacheUnitAssignments(
-            $this->units,
-            $this->batanganDrivers,
-            $this->cadanganDrivers,
-            $this->unitAssignmentsCache
-        );
-
-        $this->utilityService->precacheRouteAssignments(
-            $this->routes,
-            $this->batanganDrivers,
-            $this->cadanganDrivers,
-            $this->routeAssignmentsCache
-        );
-
-        $this->utilityService->precacheExistingSchedules($startDate, $endDate, $this->existingSchedulesCache);
-        $this->utilityService->precacheLeaveRequests($startDate, $endDate, $this->leaveRequestsCache);
-
-        $currentDate = $startDate->copy();
-        $totalDays = $startDate->diffInDays($endDate) + 1;
-        $daysProcessed = 0;
-
-        set_time_limit(300);
-
-        $chunkSize = 5;
-        $chunks = ceil($totalDays / $chunkSize);
-
-        $driversOnLeaveByDate = [];
-        foreach ($this->leaveRequestsCache as $leave) {
-            $start = Carbon::parse($leave->start_date);
-            $end = Carbon::parse($leave->end_date);
-
-            for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
-                $dateStr = $date->format('Y-m-d');
-                if (!isset($driversOnLeaveByDate[$dateStr])) {
-                    $driversOnLeaveByDate[$dateStr] = [];
-                }
-                $driversOnLeaveByDate[$dateStr][] = $leave->driver_id;
-            }
-        }
-
-        for ($chunk = 0; $chunk < $chunks; $chunk++) {
-            $chunkStartDate = $startDate->copy()->addDays($chunk * $chunkSize);
-            $chunkEndDate = $startDate->copy()->addDays(min(($chunk + 1) * $chunkSize - 1, $totalDays - 1));
-
-            if ($chunkEndDate->gt($endDate)) {
-                $chunkEndDate = $endDate->copy();
-            }
-
-            $currentDate = $chunkStartDate->copy();
-
-            while ($currentDate->lte($chunkEndDate)) {
-                $dateStr = $currentDate->format('Y-m-d');
-                $daysProcessed++;
-                $this->weekendDriversPool = [];
-
-                $unavailableUnitIds = $this->utilityService->getUnavailableUnitsForDay($dateStr, $this->unitDayOffs);
-                $resourcePercentage = $this->utilityService->getResourcePercentageFromUnitRenops($dateStr, [
-                    'weekend_percentage' => $this->renopsSettings ? $this->renopsSettings->weekend_threshold : 80,
-                    'holiday_percentage' => $this->renopsSettings ? $this->renopsSettings->holiday_threshold : 80,
-                ]);
-
-                $totalUnitsCount = $this->units->count();
-                $unavailableUnitsCount = count($unavailableUnitIds);
-                $availableUnitsCount = $totalUnitsCount - $unavailableUnitsCount;
-
-                $existingSchedulesForDate = isset($this->existingSchedulesCache[$dateStr]) 
-                    ? collect($this->existingSchedulesCache[$dateStr]) 
-                    : collect();
-                    
-                $scheduledUnitIdsMorning = $existingSchedulesForDate->where('shift', 'pagi')->pluck('unit_id')->toArray();
-                $scheduledUnitIdsEvening = $existingSchedulesForDate->where('shift', 'siang')->pluck('unit_id')->toArray();
-                $scheduledDriverIds = $existingSchedulesForDate->pluck('driver_id')->toArray();
-                $driversOnLeaveIds = $driversOnLeaveByDate[$dateStr] ?? [];
-                $dayDriversScheduled = []; 
-                $morningResults = $this->generateShiftSchedules(
-                    $dateStr,
-                    'pagi',
-                    $resourcePercentage,
-                    $startDate->format('Y-m-d'),
-                    $endDate->format('Y-m-d'),
-                    $unavailableUnitIds,
-                    $scheduledUnitIdsMorning,
-                    $scheduledDriverIds,
-                    $driversOnLeaveIds,
-                    $dayDriversScheduled
-                );
-
-                $scheduledDriverIdsForAfternoon = array_merge($scheduledDriverIds, array_keys($dayDriversScheduled));
-                $afternoonResults = $this->generateShiftSchedules(
-                    $dateStr,
-                    'siang',
-                    $resourcePercentage,
-                    $startDate->format('Y-m-d'),
-                    $endDate->format('Y-m-d'),
-                    $unavailableUnitIds,
-                    $scheduledUnitIdsEvening,
-                    $scheduledDriverIdsForAfternoon,
-                    $driversOnLeaveIds,
-                    $dayDriversScheduled
-                );
-                
-                $availableUnitsCount = count($this->units) - count($unavailableUnitIds);
-                $unitsWithMorningShift = $morningResults['scheduled_units'] ?? [];
-                $unitsWithAfternoonShift = $afternoonResults['scheduled_units'] ?? [];
-                $unitsMissingMorning = array_diff(
-                    array_column($this->units->whereNotIn('id', $unavailableUnitIds)->all(), 'id'), 
-                    $unitsWithMorningShift
-                );
-                $unitsMissingAfternoon = array_diff(
-                    array_column($this->units->whereNotIn('id', $unavailableUnitIds)->all(), 'id'), 
-                    $unitsWithAfternoonShift
-                );
-                
-                if (count($unitsMissingMorning) > 0 || count($unitsMissingAfternoon) > 0) {
-                    $updatedScheduledDriverIds = array_merge($scheduledDriverIds, array_keys($dayDriversScheduled));
-                    $rescheduleResults = [
-                        'morning_added' => 0,
-                        'afternoon_added' => 0
-                    ];
-                    $rescheduleResults = $this->attemptRescheduleForMissingShifts(
-                        $dateStr,
-                        $unitsMissingMorning,
-                        $unitsMissingAfternoon,
-                        $updatedScheduledDriverIds,
-                        $driversOnLeaveIds,
-                        $dayDriversScheduled
-                    );
-                }
-                
-                if ((count($unitsMissingMorning) - ($rescheduleResults['morning_added'] ?? 0) > 0) || 
-                    (count($unitsMissingAfternoon) - ($rescheduleResults['afternoon_added'] ?? 0) > 0)) {
-                }
-
-                if ($daysProcessed % 3 == 0 || $currentDate->equalTo($endDate)) {
-                    $progressPercent = round(($daysProcessed / $totalDays) * 100);
-                }
-
-                $currentDate->addDay();
-            }
-        }
-
-        $this->logDriverScheduleStats($startDate->format('Y-m-d'), $endDate->format('Y-m-d'), 'Pre-balancing');
-        $this->balanceSchedulesInPeriod($startDate, $endDate, $results);
-        $this->logDriverScheduleStats($startDate->format('Y-m-d'), $endDate->format('Y-m-d'), 'Final');
-
-        $endTime = microtime(true);
-        $executionTime = round($endTime - $startTime, 2);
-
-        $results['success'] = $this->success;
-        $results['failed'] = $this->failed;
-        $results['messages'] = $this->messages;
-
-        return $results;
-    }
-
-    protected function loadData(array &$results): void
-    {
+        // Validate date range
         try {
-            $this->routes = collect();
-            $this->units = collect();
-            $this->batanganDrivers = collect();
-            $this->cadanganDrivers = collect();
-            $this->routes = Route::all();
-            $this->units = Unit::with('routes')->get();
-            $allDrivers = Driver::with(['units', 'routes'])->get();
-            $this->batanganDrivers = $allDrivers->where('type', 'batangan');
-            $this->cadanganDrivers = $allDrivers->where('type', 'cadangan');
-            $this->driverUnitMap = [];
+            $start = Carbon::parse($startDate);
+            $end = Carbon::parse($endDate);
             
-            foreach ($allDrivers as $driver) {
-                if ($driver->units && $driver->units->isNotEmpty()) {
-                    $this->driverUnitMap[$driver->id] = $driver->units->pluck('id')->toArray();
-                }
+            if ($start->gt($end)) {
+                return [
+                    'valid' => false,
+                    'message' => 'Tanggal mulai tidak boleh lebih besar dari tanggal selesai'
+                ];
             }
 
-        } catch (\Exception $e) {
-            $results['messages'][] = "ERROR loading data: " . $e->getMessage();
+            $dateRange = CarbonPeriod::create($start, $end)->toArray();
+            
+            return [
+                'valid' => true,
+                'unit' => $unit,
+                'route' => $route,
+                'dateRange' => $dateRange
+            ];
+
+        } catch (Exception $e) {
+            return [
+                'valid' => false,
+                'message' => 'Format tanggal tidak valid'
+            ];
         }
     }
 
-    protected function generateBatanganSchedulePlan($startDate, $endDate)
+    /**
+     * Get available drivers for a unit
+     *
+     * @param int $unitId
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
+    private function getAvailableDrivers(int $unitId)
     {
-        $start = Carbon::parse($startDate)->copy();
-        $end = Carbon::parse($endDate)->copy();
-        $days = [];
-        $weekdays = [];
-        $weekends = [];
-        
-        for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
-            $dateStr = $date->format('Y-m-d');
-            $days[] = $dateStr;
-            
-            if ($date->isWeekend()) {
-                $weekends[] = $dateStr;
-            } else {
-                $weekdays[] = $dateStr;
-            }
-        }
-        
-        $totalDays = count($days);
-        $targetDays = isset($this->batanganSettings['min_schedules']) ? $this->batanganSettings['min_schedules'] : min(13, $totalDays);
-        $targetDays = min($targetDays, $totalDays);
-        
-        $unitBatanganDriverCounts = [];
-        foreach ($this->units as $unit) {
-            $unitBatanganDrivers = $this->batanganDrivers->filter(function($driver) use ($unit) {
-                return $driver->units->contains('id', $unit->id);
-            });
-            
-            $unitBatanganDriverCounts[$unit->id] = $unitBatanganDrivers->count();
-        }
-        
-        foreach ($this->batanganDrivers as $driver) {
-            foreach ($driver->units as $unit) {
-                $driverCount = $unitBatanganDriverCounts[$unit->id] ?? 1;
-                $adjustedTargetDays = min($targetDays, ceil($totalDays * 0.95 / $driverCount));
-                $targetWeekends = min(
-                    (int)ceil(count($weekends) / $driverCount), 
-                    (int)ceil($adjustedTargetDays * count($weekends) / $totalDays)
-                );
-                $targetWeekdays = $adjustedTargetDays - $targetWeekends;
-                $selectedDays = [];
-                
-                $weekendCopy = $weekends;
-                shuffle($weekendCopy);
-                $selectedWeekends = array_slice($weekendCopy, 0, $targetWeekends);
-                $selectedDays = array_merge($selectedDays, $selectedWeekends);
-                
-                $weekdayCopy = $weekdays;
-                shuffle($weekdayCopy);
-                $selectedWeekdays = array_slice($weekdayCopy, 0, $targetWeekdays);
-                $selectedDays = array_merge($selectedDays, $selectedWeekdays);
-                
-                sort($selectedDays);
-                $plan = [];
-                $lastShift = null;
-                $lastDay = null;
-                $morningCount = 0;
-                $afternoonCount = 0;
-                
-                foreach ($selectedDays as $i => $day) {
-                    if ($lastDay) {
-                        $prevIdx = array_search($lastDay, $days);
-                        $currIdx = array_search($day, $days);
-                        $gap = $currIdx - $prevIdx;
-                        
-                        if ($gap > 1) {
-                            $lastShift = null;
-                        }
-                    }
-                    
-                    if ($lastShift === 'siang') {
-                        $shift = 'siang';
-                    } else {
-                        if ($morningCount < $afternoonCount) {
-                            $shift = 'pagi';
-                        } elseif ($afternoonCount < $morningCount) {
-                            $shift = 'siang';
-                        } else {
-                            $shift = $i % 2 == 0 ? 'pagi' : 'siang';
-                        }
-                    }
-                    
-                    $plan[$day] = $shift;
-                    $lastShift = $shift;
-                    $lastDay = $day;
-                    
-                    if ($shift === 'pagi') {
-                        $morningCount++;
-                    } else {
-                        $afternoonCount++;
-                    }
-                }
-                
-                $this->batanganSchedulePlan[$unit->id][$driver->id] = $plan;
-            }
-        }
+        return Driver::where('status', self::STATUS_AKTIF)
+            ->whereHas('units', function($query) use ($unitId) {
+                $query->where('units.id', $unitId);
+            })
+            ->orderByRaw('CASE WHEN type = "batangan" THEN 0 ELSE 1 END')
+            ->orderBy('name')
+            ->get();
     }
 
-    protected function generateShiftSchedules(
-        string $dateStr,
-        string $shift,
-        int $resourcePercentage,
-        string $periodStartDate,
-        string $periodEndDate,
-        array $unavailableUnitIds,
-        array $scheduledUnitIds,
-        array $scheduledDriverIds,
-        array $driversOnLeaveIds,
-        array &$dayDriversScheduled = []
-    ): array {
-        $this->messages[] = "Generating {$shift} shift schedules for {$dateStr}";
-        
-        $result = [
-            'units_scheduled' => 0,
-            'drivers_scheduled' => 0,
-            'scheduled_units' => []  // Track unit IDs that were scheduled
-        ];
-
-        $scheduledDriverIdsSet = array_flip($scheduledDriverIds);
-        $scheduledUnitIdsSet = array_flip($scheduledUnitIds);
-        $driversOnLeaveIdsSet = array_flip($driversOnLeaveIds);
-
-        static $scheduledDriverShiftsSet = [];
-        if (!isset($scheduledDriverShiftsSet[$dateStr])) {
-            $scheduledDriverShiftsSet[$dateStr] = [];
-        }
-
-        $previousDate = Carbon::parse($dateStr)->subDay();
-        $previousDateStr = $previousDate->format('Y-m-d');
-        $previousDaySchedules = [];
-        
-        if (isset($this->existingSchedulesCache[$previousDateStr])) {
-            foreach ($this->existingSchedulesCache[$previousDateStr] as $schedule) {
-                $previousDaySchedules[$schedule->driver_id] = [
-                    'unit_id' => $schedule->unit_id,
-                    'shift' => $schedule->shift
-                ];
-            }
-        }
-        
-        $twoDaysAgo = Carbon::parse($dateStr)->subDays(2);
-        $twoDaysAgoStr = $twoDaysAgo->format('Y-m-d');
-        $twoDaysAgoSchedules = [];
-        
-        if (isset($this->existingSchedulesCache[$twoDaysAgoStr])) {
-            foreach ($this->existingSchedulesCache[$twoDaysAgoStr] as $schedule) {
-                $twoDaysAgoSchedules[$schedule->driver_id] = [
-                    'unit_id' => $schedule->unit_id,
-                    'shift' => $schedule->shift
-                ];
-            }
-        }
-
-        $driverScheduleCounts = $this->getDriverScheduleCountsForPeriod($periodStartDate, $periodEndDate);
-        $sortedUnits = $this->units->sortBy('unit_number');
-        $schedulesToCreate = [];
-        $unitsWithBatanganDrivers = [];
-        
-        foreach ($sortedUnits as $unit) {
-            $unitBatanganDrivers = $this->batanganDrivers->filter(function($driver) use ($unit) {
-                return $driver->units->contains('id', $unit->id);
-            });
-            
-            if (!$unitBatanganDrivers->isEmpty()) {
-                $unitsWithBatanganDrivers[$unit->id] = true;
-            }
-        }
-        
-        foreach ($sortedUnits as $unit) {
-            if (in_array($unit->id, $unavailableUnitIds)) {
-                continue;
-            }
-
-            if (isset($scheduledUnitIdsSet[$unit->id])) {
-                continue;
-            }
-
-            $driver = $this->driverSelectionService->findBatanganDriverForUnit(
-                $unit,
-                $dateStr,
-                $shift,
-                $scheduledDriverIdsSet,
-                $driversOnLeaveIdsSet,
-                $previousDaySchedules,
-                $twoDaysAgoSchedules,
-                $driverScheduleCounts,
-                $this->batanganDrivers,
-                $this->unitAssignmentsCache,
-                $this->unitDayOffs,
-                $this->batanganSettings,
-                $this->cadanganSettings,
-                $this->messages
-            );
-
-            if ($driver) {
-                if (isset($dayDriversScheduled[$driver->id])) {
-                    continue;
-                }
-                
-                $plan = $this->batanganSchedulePlan[$unit->id][$driver->id] ?? [];
-                if (!isset($plan[$dateStr]) || $plan[$dateStr] !== $shift) {
-                    continue;
-                }
-                
-                $routeId = $unit->routes->isNotEmpty() ? $unit->routes->first()->id : null;
-                if (!$routeId) {
-                    continue;
-                }
-                
-                $schedule = [
-                    'unit_id' => $unit->id,
-                    'driver_id' => $driver->id,
-                    'route_id' => $routeId,
-                    'schedule_date' => $dateStr,
-                    'shift' => $shift,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-                
-                $schedulesToCreate[] = $schedule;
-                $scheduledDriverIdsSet[$driver->id] = true;
-                $scheduledUnitIdsSet[$unit->id] = true;
-                $scheduledDriverShiftsSet[$dateStr][$driver->id] = $shift; // Mark driver as scheduled for this shift on this day
-                $dayDriversScheduled[$driver->id] = $shift; // Also mark in the daily tracking array
-                
-                if (!isset($driverScheduleCounts[$driver->id])) {
-                    $driverScheduleCounts[$driver->id] = 0;
-                }
-                $driverScheduleCounts[$driver->id]++;
-            }
-        }
-
-        foreach ($sortedUnits as $unit) {
-            if (in_array($unit->id, $unavailableUnitIds)) {
-                continue;
-            }
-            if (isset($scheduledUnitIdsSet[$unit->id])) {
-                continue;
-            }
-            
-            $priority = isset($unitsWithBatanganDrivers[$unit->id]) ? 0 : 1;
-            
-            if ($priority === 0) {
-                continue;
-            }
-            
-            $driver = $this->driverSelectionService->findCadanganDriverForUnit(
-                $unit,
-                $dateStr,
-                $shift,
-                $scheduledDriverIdsSet,
-                $driversOnLeaveIdsSet,
-                $previousDaySchedules,
-                $twoDaysAgoSchedules,
-                $driverScheduleCounts,
-                $this->cadanganDrivers,
-                $this->unitAssignmentsCache,
-                $this->routeAssignmentsCache,
-                $this->unitDayOffs,
-                $this->batanganSettings,
-                $this->cadanganSettings,
-                $this->messages
-            );
-            if ($driver) {
-                if (isset($scheduledDriverShiftsSet[$dateStr][$driver->id])) {
-                    continue;
-                }
-                $routeId = $unit->routes->isNotEmpty() ? $unit->routes->first()->id : null;
-                if (!$routeId) {
-                    continue;
-                }
-                $schedule = [
-                    'unit_id' => $unit->id,
-                    'driver_id' => $driver->id,
-                    'route_id' => $routeId,
-                    'schedule_date' => $dateStr,
-                    'shift' => $shift,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-                $schedulesToCreate[] = $schedule;
-                $scheduledDriverIdsSet[$driver->id] = true;
-                $scheduledUnitIdsSet[$unit->id] = true;
-                $scheduledDriverShiftsSet[$dateStr][$driver->id] = $shift; // Mark driver as scheduled for this shift on this day
-                if (!isset($driverScheduleCounts[$driver->id])) {
-                    $driverScheduleCounts[$driver->id] = 0;
-                }
-                $driverScheduleCounts[$driver->id]++;
-            }
-        }
-        
-        foreach ($sortedUnits as $unit) {
-            if (in_array($unit->id, $unavailableUnitIds)) {
-                continue;
-            }
-            if (isset($scheduledUnitIdsSet[$unit->id])) {
-                continue;
-            }
-            
-            if (!isset($unitsWithBatanganDrivers[$unit->id])) {
-                continue;
-            }
-            
-            $driver = $this->driverSelectionService->findCadanganDriverForUnit(
-                $unit,
-                $dateStr,
-                $shift,
-                $scheduledDriverIdsSet,
-                $driversOnLeaveIdsSet,
-                $previousDaySchedules,
-                $twoDaysAgoSchedules,
-                $driverScheduleCounts,
-                $this->cadanganDrivers,
-                $this->unitAssignmentsCache,
-                $this->routeAssignmentsCache,
-                $this->unitDayOffs,
-                $this->batanganSettings,
-                $this->cadanganSettings,
-                $this->messages
-            );
-            
-            if ($driver) {
-                if (isset($scheduledDriverShiftsSet[$dateStr][$driver->id])) {
-                    continue;
-                }
-                $routeId = $unit->routes->isNotEmpty() ? $unit->routes->first()->id : null;
-                if (!$routeId) {
-                    continue;
-                }
-                $schedule = [
-                    'unit_id' => $unit->id,
-                    'driver_id' => $driver->id,
-                    'route_id' => $routeId,
-                    'schedule_date' => $dateStr,
-                    'shift' => $shift,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-                $schedulesToCreate[] = $schedule;
-                $scheduledDriverIdsSet[$driver->id] = true;
-                $scheduledUnitIdsSet[$unit->id] = true;
-                $scheduledDriverShiftsSet[$dateStr][$driver->id] = $shift; // Mark driver as scheduled for this shift on this day
-                if (!isset($driverScheduleCounts[$driver->id])) {
-                    $driverScheduleCounts[$driver->id] = 0;
-                }
-                $driverScheduleCounts[$driver->id]++;
-            }
-        }
-        
-        if (!empty($schedulesToCreate)) {
-            list($success, $failed) = $this->utilityService->createSchedules($schedulesToCreate, $this->messages);
-            $this->success += $success;
-            $this->failed += $failed;
-            
-            $scheduledUnitIds = array_unique(array_column($schedulesToCreate, 'unit_id'));
-            $result['units_scheduled'] = count($scheduledUnitIds);
-            $result['scheduled_units'] = $scheduledUnitIds;
-            $result['drivers_scheduled'] = count(array_unique(array_column($schedulesToCreate, 'driver_id')));
-            
-            foreach ($schedulesToCreate as $schedule) {
-                $dayDriversScheduled[$schedule['driver_id']] = $schedule['shift'];
-            }
-        }
-        
-        return $result;
-    }
-    
-    protected function getDriverScheduleCountsForPeriod(string $startDateStr, string $endDateStr): array
+    /**
+     * Generate schedules for a specific date using predefined pattern with cadangan backup
+     *
+     * @param int $routeId
+     * @param int $unitId
+     * @param Carbon $date
+     * @param \Illuminate\Database\Eloquent\Collection $availableDrivers
+     * @param array $dateRange
+     * @return array
+     */
+    private function generateSchedulesForDate(int $routeId, int $unitId, Carbon $date, $availableDrivers, array $dateRange): array
     {
-        $driverCounts = [];
-        $existingSchedules = Schedule::select('driver_id', DB::raw('COUNT(*) as count'))
-            ->whereBetween('schedule_date', [$startDateStr, $endDateStr])
-            ->groupBy('driver_id')
+        $schedules = [];
+        $dateString = $date->format('Y-m-d');
+        
+        Log::info("🚌 === DAILY SCHEDULE GENERATION === {$dateString} ===");
+        
+        // Separate drivers by type
+        $batanganDrivers = $availableDrivers->where('type', self::DRIVER_TYPE_BATANGAN);
+        $cadanganDrivers = $availableDrivers->where('type', self::DRIVER_TYPE_CADANGAN);
+        
+        Log::info("Available drivers: {$batanganDrivers->count()} batangan, {$cadanganDrivers->count()} cadangan");
+        
+        // Get month boundaries for shift count validation
+        $monthStart = $date->copy()->startOfMonth();
+        $monthEnd = $date->copy()->endOfMonth();
+
+        // Track which shifts are filled
+        $assignedShifts = [];
+
+        // Check for existing schedules before starting
+        $existingSchedules = Schedule::where('unit_id', $unitId)
+            ->where('schedule_date', $dateString)
             ->get();
             
-        foreach ($existingSchedules as $schedule) {
-            $driverCounts[$schedule->driver_id] = $schedule->count;
+        if ($existingSchedules->isNotEmpty()) {
+            Log::info("⚠ Found {$existingSchedules->count()} existing schedule(s) for {$dateString}, will work around them");
+            foreach ($existingSchedules as $existing) {
+                $assignedShifts[$existing->shift] = $existing->driver_id;
+                Log::info("Existing: Driver {$existing->driver_id} has {$existing->shift} shift");
+            }
         }
-        
-        return $driverCounts;
+
+        // Phase 1: Apply batangan pattern (if we have at least 2 batangan drivers)
+        if ($batanganDrivers->count() >= 2) {
+            Log::info("🎯 Starting Phase 1: Batangan Pattern Application");
+            $patternSchedules = $this->applyBatanganPattern(
+                $routeId, $unitId, $date, $batanganDrivers, $dateRange, $monthStart, $monthEnd, $assignedShifts
+            );
+            $schedules = array_merge($schedules, $patternSchedules);
+        } else {
+            Log::info("⚠ Insufficient batangan drivers ({$batanganDrivers->count()}/2 required), skipping pattern for {$dateString}");
+        }
+
+        // Phase 2: Fill remaining slots with cadangan drivers
+        Log::info("🔄 Starting Phase 2: Cadangan Driver Backup");
+        $cadanganSchedules = $this->fillWithCadanganDrivers(
+            $routeId, $unitId, $dateString, $cadanganDrivers, $monthStart, $monthEnd, $assignedShifts
+        );
+        $schedules = array_merge($schedules, $cadanganSchedules);
+
+        // Phase 3: Fill any remaining empty slots with available batangan drivers (fallback)
+        Log::info("🆘 Starting Phase 3: Batangan Fallback");
+        $fallbackSchedules = $this->fillRemainingSlots(
+            $routeId, $unitId, $dateString, $batanganDrivers, $monthStart, $monthEnd, $assignedShifts
+        );
+        $schedules = array_merge($schedules, $fallbackSchedules);
+
+        // Final summary
+        $finalShiftCount = Schedule::where('unit_id', $unitId)
+            ->where('schedule_date', $dateString)
+            ->count();
+            
+        $coverageStatus = $finalShiftCount >= 2 ? "✅ COMPLETE" : "⚠️ PARTIAL";
+        Log::info("🏁 === DAILY GENERATION COMPLETE === {$dateString}: {$finalShiftCount}/2 shifts {$coverageStatus} ===");
+
+        // Validate schedule integrity
+        $integrityIssues = $this->validateScheduleIntegrity($unitId, $dateString);
+        if (!empty($integrityIssues)) {
+            Log::warning("Integrity issues found for {$dateString}: " . implode(', ', $integrityIssues));
+        }
+
+        return $schedules;
     }
 
-    protected function balanceSchedulesInPeriod(Carbon $startDate, Carbon $endDate, array &$results): void
+    /**
+     * Apply the batangan pattern for 2 primary drivers
+     *
+     * @param int $routeId
+     * @param int $unitId
+     * @param Carbon $date
+     * @param \Illuminate\Database\Eloquent\Collection $batanganDrivers
+     * @param array $dateRange
+     * @param Carbon $monthStart
+     * @param Carbon $monthEnd
+     * @param array &$assignedShifts
+     * @return array
+     */
+    private function applyBatanganPattern(int $routeId, int $unitId, Carbon $date, $batanganDrivers, array $dateRange, Carbon $monthStart, Carbon $monthEnd, array &$assignedShifts): array
     {
-        $allSchedules = Schedule::whereBetween('schedule_date', [
-                $startDate->format('Y-m-d'), 
-                $endDate->format('Y-m-d')
+        $schedules = [];
+        $dateString = $date->format('Y-m-d');
+        
+        Log::info("=== BATANGAN PATTERN PHASE === Starting pattern application for {$dateString}");
+        
+        // Get the day position in the generation period (1-15)
+        $startDate = $dateRange[0];
+        $dayPosition = $startDate->diffInDays($date) + 1;
+        
+        // Apply unit-based pattern offset to reduce conflicts across units
+        $unitOffset = $this->getUnitPatternOffset($unitId);
+        $patternPosition = ((($dayPosition - 1) + $unitOffset) % 15) + 1; // Cycle every 15 days with offset
+
+        // Get pattern for this day position
+        $pattern = $this->getPatternForDay($patternPosition);
+        
+        Log::info("Pattern Day {$patternPosition}/15 (Unit {$unitId} offset: {$unitOffset}): Driver1={$pattern['driver1']}, Driver2={$pattern['driver2']}");
+        
+        // Sort drivers consistently for pattern assignment
+        $sortedDrivers = $batanganDrivers->sortBy('id')->values();
+        $driver1 = $sortedDrivers[0];
+        $driver2 = $sortedDrivers[1];
+
+        Log::info("Primary drivers: {$driver1->name} ({$driver1->id}), {$driver2->name} ({$driver2->id})");
+
+        // Apply pattern for Driver 1
+        if ($pattern['driver1'] !== '-') {
+            if ($this->canDriverTakeShift($driver1, $unitId, $dateString, $pattern['driver1'], $monthStart, $monthEnd)) {
+                // Double check for conflicts before creating
+                $conflictCheck = Schedule::where('unit_id', $unitId)
+                    ->where('schedule_date', $dateString)
+                    ->where('shift', $pattern['driver1'])
+                    ->first();
+                    
+                if ($conflictCheck) {
+                    Log::warning("⚠ Pattern conflict: {$pattern['driver1']} shift on {$dateString} already taken by driver {$conflictCheck->driver_id}");
+                } else {
+                    $schedule = Schedule::create([
+                        'route_id' => $routeId,
+                        'unit_id' => $unitId,
+                        'driver_id' => $driver1->id,
+                        'schedule_date' => $dateString,
+                        'shift' => $pattern['driver1'],
+                        'status' => self::SCHEDULE_STATUS_SCHEDULED
+                    ]);
+                    $schedules[] = $schedule;
+                    $assignedShifts[$pattern['driver1']] = $driver1->id;
+                    
+                    // Get driver's current monthly count for logging
+                    $monthlyCount = Schedule::where('driver_id', $driver1->id)
+                        ->whereBetween('schedule_date', [
+                            $monthStart->format('Y-m-d'),
+                            $monthEnd->format('Y-m-d')
+                        ])
+                        ->count();
+                        
+                    Log::info("✓ Batangan pattern: Driver {$driver1->name} ({$driver1->id}) assigned {$pattern['driver1']} shift on {$dateString} (Pattern Day {$patternPosition}, Unit {$unitId} offset: {$unitOffset}, Monthly: {$monthlyCount}/" . self::BATANGAN_MAX_SHIFTS . ")");
+                }
+            } else {
+                Log::warning("⚠ Batangan pattern constraint: Driver {$driver1->name} ({$driver1->id}) cannot take {$pattern['driver1']} shift on {$dateString} (Pattern Day {$patternPosition}, Unit {$unitId} offset: {$unitOffset})");
+            }
+        } else {
+            Log::info("○ Batangan pattern: Driver {$driver1->name} ({$driver1->id}) has scheduled day off on {$dateString} (Pattern Day {$patternPosition}, Unit {$unitId} offset: {$unitOffset})");
+        }
+
+        // Apply pattern for Driver 2
+        if ($pattern['driver2'] !== '-') {
+            if ($this->canDriverTakeShift($driver2, $unitId, $dateString, $pattern['driver2'], $monthStart, $monthEnd)) {
+                // Double check for conflicts before creating
+                $conflictCheck = Schedule::where('unit_id', $unitId)
+                    ->where('schedule_date', $dateString)
+                    ->where('shift', $pattern['driver2'])
+                    ->first();
+                    
+                if ($conflictCheck) {
+                    Log::warning("⚠ Pattern conflict: {$pattern['driver2']} shift on {$dateString} already taken by driver {$conflictCheck->driver_id}");
+                } else {
+                    $schedule = Schedule::create([
+                        'route_id' => $routeId,
+                        'unit_id' => $unitId,
+                        'driver_id' => $driver2->id,
+                        'schedule_date' => $dateString,
+                        'shift' => $pattern['driver2'],
+                        'status' => self::SCHEDULE_STATUS_SCHEDULED
+                    ]);
+                    $schedules[] = $schedule;
+                    $assignedShifts[$pattern['driver2']] = $driver2->id;
+                    
+                    // Get driver's current monthly count for logging
+                    $monthlyCount = Schedule::where('driver_id', $driver2->id)
+                        ->whereBetween('schedule_date', [
+                            $monthStart->format('Y-m-d'),
+                            $monthEnd->format('Y-m-d')
+                        ])
+                        ->count();
+                        
+                    Log::info("✓ Batangan pattern: Driver {$driver2->name} ({$driver2->id}) assigned {$pattern['driver2']} shift on {$dateString} (Pattern Day {$patternPosition}, Unit {$unitId} offset: {$unitOffset}, Monthly: {$monthlyCount}/" . self::BATANGAN_MAX_SHIFTS . ")");
+                }
+            } else {
+                Log::warning("⚠ Batangan pattern constraint: Driver {$driver2->name} ({$driver2->id}) cannot take {$pattern['driver2']} shift on {$dateString} (Pattern Day {$patternPosition}, Unit {$unitId} offset: {$unitOffset})");
+            }
+        } else {
+            Log::info("○ Batangan pattern: Driver {$driver2->name} ({$driver2->id}) has scheduled day off on {$dateString} (Pattern Day {$patternPosition}, Unit {$unitId} offset: {$unitOffset})");
+        }
+
+        $currentShiftCount = Schedule::where('unit_id', $unitId)
+            ->where('schedule_date', $dateString)
+            ->count();
+        
+        Log::info("=== BATANGAN PATTERN COMPLETE === {$dateString}: " . count($schedules) . " pattern shifts applied, total shifts: {$currentShiftCount}/2");
+
+        return $schedules;
+    }
+
+    /**
+     * Fill remaining slots with cadangan drivers
+     *
+     * @param int $routeId
+     * @param int $unitId
+     * @param string $dateString
+     * @param \Illuminate\Database\Eloquent\Collection $cadanganDrivers
+     * @param Carbon $monthStart
+     * @param Carbon $monthEnd
+     * @param array &$assignedShifts
+     * @return array
+     */
+    private function fillWithCadanganDrivers(int $routeId, int $unitId, string $dateString, $cadanganDrivers, Carbon $monthStart, Carbon $monthEnd, array &$assignedShifts): array
+    {
+        $schedules = [];
+        $allShifts = [self::SHIFT_PAGI, self::SHIFT_SIANG];
+        
+        Log::info("=== CADANGAN PHASE === Starting cadangan driver assignment for {$dateString}");
+        Log::info("Currently assigned shifts: " . implode(', ', array_keys($assignedShifts)));
+        
+        // Check if we already have complete coverage (2 shifts)
+        if (count($assignedShifts) >= 2) {
+            Log::info("✓ Day already has complete coverage (2 shifts) from batangan drivers on {$dateString}, cadangan assignment not needed");
+            return $schedules;
+        }
+        
+        // Double check by querying database for existing schedules on this date
+        $existingSchedulesCount = Schedule::where('unit_id', $unitId)
+            ->where('schedule_date', $dateString)
+            ->count();
+            
+        if ($existingSchedulesCount >= 2) {
+            Log::info("✓ Database shows {$existingSchedulesCount} shifts already exist for {$dateString}, cadangan assignment not needed");
+            return $schedules;
+        }
+        
+        // Get existing shifts from database to merge with in-memory assignments
+        $existingShifts = Schedule::where('unit_id', $unitId)
+            ->where('schedule_date', $dateString)
+            ->pluck('shift')
+            ->toArray();
+        
+        // Combine in-memory and database shifts to find truly empty slots
+        $allAssignedShifts = array_merge($existingShifts, array_keys($assignedShifts));
+        $allAssignedShifts = array_unique($allAssignedShifts);
+        
+        // Find truly empty shifts
+        $emptyShifts = array_diff($allShifts, $allAssignedShifts);
+        
+        if (empty($emptyShifts)) {
+            Log::info("✓ All shifts already assigned (DB: " . implode(', ', $existingShifts) . ", Memory: " . implode(', ', array_keys($assignedShifts)) . ") on {$dateString}");
+            return $schedules;
+        }
+
+        Log::info("Empty shifts available for cadangan drivers: " . implode(', ', $emptyShifts));
+        Log::info("Available cadangan drivers: " . $cadanganDrivers->count());
+
+        // Sort cadangan drivers for fair distribution
+        $sortedCadanganDrivers = $this->sortDriversForDistribution($cadanganDrivers, $monthStart, $monthEnd, $dateString);
+
+        foreach ($emptyShifts as $shift) {
+            // Before assigning, verify we haven't exceeded the 2-shift limit
+            $currentDbShifts = Schedule::where('unit_id', $unitId)
+                ->where('schedule_date', $dateString)
+                ->count();
+            
+            $totalCurrentShifts = $currentDbShifts + count($schedules);
+                
+            if ($totalCurrentShifts >= 2) {
+                Log::info("⚠ Maximum 2 shifts per day limit reached for {$dateString} (DB: {$currentDbShifts}, New: " . count($schedules) . "), stopping cadangan assignment");
+                break;
+            }
+            
+            $assignedDriver = null;
+            $rejectionReasons = [];
+            
+            // Try to assign to an available cadangan driver
+            foreach ($sortedCadanganDrivers as $driver) {
+                if ($this->canDriverTakeShift($driver, $unitId, $dateString, $shift, $monthStart, $monthEnd)) {
+                    // Double check for conflicts before creating
+                    $conflictCheck = Schedule::where('unit_id', $unitId)
+                        ->where('schedule_date', $dateString)
+                        ->where('shift', $shift)
+                        ->first();
+                        
+                    if ($conflictCheck) {
+                        Log::warning("⚠ Shift conflict detected: {$shift} shift on {$dateString} already taken by driver {$conflictCheck->driver_id}");
+                        continue;
+                    }
+                    
+                    $schedule = Schedule::create([
+                        'route_id' => $routeId,
+                        'unit_id' => $unitId,
+                        'driver_id' => $driver->id,
+                        'schedule_date' => $dateString,
+                        'shift' => $shift,
+                        'status' => self::SCHEDULE_STATUS_SCHEDULED
+                    ]);
+                    $schedules[] = $schedule;
+                    $assignedShifts[$shift] = $driver->id;
+                    $assignedDriver = $driver;
+                    
+                    // Get driver's current monthly count for logging
+                    $monthlyCount = Schedule::where('driver_id', $driver->id)
+                        ->whereBetween('schedule_date', [
+                            $monthStart->format('Y-m-d'),
+                            $monthEnd->format('Y-m-d')
+                        ])
+                        ->count();
+                    
+                    Log::info("✓ Cadangan fill: Driver {$driver->name} ({$driver->id}) assigned {$shift} shift on {$dateString} (Monthly: {$monthlyCount}/" . self::CADANGAN_MAX_SHIFTS . ")");
+                    break;
+                } else {
+                    // Track why this driver was rejected for better debugging
+                    $rejectionReasons[] = "Driver {$driver->name} ({$driver->id}): validation failed";
+                }
+            }
+            
+            if (!$assignedDriver) {
+                Log::warning("⚠ No available cadangan driver found for {$shift} shift on {$dateString}");
+                if (!empty($rejectionReasons)) {
+                    Log::info("Rejection reasons: " . implode(', ', $rejectionReasons));
+                }
+            }
+        }
+
+        $finalShiftCount = Schedule::where('unit_id', $unitId)
+            ->where('schedule_date', $dateString)
+            ->count();
+        
+        Log::info("=== CADANGAN PHASE COMPLETE === {$dateString}: " . count($schedules) . " cadangan shifts added, total shifts: {$finalShiftCount}/2");
+
+        return $schedules;
+    }
+
+    /**
+     * Fill any remaining empty slots with available batangan drivers (fallback)
+     *
+     * @param int $routeId
+     * @param int $unitId
+     * @param string $dateString
+     * @param \Illuminate\Database\Eloquent\Collection $batanganDrivers
+     * @param Carbon $monthStart
+     * @param Carbon $monthEnd
+     * @param array &$assignedShifts
+     * @return array
+     */
+    private function fillRemainingSlots(int $routeId, int $unitId, string $dateString, $batanganDrivers, Carbon $monthStart, Carbon $monthEnd, array &$assignedShifts): array
+    {
+        $schedules = [];
+        $allShifts = [self::SHIFT_PAGI, self::SHIFT_SIANG];
+        
+        Log::info("=== FALLBACK PHASE === Starting batangan fallback assignment for {$dateString}");
+        
+        // Check if we already have complete coverage (2 shifts)
+        if (count($assignedShifts) >= 2) {
+            Log::info("✓ Day already has complete coverage (2 shifts) on {$dateString}, batangan fallback not needed");
+            return $schedules;
+        }
+        
+        // Double check by querying database for existing schedules on this date
+        $existingSchedulesCount = Schedule::where('unit_id', $unitId)
+            ->where('schedule_date', $dateString)
+            ->count();
+            
+        if ($existingSchedulesCount >= 2) {
+            Log::info("✓ Database shows {$existingSchedulesCount} shifts already exist for {$dateString}, batangan fallback not needed");
+            return $schedules;
+        }
+        
+        // Get existing shifts from database to merge with in-memory assignments
+        $existingShifts = Schedule::where('unit_id', $unitId)
+            ->where('schedule_date', $dateString)
+            ->pluck('shift')
+            ->toArray();
+        
+        // Combine in-memory and database shifts to find truly empty slots
+        $allAssignedShifts = array_merge($existingShifts, array_keys($assignedShifts));
+        $allAssignedShifts = array_unique($allAssignedShifts);
+        
+        // Find any remaining empty shifts
+        $emptyShifts = array_diff($allShifts, $allAssignedShifts);
+        
+        if (empty($emptyShifts)) {
+            Log::info("✓ All shifts already covered on {$dateString}, fallback not needed");
+            return $schedules;
+        }
+
+        Log::info("Remaining empty shifts for fallback: " . implode(', ', $emptyShifts));
+
+        // Sort batangan drivers for fair distribution
+        $sortedBatanganDrivers = $this->sortDriversForDistribution($batanganDrivers, $monthStart, $monthEnd, $dateString);
+
+        foreach ($emptyShifts as $shift) {
+            // Before assigning, verify we haven't exceeded the 2-shift limit
+            $currentDbShifts = Schedule::where('unit_id', $unitId)
+                ->where('schedule_date', $dateString)
+                ->count();
+            
+            $totalCurrentShifts = $currentDbShifts + count($schedules);
+                
+            if ($totalCurrentShifts >= 2) {
+                Log::info("⚠ Maximum 2 shifts per day limit reached for {$dateString} (DB: {$currentDbShifts}, New: " . count($schedules) . "), stopping fallback assignment");
+                break;
+            }
+            
+            $assignedDriver = null;
+            $rejectionReasons = [];
+            
+            // Try to assign to an available batangan driver
+            foreach ($sortedBatanganDrivers as $driver) {
+                if ($this->canDriverTakeShift($driver, $unitId, $dateString, $shift, $monthStart, $monthEnd)) {
+                    // Double check for conflicts before creating
+                    $conflictCheck = Schedule::where('unit_id', $unitId)
+                        ->where('schedule_date', $dateString)
+                        ->where('shift', $shift)
+                        ->first();
+                        
+                    if ($conflictCheck) {
+                        Log::warning("⚠ Shift conflict detected: {$shift} shift on {$dateString} already taken by driver {$conflictCheck->driver_id}");
+                        continue;
+                    }
+                    
+                    $schedule = Schedule::create([
+                        'route_id' => $routeId,
+                        'unit_id' => $unitId,
+                        'driver_id' => $driver->id,
+                        'schedule_date' => $dateString,
+                        'shift' => $shift,
+                        'status' => self::SCHEDULE_STATUS_SCHEDULED
+                    ]);
+                    $schedules[] = $schedule;
+                    $assignedShifts[$shift] = $driver->id;
+                    $assignedDriver = $driver;
+                    
+                    // Get driver's current monthly count for logging
+                    $monthlyCount = Schedule::where('driver_id', $driver->id)
+                        ->whereBetween('schedule_date', [
+                            $monthStart->format('Y-m-d'),
+                            $monthEnd->format('Y-m-d')
+                        ])
+                        ->count();
+                    
+                    Log::info("✓ Batangan fallback: Driver {$driver->name} ({$driver->id}) assigned {$shift} shift on {$dateString} (Monthly: {$monthlyCount}/" . self::BATANGAN_MAX_SHIFTS . ")");
+                    break;
+                } else {
+                    // Track why this driver was rejected for better debugging
+                    $rejectionReasons[] = "Driver {$driver->name} ({$driver->id}): validation failed";
+                }
+            }
+            
+            if (!$assignedDriver) {
+                Log::warning("⚠ No driver available for {$shift} shift on {$dateString} - slot remains empty");
+                if (!empty($rejectionReasons)) {
+                    Log::info("Rejection reasons: " . implode(', ', $rejectionReasons));
+                }
+            }
+        }
+
+        $finalShiftCount = Schedule::where('unit_id', $unitId)
+            ->where('schedule_date', $dateString)
+            ->count();
+        
+        Log::info("=== FALLBACK PHASE COMPLETE === {$dateString}: " . count($schedules) . " fallback shifts added, total shifts: {$finalShiftCount}/2");
+
+        return $schedules;
+    }
+
+    /**
+     * Sort drivers for fair distribution based on workload
+     *
+     * @param \Illuminate\Database\Eloquent\Collection $drivers
+     * @param Carbon $monthStart
+     * @param Carbon $monthEnd
+     * @param string $dateString
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
+    private function sortDriversForDistribution($drivers, Carbon $monthStart, Carbon $monthEnd, string $dateString): \Illuminate\Database\Eloquent\Collection
+    {
+        // Get drivers with their current monthly shift counts
+        $driversWithCounts = [];
+        foreach ($drivers as $driver) {
+            $monthlyCount = Schedule::where('driver_id', $driver->id)
+                ->whereBetween('schedule_date', [
+                    $monthStart->format('Y-m-d'),
+                    $monthEnd->format('Y-m-d')
+                ])
+                ->count();
+
+            // Get recent activity to help with rotation
+            $recentActivity = Schedule::where('driver_id', $driver->id)
+                ->where('schedule_date', '>=', Carbon::parse($dateString)->subDays(7)->format('Y-m-d'))
+                ->count();
+
+            $driversWithCounts[] = [
+                'driver' => $driver,
+                'monthly_count' => $monthlyCount,
+                'recent_activity' => $recentActivity,
+                'last_shift_date' => $this->getLastShiftDate($driver->id, $dateString)
+            ];
+        }
+
+        // Sort drivers for better distribution:
+        // 1. Fewer monthly shifts first
+        // 2. Less recent activity
+        // 3. Longer time since last shift
+        // 4. Name for consistency
+        usort($driversWithCounts, function($a, $b) {
+            // Primary: fewer monthly shifts
+            if ($a['monthly_count'] != $b['monthly_count']) {
+                return $a['monthly_count'] <=> $b['monthly_count'];
+            }
+
+            // Secondary: less recent activity
+            if ($a['recent_activity'] != $b['recent_activity']) {
+                return $a['recent_activity'] <=> $b['recent_activity'];
+            }
+
+            // Tertiary: longer time since last shift
+            if ($a['last_shift_date'] != $b['last_shift_date']) {
+                return $a['last_shift_date'] <=> $b['last_shift_date'];
+            }
+
+            // Final: alphabetical by name for consistency
+            return $a['driver']->name <=> $b['driver']->name;
+        });
+
+        // Convert back to Eloquent Collection
+        $sortedDrivers = collect($driversWithCounts)->pluck('driver');
+        return new \Illuminate\Database\Eloquent\Collection($sortedDrivers->all());
+    }
+
+    /**
+     * Get the pattern for a specific day (1-15)
+     *
+     * @param int $day Day position (1-15)
+     * @return array Pattern for driver1 and driver2
+     */
+    private function getPatternForDay(int $day): array
+    {
+        // Updated Pattern for 15 days:
+        // D1  D2  D3  D4  D5  D6  D7  D8  D9  D10 D11 D12 D13 D14 D15
+        // S   S   -   P   P   P   P   P   P   P   P   P   P   P   S   (Driver 1)
+        // P   P   P   S   S   S   S   S   S   S   S   S   S   S   -   (Driver 2)
+        
+        $patterns = [
+            1  => ['driver1' => self::SHIFT_SIANG, 'driver2' => self::SHIFT_PAGI],
+            2  => ['driver1' => self::SHIFT_SIANG, 'driver2' => self::SHIFT_PAGI],
+            3  => ['driver1' => '-', 'driver2' => self::SHIFT_PAGI],
+            4  => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
+            5  => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
+            6  => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
+            7  => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
+            8  => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
+            9  => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
+            10 => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
+            11 => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
+            12 => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
+            13 => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
+            14 => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
+            15 => ['driver1' => self::SHIFT_SIANG, 'driver2' => '-'],
+        ];
+
+        return $patterns[$day] ?? ['driver1' => '-', 'driver2' => '-'];
+    }
+
+    /**
+     * Get unit-specific pattern offset to prevent conflicts across units
+     * This ensures each unit has a different starting point in the 15-day cycle,
+     * reducing scheduling conflicts for cadangan drivers who work multiple units.
+     *
+     * @param int $unitId
+     * @return int Offset value (0-14)
+     */
+    private function getUnitPatternOffset(int $unitId): int
+    {
+        // Use hash-based approach for better distribution across units
+        // This ensures consistent offset for same unit across generations
+        return abs(crc32("unit_pattern_$unitId")) % 15;
+    }
+
+    /**
+     * Determine allowed shifts for a specific date based on previous day rules
+     *
+     * @param int $unitId
+     * @param Carbon $date
+     * @param array $dateRange
+     * @return array
+     */
+    private function getAllowedShiftsForDate(int $unitId, Carbon $date, array $dateRange): array
+    {
+        $previousDay = $date->copy()->subDay();
+        $twoDaysAgo = $date->copy()->subDays(2);
+        
+        // Check if previous day is within our generation range
+        $isPreviousDayInRange = collect($dateRange)->contains(function($rangeDate) use ($previousDay) {
+            return $rangeDate->format('Y-m-d') === $previousDay->format('Y-m-d');
+        });
+
+        // Get previous day schedules for this unit
+        $previousDaySchedules = Schedule::where('unit_id', $unitId)
+            ->where('schedule_date', $previousDay->format('Y-m-d'))
+            ->get();
+
+        // Get two days ago schedules for this unit
+        $twoDaysAgoSchedules = Schedule::where('unit_id', $unitId)
+            ->where('schedule_date', $twoDaysAgo->format('Y-m-d'))
+            ->get();
+
+        // Rule 1: If no previous day schedules OR previous day not in our generation range, allow both shifts
+        if ($previousDaySchedules->isEmpty() || !$isPreviousDayInRange) {
+            return [self::SHIFT_PAGI, self::SHIFT_SIANG];
+        }
+
+        // Rule 2: If previous day had siang shift, current day can only have siang shift
+        $hadSiangYesterday = $previousDaySchedules->where('shift', self::SHIFT_SIANG)->isNotEmpty();
+        if ($hadSiangYesterday) {
+            return [self::SHIFT_SIANG];
+        }
+
+        // Rule 3: If previous day only had pagi shift, current day can have both shifts
+        $hadPagiYesterday = $previousDaySchedules->where('shift', self::SHIFT_PAGI)->isNotEmpty();
+        $hadOnlyPagiYesterday = $hadPagiYesterday && $previousDaySchedules->where('shift', self::SHIFT_SIANG)->isEmpty();
+        
+        if ($hadOnlyPagiYesterday) {
+            return [self::SHIFT_PAGI, self::SHIFT_SIANG];
+        }
+
+        // Rule 4: If two days ago had schedules, allow both shifts
+        if ($twoDaysAgoSchedules->isNotEmpty()) {
+            return [self::SHIFT_PAGI, self::SHIFT_SIANG];
+        }
+
+        // Rule 5: If no schedules exist yet, allow both shifts
+        return [self::SHIFT_PAGI, self::SHIFT_SIANG];
+    }
+
+    /**
+     * Select driver with better distribution logic
+     *
+     * @param \Illuminate\Database\Eloquent\Collection $drivers
+     * @param int $unitId
+     * @param string $dateString
+     * @param string $shift
+     * @param Carbon $monthStart
+     * @param Carbon $monthEnd
+     * @return Driver|null
+     */
+    private function selectDriverWithDistribution($drivers, int $unitId, string $dateString, string $shift, Carbon $monthStart, Carbon $monthEnd): ?Driver
+    {
+        if ($drivers->isEmpty()) {
+            return null;
+        }
+
+        // Get drivers with their current monthly shift counts
+        $driversWithCounts = [];
+        foreach ($drivers as $driver) {
+            if ($this->canDriverTakeShift($driver, $unitId, $dateString, $shift, $monthStart, $monthEnd)) {
+                $monthlyCount = Schedule::where('driver_id', $driver->id)
+                    ->whereBetween('schedule_date', [
+                        $monthStart->format('Y-m-d'),
+                        $monthEnd->format('Y-m-d')
+                    ])
+                    ->count();
+
+                // Get recent activity to help with rotation
+                $recentActivity = Schedule::where('driver_id', $driver->id)
+                    ->where('schedule_date', '>=', Carbon::parse($dateString)->subDays(7)->format('Y-m-d'))
+                    ->count();
+
+                $driversWithCounts[] = [
+                    'driver' => $driver,
+                    'monthly_count' => $monthlyCount,
+                    'recent_activity' => $recentActivity,
+                    'last_shift_date' => $this->getLastShiftDate($driver->id, $dateString)
+                ];
+            }
+        }
+
+        if (empty($driversWithCounts)) {
+            return null;
+        }
+
+        // Sort drivers for better distribution:
+        // 1. Fewer monthly shifts first
+        // 2. Less recent activity
+        // 3. Longer time since last shift
+        // 4. Name for consistency
+        usort($driversWithCounts, function($a, $b) {
+            // Primary: fewer monthly shifts
+            if ($a['monthly_count'] != $b['monthly_count']) {
+                return $a['monthly_count'] <=> $b['monthly_count'];
+            }
+
+            // Secondary: less recent activity
+            if ($a['recent_activity'] != $b['recent_activity']) {
+                return $a['recent_activity'] <=> $b['recent_activity'];
+            }
+
+            // Tertiary: longer time since last shift
+            if ($a['last_shift_date'] != $b['last_shift_date']) {
+                return $a['last_shift_date'] <=> $b['last_shift_date'];
+            }
+
+            // Final: alphabetical by name for consistency
+            return $a['driver']->name <=> $b['driver']->name;
+        });
+
+        return $driversWithCounts[0]['driver'];
+    }
+
+    /**
+     * Get the last shift date for a driver (as days ago)
+     *
+     * @param int $driverId
+     * @param string $currentDate
+     * @return int Days since last shift (higher = longer ago)
+     */
+    private function getLastShiftDate(int $driverId, string $currentDate): int
+    {
+        $lastSchedule = Schedule::where('driver_id', $driverId)
+            ->where('schedule_date', '<', $currentDate)
+            ->orderBy('schedule_date', 'desc')
+            ->first();
+
+        if (!$lastSchedule) {
+            return 999; // Very high number if no previous shifts
+        }
+
+        $lastDate = Carbon::parse($lastSchedule->schedule_date);
+        $current = Carbon::parse($currentDate);
+        
+        return $current->diffInDays($lastDate);
+    }
+
+    /**
+     * Select appropriate driver for a specific shift (legacy method, kept for compatibility)
+     *
+     * @param int $unitId
+     * @param string $dateString
+     * @param string $shift
+     * @param \Illuminate\Database\Eloquent\Collection $availableDrivers
+     * @param Carbon $monthStart
+     * @param Carbon $monthEnd
+     * @return Driver|null
+     */
+    private function selectDriverForShift(int $unitId, string $dateString, string $shift, $availableDrivers, Carbon $monthStart, Carbon $monthEnd): ?Driver
+    {
+        // Use the improved distribution method
+        $batanganDrivers = $availableDrivers->where('type', self::DRIVER_TYPE_BATANGAN);
+        $cadanganDrivers = $availableDrivers->where('type', self::DRIVER_TYPE_CADANGAN);
+
+        // Try batangan first
+        $driver = $this->selectDriverWithDistribution($batanganDrivers, $unitId, $dateString, $shift, $monthStart, $monthEnd);
+        
+        // If no batangan available, try cadangan
+        if (!$driver) {
+            $driver = $this->selectDriverWithDistribution($cadanganDrivers, $unitId, $dateString, $shift, $monthStart, $monthEnd);
+        }
+
+        return $driver;
+    }
+
+    /**
+     * Check if a driver can take a specific shift
+     *
+     * @param Driver $driver
+     * @param int $unitId
+     * @param string $dateString
+     * @param string $shift
+     * @param Carbon $monthStart
+     * @param Carbon $monthEnd
+     * @return bool
+     */
+    private function canDriverTakeShift(Driver $driver, int $unitId, string $dateString, string $shift, Carbon $monthStart, Carbon $monthEnd): bool
+    {
+        // Rule 1: Driver cannot be scheduled more than 1 shift on the same day (ANY unit)
+        $existingScheduleOnDate = Schedule::where('driver_id', $driver->id)
+            ->where('schedule_date', $dateString)
+            ->exists();
+
+        if ($existingScheduleOnDate) {
+            return false;
+        }
+
+        // Rule 2: Check if the specific unit+date already has 2 shifts (maximum coverage)
+        $existingShiftsOnDateUnit = Schedule::where('unit_id', $unitId)
+            ->where('schedule_date', $dateString)
+            ->count();
+            
+        if ($existingShiftsOnDateUnit >= 2) {
+            return false;
+        }
+
+        // Rule 3: Driver cannot have duplicate schedules for same date and shift
+        $existingScheduleOnShift = Schedule::where('driver_id', $driver->id)
+            ->where('schedule_date', $dateString)
+            ->where('shift', $shift)
+            ->exists();
+
+        if ($existingScheduleOnShift) {
+            return false;
+        }
+
+        // Rule 4: Check if the specific shift is already taken on this date/unit
+        $shiftAlreadyTaken = Schedule::where('unit_id', $unitId)
+            ->where('schedule_date', $dateString)
+            ->where('shift', $shift)
+            ->exists();
+            
+        if ($shiftAlreadyTaken) {
+            return false;
+        }
+
+        // Rule 5: Check monthly shift limits
+        $monthlyShiftCount = Schedule::where('driver_id', $driver->id)
+            ->whereBetween('schedule_date', [
+                $monthStart->format('Y-m-d'),
+                $monthEnd->format('Y-m-d')
+            ])
+            ->count();
+
+        $maxShifts = ($driver->type === self::DRIVER_TYPE_BATANGAN) 
+            ? self::BATANGAN_MAX_SHIFTS 
+            : self::CADANGAN_MAX_SHIFTS;
+
+        if ($monthlyShiftCount >= $maxShifts) {
+            return false;
+        }
+
+        // Rule 6: Additional rule for cadangan - cannot be scheduled for multiple shifts in one day
+        // (This is redundant with Rule 1, but kept for clarity)
+        if ($driver->type === self::DRIVER_TYPE_CADANGAN) {
+            $shiftsOnDate = Schedule::where('driver_id', $driver->id)
+                ->where('schedule_date', $dateString)
+                ->count();
+
+            if ($shiftsOnDate >= 1) {
+                return false;
+            }
+        }
+
+        // Rule 7: Check if driver is on leave (if leave system is implemented)
+        if (method_exists($driver, 'leaveRequests')) {
+            $onLeave = $driver->leaveRequests()
+                ->where('status', 'approved')
+                ->where('start_date', '<=', $dateString)
+                ->where('end_date', '>=', $dateString)
+                ->exists();
+
+            if ($onLeave) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Get schedule statistics for a driver in a specific month
+     *
+     * @param int $driverId
+     * @param Carbon $monthStart
+     * @param Carbon $monthEnd
+     * @return array
+     */
+    public function getDriverMonthlyStats(int $driverId, Carbon $monthStart, Carbon $monthEnd): array
+    {
+        $schedules = Schedule::where('driver_id', $driverId)
+            ->whereBetween('schedule_date', [
+                $monthStart->format('Y-m-d'),
+                $monthEnd->format('Y-m-d')
             ])
             ->get();
+
+        $driver = Driver::find($driverId);
+        $remainingShifts = 0;
+        
+        if ($driver) {
+            $maxShifts = ($driver->type === self::DRIVER_TYPE_BATANGAN) 
+                ? self::BATANGAN_MAX_SHIFTS 
+                : self::CADANGAN_MAX_SHIFTS;
             
-        if ($allSchedules->isEmpty()) {
-            $this->createDriverScheduleHistoryRecords($startDate, $endDate);
-            return;
+            $remainingShifts = max(0, $maxShifts - $schedules->count());
         }
-            
-        $schedulesByDriver = $allSchedules->groupBy('driver_id');
-        $batanganSchedules = [];
-        $cadanganSchedules = [];
-        
-        foreach ($schedulesByDriver as $driverId => $driverSchedules) {
-            $driver = $this->batanganDrivers->firstWhere('id', $driverId);
-            $count = $driverSchedules->count();
-            
-            if ($driver) {
-                $batanganSchedules[$driverId] = $count;
-            } else {
-                $driver = $this->cadanganDrivers->firstWhere('id', $driverId);
-                if ($driver) {
-                    $cadanganSchedules[$driverId] = $count;
-                }
-            }
-        }
-        
-        $batanganAverage = !empty($batanganSchedules) ? array_sum($batanganSchedules) / count($batanganSchedules) : 0;
-        $cadanganAverage = !empty($cadanganSchedules) ? array_sum($cadanganSchedules) / count($cadanganSchedules) : 0;
-        
-        if (!empty($cadanganSchedules) && !empty($batanganSchedules)) {
-            $targetRatio = 0.85; // cadangan drivers should get about 85% of what batangan drivers get
-            $targetCadanganAverage = $batanganAverage * $targetRatio;
-            
-            if ($cadanganAverage > $targetCadanganAverage) {
-                $this->redistributeExcessCadanganSchedules(
-                    $allSchedules, 
-                    $cadanganSchedules, 
-                    $batanganSchedules, 
-                    $cadanganAverage, 
-                    $targetCadanganAverage
-                );
-                
-                $updatedSchedules = Schedule::whereBetween('schedule_date', [
-                    $startDate->format('Y-m-d'), 
-                    $endDate->format('Y-m-d')
-                ])->get();
-                
-                $updatedSchedulesByDriver = $updatedSchedules->groupBy('driver_id');
-                $updatedBatanganSchedules = [];
-                $updatedCadanganSchedules = [];
-                
-                foreach ($updatedSchedulesByDriver as $driverId => $driverSchedules) {
-                    $driver = $this->batanganDrivers->firstWhere('id', $driverId);
-                    $count = $driverSchedules->count();
-                    
-                    if ($driver) {
-                        $updatedBatanganSchedules[$driverId] = $count;
-                    } else {
-                        $driver = $this->cadanganDrivers->firstWhere('id', $driverId);
-                        if ($driver) {
-                            $updatedCadanganSchedules[$driverId] = $count;
-                        }
-                    }
-                }
-                
-                $updatedBatanganAvg = !empty($updatedBatanganSchedules) ? 
-                    array_sum($updatedBatanganSchedules) / count($updatedBatanganSchedules) : 0;
-                
-                $updatedCadanganAvg = !empty($updatedCadanganSchedules) ? 
-                    array_sum($updatedCadanganSchedules) / count($updatedCadanganSchedules) : 0;
-                
-                $updatedTargetAvg = $updatedBatanganAvg * $targetRatio;
-                
-                if ($updatedCadanganAvg > $updatedTargetAvg) {
-                    $this->redistributeExcessCadanganSchedules(
-                        $updatedSchedules, 
-                        $updatedCadanganSchedules, 
-                        $updatedBatanganSchedules, 
-                        $updatedCadanganAvg, 
-                        $updatedTargetAvg
-                    );
-                } else {
-                    $this->messages[] = "After redistribution: Cadangan drivers now have appropriate schedule levels. " .
-                                        "Average: " . round($updatedCadanganAvg, 1) . ", Target: " . round($updatedTargetAvg, 1);
-                }
-            } else {
-                $this->messages[] = "Cadangan drivers already have fewer schedules than batangan drivers. No rebalancing needed.";
-            }
-        }
-        
-        $this->createDriverScheduleHistoryRecords($startDate, $endDate);
+
+        return [
+            'total_shifts' => $schedules->count(),
+            'pagi_shifts' => $schedules->where('shift', self::SHIFT_PAGI)->count(),
+            'siang_shifts' => $schedules->where('shift', self::SHIFT_SIANG)->count(),
+            'remaining_shifts' => $remainingShifts,
+            'max_shifts' => $driver ? ($driver->type === self::DRIVER_TYPE_BATANGAN 
+                ? self::BATANGAN_MAX_SHIFTS 
+                : self::CADANGAN_MAX_SHIFTS) : 0,
+            'driver_type' => $driver ? $driver->type : null
+        ];
     }
-    
-    protected function createDriverScheduleHistoryRecords(Carbon $startDate, Carbon $endDate): void
+
+    /**
+     * Delete existing schedules for the given parameters before generating new ones
+     *
+     * @param int $routeId
+     * @param int $unitId
+     * @param string $startDate
+     * @param string $endDate
+     * @return int Number of deleted schedules
+     */
+    public function clearExistingSchedules(int $routeId, int $unitId, string $startDate, string $endDate): int
     {
-        try {
-            $schedules = Schedule::whereBetween('schedule_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-                ->get();
-                
-            $schedulesByDriver = $schedules->groupBy('driver_id');
-            
-            foreach ($schedulesByDriver as $driverId => $driverSchedules) {
-                $totalSchedules = $driverSchedules->count();
-                $morningShifts = $driverSchedules->where('shift', 'pagi')->count();
-                $afternoonShifts = $driverSchedules->where('shift', 'siang')->count();
-                
-                $driver = Driver::find($driverId);
-                $targetCount = 13; // Default target
-                if ($driver) {
-                    if ($driver->type === 'batangan' && isset($this->batanganSettings['min_schedules'])) {
-                        $targetCount = $this->batanganSettings['min_schedules'];
-                    } else if ($driver->type === 'cadangan' && isset($this->cadanganSettings['min_schedules'])) {
-                        $targetCount = $this->cadanganSettings['min_schedules'];
-                    }
-                }
-                
-                DriverScheduleHistory::updateOrCreate(
-                    [
-                        'driver_id' => $driverId,
-                        'period_start_date' => $startDate->format('Y-m-d'),
-                        'period_end_date' => $endDate->format('Y-m-d'),
-                    ],
-                    [
-                        'total_schedules' => $totalSchedules,
-                        'morning_shifts' => $morningShifts,
-                        'afternoon_shifts' => $afternoonShifts,
-                        'target_count' => $targetCount,
-                        'target_met' => $totalSchedules >= $targetCount,
-                    ]
-                );
-            }
-            
-        } catch (\Exception $e) {
-            Log::error($e->getTraceAsString());
-        }
+        return Schedule::where('route_id', $routeId)
+            ->where('unit_id', $unitId)
+            ->whereBetween('schedule_date', [$startDate, $endDate])
+            ->delete();
     }
-    
-    protected function attemptRescheduleForMissingShifts(
-        string $dateStr,
-        array $unitsMissingMorning,
-        array $unitsMissingAfternoon,
-        array $scheduledDriverIds,
-        array $driversOnLeaveIds,
-        array &$dayDriversScheduled
-    ): array {
-        return $this->enhancedAttemptRescheduleForMissingShifts(
-            $dateStr,
-            $scheduledDriverIds,
-            $driversOnLeaveIds,
-            $unitsMissingMorning,
-            $unitsMissingAfternoon,
-            $dayDriversScheduled
-        );
-        $cadanganSettings = $this->cadanganSettings;
-        $result = [
-            'morning_added' => 0,
-            'afternoon_added' => 0
+
+    /**
+     * Optimize driver workload distribution across the date range
+     *
+     * @param int $unitId
+     * @param array $dateRange
+     * @param \Illuminate\Database\Eloquent\Collection $availableDrivers
+     * @return array Suggestions for better distribution
+     */
+    private function analyzeWorkloadDistribution(int $unitId, array $dateRange, $availableDrivers): array
+    {
+        $analysis = [
+            'total_shifts_needed' => 0,
+            'total_capacity' => 0,
+            'distribution_suggestions' => []
+        ];
+
+        // Calculate total shifts needed (rough estimate)
+        $totalDays = count($dateRange);
+        $analysis['total_shifts_needed'] = $totalDays * 2; // Assuming 2 shifts per day max
+
+        // Calculate total monthly capacity
+        $batanganDrivers = $availableDrivers->where('type', self::DRIVER_TYPE_BATANGAN);
+        $cadanganDrivers = $availableDrivers->where('type', self::DRIVER_TYPE_CADANGAN);
+
+        $analysis['total_capacity'] = 
+            ($batanganDrivers->count() * self::BATANGAN_MAX_SHIFTS) +
+            ($cadanganDrivers->count() * self::CADANGAN_MAX_SHIFTS);
+
+        // Check if we have enough capacity
+        if ($analysis['total_capacity'] < $analysis['total_shifts_needed']) {
+            $analysis['distribution_suggestions'][] = 'Warning: Total driver capacity may be insufficient for the requested period';
+        }
+
+        // Suggest optimal distribution strategy
+        if ($batanganDrivers->count() > 0 && $cadanganDrivers->count() > 0) {
+            $analysis['distribution_suggestions'][] = 'Use batangan drivers for primary coverage, cadangan for backup and peak periods';
+        } elseif ($batanganDrivers->count() > 0) {
+            $analysis['distribution_suggestions'][] = 'Only batangan drivers available - ensure even distribution';
+        } elseif ($cadanganDrivers->count() > 0) {
+            $analysis['distribution_suggestions'][] = 'Only cadangan drivers available - limited to 11 shifts per driver per month';
+        }
+
+        return $analysis;
+    }
+
+    /**
+     * Get driver workload balance for better scheduling decisions
+     *
+     * @param \Illuminate\Database\Eloquent\Collection $drivers
+     * @param Carbon $monthStart
+     * @param Carbon $monthEnd
+     * @return array
+     */
+    private function getDriverWorkloadBalance($drivers, Carbon $monthStart, Carbon $monthEnd): array
+    {
+        $workloadData = [];
+
+        foreach ($drivers as $driver) {
+            $currentSchedules = Schedule::where('driver_id', $driver->id)
+                ->whereBetween('schedule_date', [
+                    $monthStart->format('Y-m-d'),
+                    $monthEnd->format('Y-m-d')
+                ])
+                ->count();
+
+            $maxShifts = ($driver->type === self::DRIVER_TYPE_BATANGAN) 
+                ? self::BATANGAN_MAX_SHIFTS 
+                : self::CADANGAN_MAX_SHIFTS;
+
+            $workloadData[$driver->id] = [
+                'driver' => $driver,
+                'current_shifts' => $currentSchedules,
+                'max_shifts' => $maxShifts,
+                'remaining_capacity' => $maxShifts - $currentSchedules,
+                'utilization_percentage' => round(($currentSchedules / $maxShifts) * 100, 2)
+            ];
+        }
+
+        // Sort by utilization percentage (ascending) to prioritize underutilized drivers
+        uasort($workloadData, function($a, $b) {
+            return $a['utilization_percentage'] <=> $b['utilization_percentage'];
+        });
+
+        return $workloadData;
+    }
+
+    /**
+     * Validate schedule integrity before and after generation
+     *
+     * @param int $unitId
+     * @param string $dateString
+     * @return array
+     */
+    private function validateScheduleIntegrity(int $unitId, string $dateString): array
+    {
+        $issues = [];
+        
+        // Check for duplicate drivers on same date
+        $duplicateDrivers = Schedule::select('driver_id', \DB::raw('count(*) as count'))
+            ->where('unit_id', $unitId)
+            ->where('schedule_date', $dateString)
+            ->groupBy('driver_id')
+            ->having('count', '>', 1)
+            ->get();
+            
+        if ($duplicateDrivers->isNotEmpty()) {
+            foreach ($duplicateDrivers as $duplicate) {
+                $issues[] = "Driver {$duplicate->driver_id} has {$duplicate->count} shifts on {$dateString}";
+            }
+        }
+        
+        // Check for duplicate shifts
+        $duplicateShifts = Schedule::select('shift', \DB::raw('count(*) as count'))
+            ->where('unit_id', $unitId)
+            ->where('schedule_date', $dateString)
+            ->groupBy('shift')
+            ->having('count', '>', 1)
+            ->get();
+            
+        if ($duplicateShifts->isNotEmpty()) {
+            foreach ($duplicateShifts as $duplicate) {
+                $issues[] = "Shift {$duplicate->shift} has {$duplicate->count} assignments on {$dateString}";
+            }
+        }
+        
+        // Check for excessive shifts per day
+        $totalShifts = Schedule::where('unit_id', $unitId)
+            ->where('schedule_date', $dateString)
+            ->count();
+            
+        if ($totalShifts > 2) {
+            $issues[] = "Unit has {$totalShifts} shifts on {$dateString} (maximum: 2)";
+        }
+        
+        return $issues;
+    }
+
+    /**
+     * Get detailed schedule summary for a date
+     *
+     * @param int $unitId
+     * @param string $dateString
+     * @return array
+     */
+    private function getScheduleSummary(int $unitId, string $dateString): array
+    {
+        $schedules = Schedule::with('driver')
+            ->where('unit_id', $unitId)
+            ->where('schedule_date', $dateString)
+            ->orderBy('shift')
+            ->get();
+            
+        $summary = [
+            'date' => $dateString,
+            'total_shifts' => $schedules->count(),
+            'coverage_complete' => $schedules->count() >= 2,
+            'shifts' => []
         ];
         
-        $allScheduledDriverIdsSet = array_flip($scheduledDriverIds);
-        foreach ($dayDriversScheduled as $driverId => $shift) {
-            $allScheduledDriverIdsSet[$driverId] = true;
+        foreach ($schedules as $schedule) {
+            $summary['shifts'][] = [
+                'shift' => $schedule->shift,
+                'driver_id' => $schedule->driver_id,
+                'driver_name' => $schedule->driver->name ?? 'Unknown',
+                'driver_type' => $schedule->driver->type ?? 'Unknown'
+            ];
         }
         
-        $totalDriversForDay = count($allScheduledDriverIdsSet);
-        $driversOnLeaveIdsSet = array_flip($driversOnLeaveIds);
+        // Check for missing shifts
+        $allShifts = [self::SHIFT_PAGI, self::SHIFT_SIANG];
+        $assignedShifts = $schedules->pluck('shift')->toArray();
+        $missingShifts = array_diff($allShifts, $assignedShifts);
         
-        if (!empty($unitsMissingMorning)) {
-            $morningSchedulesToCreate = [];
-            
-            if ($totalDriversForDay > 2) {
-                $this->messages[] = "Already exceeded maximum of 2 drivers for {$dateStr}. Skipping morning assignments.";
-            } else {
-                foreach ($unitsMissingMorning as $unitId) {
-                    $unit = $this->units->firstWhere('id', $unitId);
-                    if (!$unit) {
-                        continue;
-                    }
-                    
-                    $availableDrivers = $this->batanganDrivers->filter(function($driver) use ($allScheduledDriverIdsSet, $driversOnLeaveIdsSet) {
-                        return !isset($allScheduledDriverIdsSet[$driver->id]) && !isset($driversOnLeaveIdsSet[$driver->id]);
-                    });
-                    
-                    $availableDrivers = $availableDrivers->filter(function($driver) use ($unitId) {
-                        return $driver->units->contains('id', $unitId);
-                    });
-                    
-                    if ($availableDrivers->isEmpty()) {
-                        $cadanganDrivers = $this->cadanganDrivers->filter(function($driver) use ($allScheduledDriverIdsSet, $driversOnLeaveIdsSet) {
-                            return !isset($allScheduledDriverIdsSet[$driver->id]) && !isset($driversOnLeaveIdsSet[$driver->id]);
-                        });
-                        
-                        $availableDrivers = $cadanganDrivers->filter(function($driver) use ($unitId) {
-                            return $driver->units->contains('id', $unitId);
-                        });
-                        
-                        if (!$availableDrivers->isEmpty()) {
-                            $driverScheduleCounts = $this->getDriverScheduleCountsForPeriod(
-                                Carbon::parse($dateStr)->startOfMonth()->format('Y-m-d'),
-                                Carbon::parse($dateStr)->endOfMonth()->format('Y-m-d')
-                            );
-                            
-                            $availableDrivers = $availableDrivers->filter(function($driver) use ($driverScheduleCounts) {
-                                $currentCount = $driverScheduleCounts[$driver->id] ?? 0;
-                                return $currentCount < 11; // Cadangan max is 11
-                            });
-                        }
-                    } else {
-                        $driverScheduleCounts = $this->getDriverScheduleCountsForPeriod(
-                            Carbon::parse($dateStr)->startOfMonth()->format('Y-m-d'),
-                            Carbon::parse($dateStr)->endOfMonth()->format('Y-m-d')
-                        );
-                        
-                        $availableDrivers = $availableDrivers->sortBy(function($driver) use ($driverScheduleCounts) {
-                            $currentCount = $driverScheduleCounts[$driver->id] ?? 0;
-                            return $currentCount >= 13 ? $currentCount + 100 : $currentCount;
-                        });
-                    }
-                    
-                    if (!$availableDrivers->isEmpty()) {
-                        $driver = $availableDrivers->first(function($driver) use ($unit, $unitId) {
-                            return $driver->units->contains('id', $unitId);
-                        });
-                        
-                        if ($driver) {
-                            $routeId = $unit->routes->isNotEmpty() ? $unit->routes->first()->id : null;
-                            if ($routeId) {
-                                $schedule = [
-                                    'unit_id' => $unit->id,
-                                    'driver_id' => $driver->id,
-                                    'route_id' => $routeId,
-                                    'schedule_date' => $dateStr,
-                                    'shift' => 'pagi',
-                                    'created_at' => now(),
-                                    'updated_at' => now(),
-                                ];
-                                
-                                $morningSchedulesToCreate[] = $schedule;
-                                $allScheduledDriverIdsSet[$driver->id] = true;
-                                $dayDriversScheduled[$driver->id] = 'pagi';
-                            }
-                        }
-                    }
-                }
-            }
-            
-            if (!empty($morningSchedulesToCreate)) {
-                list($success, $failed) = $this->utilityService->createSchedules($morningSchedulesToCreate, $this->messages);
-                $this->success += $success;
-                $this->failed += $failed;
-                $result['morning_added'] = $success;
-            }
-        }
+        $summary['missing_shifts'] = $missingShifts;
+        $summary['has_missing_shifts'] = !empty($missingShifts);
         
-        if (!empty($unitsMissingAfternoon)) {
-            $afternoonSchedulesToCreate = [];
-            $totalDriversForDay = count($allScheduledDriverIdsSet);
-            
-            if ($totalDriversForDay >= 2) {
-                $this->messages[] = "Already reached maximum of 2 drivers for {$dateStr}. Skipping afternoon assignments.";
-            } else {
-                foreach ($unitsMissingAfternoon as $unitId) {
-                    if ($totalDriversForDay >= 2) {
-                        break; // Stop if we've reached the 2-driver limit
-                    }
-                    
-                    $unit = $this->units->firstWhere('id', $unitId);
-                    if (!$unit) {
-                        continue;
-                    }
-                    
-                    $availableDrivers = $this->batanganDrivers->filter(function($driver) use ($allScheduledDriverIdsSet, $driversOnLeaveIdsSet) {
-                        return !isset($allScheduledDriverIdsSet[$driver->id]) && !isset($driversOnLeaveIdsSet[$driver->id]);
-                    });
-                    
-                    $availableDrivers = $availableDrivers->filter(function($driver) use ($unitId) {
-                        return $driver->units->contains('id', $unitId);
-                    });
-                    
-                    if ($availableDrivers->isEmpty()) {
-                        $cadanganDrivers = $this->cadanganDrivers->filter(function($driver) use ($allScheduledDriverIdsSet, $driversOnLeaveIdsSet) {
-                            return !isset($allScheduledDriverIdsSet[$driver->id]) && !isset($driversOnLeaveIdsSet[$driver->id]);
-                        });
-                        
-                        $availableDrivers = $cadanganDrivers->filter(function($driver) use ($unitId) {
-                            return $driver->units->contains('id', $unitId);
-                        });
-                        
-                        if (!$availableDrivers->isEmpty()) {
-                            $driverScheduleCounts = $this->getDriverScheduleCountsForPeriod(
-                                Carbon::parse($dateStr)->startOfMonth()->format('Y-m-d'),
-                                Carbon::parse($dateStr)->endOfMonth()->format('Y-m-d')
-                            );
-                            
-                            $availableDrivers = $availableDrivers->filter(function($driver) use ($driverScheduleCounts) {
-                                $currentCount = $driverScheduleCounts[$driver->id] ?? 0;
-                                return $currentCount < 11; // Cadangan max is 11
-                            });
-                        }
-                    } else {
-                        $driverScheduleCounts = $this->getDriverScheduleCountsForPeriod(
-                            Carbon::parse($dateStr)->startOfMonth()->format('Y-m-d'),
-                            Carbon::parse($dateStr)->endOfMonth()->format('Y-m-d')
-                        );
-                        
-                        $availableDrivers = $availableDrivers->sortBy(function($driver) use ($driverScheduleCounts) {
-                            $currentCount = $driverScheduleCounts[$driver->id] ?? 0;
-                            return $currentCount >= 13 ? $currentCount + 100 : $currentCount;
-                        });
-                    }
-                    
-                    if (!$availableDrivers->isEmpty()) {
-                        $driver = $availableDrivers->first(function($driver) use ($unit, $unitId) {
-                            return $driver->units->contains('id', $unitId);
-                        });
-                        
-                        if ($driver) {
-                            $routeId = $unit->routes->isNotEmpty() ? $unit->routes->first()->id : null;
-                            if ($routeId) {
-                                $schedule = [
-                                    'unit_id' => $unit->id,
-                                    'driver_id' => $driver->id,
-                                    'route_id' => $routeId,
-                                    'schedule_date' => $dateStr,
-                                    'shift' => 'siang',
-                                    'created_at' => now(),
-                                    'updated_at' => now(),
-                                ];
-                                
-                                $afternoonSchedulesToCreate[] = $schedule;
-                                $allScheduledDriverIdsSet[$driver->id] = true;
-                                $dayDriversScheduled[$driver->id] = 'siang';
-                            }
-                        }
-                    }
-                }
-            }
-            
-            if (!empty($afternoonSchedulesToCreate)) {
-                list($success, $failed) = $this->utilityService->createSchedules($afternoonSchedulesToCreate, $this->messages);
-                $this->success += $success;
-                $this->failed += $failed;
-                $result['afternoon_added'] = $success;
-            }
-        }
-        
-        return $result;
+        return $summary;
     }
-    
-    protected function rebalanceCadanganSchedules(Collection $schedules): void 
+
+    /**
+     * Calculate coverage statistics for the generated schedules
+     *
+     * @param int $unitId
+     * @param array $dateRange
+     * @return array
+     */
+    private function calculateCoverageStatistics(int $unitId, array $dateRange): array
     {
-        $schedulesByDriver = $schedules->groupBy('driver_id');
-        $batanganSchedules = [];
-        $cadanganSchedules = [];
-        $targetRatio = $this->cadanganSettings['ratio'] ?? 0.85;
-        
-        // Group schedules by driver type
-        foreach ($schedulesByDriver as $driverId => $driverSchedules) {
-            $driver = $this->batanganDrivers->firstWhere('id', $driverId);
-            $count = $driverSchedules->count();
-            
-            if ($driver) {
-                $batanganSchedules[$driverId] = $count;
+        $stats = [
+            'total_days' => count($dateRange),
+            'days_with_full_coverage' => 0,
+            'days_with_partial_coverage' => 0,
+            'days_with_no_coverage' => 0,
+            'total_shifts_generated' => 0,
+            'coverage_percentage' => 0,
+            'daily_breakdown' => []
+        ];
+
+        foreach ($dateRange as $date) {
+            $dateString = $date->format('Y-m-d');
+            $shiftsCount = Schedule::where('unit_id', $unitId)
+                ->where('schedule_date', $dateString)
+                ->count();
+
+            $stats['total_shifts_generated'] += $shiftsCount;
+            $stats['daily_breakdown'][$dateString] = [
+                'shifts' => $shiftsCount,
+                'status' => $shiftsCount >= 2 ? 'full' : ($shiftsCount > 0 ? 'partial' : 'empty')
+            ];
+
+            if ($shiftsCount >= 2) {
+                $stats['days_with_full_coverage']++;
+            } elseif ($shiftsCount > 0) {
+                $stats['days_with_partial_coverage']++;
             } else {
-                $driver = $this->cadanganDrivers->firstWhere('id', $driverId);
-                if ($driver) {
-                    $cadanganSchedules[$driverId] = $count;
-                }
+                $stats['days_with_no_coverage']++;
             }
         }
-        
-        // Calculate averages
-        $batanganAvg = !empty($batanganSchedules) ? array_sum($batanganSchedules) / count($batanganSchedules) : 0;
-        $cadanganAvg = !empty($cadanganSchedules) ? array_sum($cadanganSchedules) / count($cadanganSchedules) : 0;
-        $targetAvg = $batanganAvg * $targetRatio;
-        
-        // Check if rebalancing is needed
-        if ($cadanganAvg > $targetAvg) {
-            $this->redistributeExcessCadanganSchedules(
-                $schedules, 
-                $cadanganSchedules, 
-                $batanganSchedules,
-                $cadanganAvg,
-                $targetAvg
-            );
-            
-            // Validate results
-            $this->validateScheduleDistribution($schedules);
-        }
-    }
-    
-    protected function validateScheduleDistribution(Collection $schedules): void
-    {
-        $schedulesByDriver = $schedules->groupBy('driver_id');
-        $batanganCount = $this->batanganDrivers->count();
-        $cadanganCount = $this->cadanganDrivers->count();
-        
-        if ($batanganCount > 0 && $cadanganCount > 0) {
-            $targetRatio = $this->cadanganSettings['ratio'] ?? 0.85;
-            
-            $batanganTotal = 0;
-            $cadanganTotal = 0;
-            
-            foreach ($schedulesByDriver as $driverId => $driverSchedules) {
-                if ($this->batanganDrivers->contains('id', $driverId)) {
-                    $batanganTotal += $driverSchedules->count();
-                } elseif ($this->cadanganDrivers->contains('id', $driverId)) {
-                    $cadanganTotal += $driverSchedules->count();
-                }
-            }
-            
-            $batanganAvg = $batanganTotal / $batanganCount;
-            $cadanganAvg = $cadanganTotal / $cadanganCount;
-            $actualRatio = $cadanganAvg / $batanganAvg;
-            
-            if (abs($actualRatio - $targetRatio) > 0.1) { // 10% tolerance
-                $this->messages[] = "Warning: Schedule distribution ratio ({$actualRatio}) differs significantly from target ({$targetRatio})";
-            }
-        }
+
+        // Calculate coverage percentage (based on 2 shifts per day target)
+        $maxPossibleShifts = count($dateRange) * 2;
+        $stats['coverage_percentage'] = $maxPossibleShifts > 0 
+            ? round(($stats['total_shifts_generated'] / $maxPossibleShifts) * 100, 2) 
+            : 0;
+
+        return $stats;
     }
 }

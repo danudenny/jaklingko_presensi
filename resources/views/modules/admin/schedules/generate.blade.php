@@ -109,12 +109,42 @@
         </x-slot>
     </x-page-title>
 
-
     <x-card>
         <div class="mb-6">  
-            <form action="{{ route('schedules.generate') }}" method="POST" id="generate-form">
+            <form action="{{ route('schedules.generate') }}" method="POST" id="generate-form" x-data="{ selectedRoute: '', loading: false }">
                 @csrf
                 <div class="grid grid-cols-1 gap-6 mb-6 md:grid-cols-2">
+                    <!-- Route Selection -->
+                    <div>
+                        <label for="route_id" class="block mb-1 text-sm font-medium text-gray-700">Rute</label>
+                        <select id="route_id" name="route_id" x-model="selectedRoute" @change="getUnitsForRoute($event.target.value)" class="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 text-base border-gray-300 rounded-md @error('route_id') border-red-500 @enderror">
+                            <option value="">Pilih Rute</option>
+                            @foreach(\App\Models\Route::active()->orderBy('route_number')->get() as $route)
+                                <option value="{{ $route->id }}">{{ $route->route_number }} - {{ $route->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('route_id')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <!-- Unit Selection -->
+                    <div>
+                        <label for="unit_id" class="block mb-1 text-sm font-medium text-gray-700">Unit</label>
+                        <div class="relative">
+                            <select id="unit_id" name="unit_id" class="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 text-base border-gray-300 rounded-md @error('unit_id') border-red-500 @enderror">
+                                <option value="">Pilih Unit</option>
+                            </select>
+                            <div x-show="loading" class="absolute right-2 top-2">
+                                <i class="text-indigo-500 fas fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                        @error('unit_id')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <!-- Date Range -->
                     <div class="md:col-span-2">
                         <label for="date-range" class="block mb-1 text-sm font-medium text-gray-700">Periode Jadwal</label>
                         <div class="relative rounded-md shadow-sm">
@@ -174,8 +204,18 @@
                     </div>
                 </div>
 
+                <!-- Clear Existing Option -->
+                <div class="mt-4">
+                    <div class="flex items-center">
+                        <input type="checkbox" id="clear_existing" name="clear_existing" value="1" class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                        <label for="clear_existing" class="ml-2 text-sm text-gray-700">
+                            Hapus jadwal yang sudah ada untuk periode yang sama
+                            <span class="text-xs text-gray-500 block">Centang jika ingin mengganti jadwal yang sudah ada</span>
+                        </label>
+                    </div>
+                </div>
 
-                <div class="flex justify-end">
+                <div class="flex justify-end mt-6">
                     <button type="submit" id="submit-button" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                         <i class="mr-2 fas fa-calendar-plus" id="button-icon"></i>
                         <span id="button-text">Buat Jadwal</span>
@@ -554,6 +594,96 @@
             $("#days-count").text(days);
         }
         
+    });
+</script>
+
+<script>
+    // Alpine.js function to get units for selected route
+    function getUnitsForRoute(routeId) {
+        if (!routeId) {
+            document.getElementById('unit_id').innerHTML = '<option value="">Pilih Unit</option>';
+            return;
+        }
+
+        this.loading = true;
+        fetch(`/drivers/get-units-for-route?route_id=${routeId}`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const unitSelect = document.getElementById('unit_id');
+                unitSelect.innerHTML = '<option value="">Pilih Unit</option>';
+                data.data.forEach(unit => {
+                    const option = new Option(`${unit.unit_number} - ${unit.plate_number}`, unit.id);
+                    unitSelect.add(option);
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error loading units:', error);
+            toastr.error('Error loading units for the selected route');
+        })
+        .finally(() => {
+            this.loading = false;
+        });
+    }
+
+    $(document).ready(function() {
+        // Add form validation
+        $('#generate-form').on('submit', function(e) {
+            // Validate route and unit selection
+            const routeId = $('#route_id').val();
+            const unitId = $('#unit_id').val();
+            const startDate = $('#start_date').val();
+            const endDate = $('#end_date').val();
+            
+            if (!routeId || !unitId) {
+                toastr.error('Silakan pilih rute dan unit terlebih dahulu.', 'Error');
+                e.preventDefault();
+                return false;
+            }
+            
+            if (!startDate || !endDate) {
+                toastr.error('Silakan pilih tanggal mulai dan tanggal akhir terlebih dahulu.', 'Error');
+                e.preventDefault();
+                return false;
+            }
+
+            // Calculate the difference in days
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            const diffTime = Math.abs(end - start);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+            
+            // Show loading state
+            $('#button-icon').addClass('hidden');
+            $('#button-text').text('Memproses...');
+            $('#loading-spinner').removeClass('hidden');
+            $('#submit-button').attr('disabled', true).addClass('opacity-75');
+            
+            // Show toast notification
+            toastr.info(
+                `Memproses pembuatan jadwal untuk ${diffDays} hari dari ${formatDisplayDate(start)} hingga ${formatDisplayDate(end)}. ` +
+                `Proses ini mungkin memerlukan waktu beberapa saat.`,
+                'Memproses Jadwal'
+            );
+            
+            // Log form submission for debugging
+            console.log('Form submitted with dates:', {
+                start_date: startDate,
+                end_date: endDate
+            });
+            
+            // Allow form to submit normally - this will redirect to the date selection page
+            return true;
+        });
+
+        // ...existing initialization code...
     });
 </script>
 @endpush

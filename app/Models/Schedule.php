@@ -180,17 +180,4 @@ class Schedule extends Model
             'on_duty' => true,
         ]);
     }
-
-    /**
-     * Auto-generate schedules for a date range
-     * 
-     * @param string $startDate
-     * @param string $endDate
-     * @return array
-     */
-    public static function autoGenerate($startDate, $endDate)
-    {
-        $service = app()->make(\App\Services\ScheduleGeneratorService::class);
-        return $service->generateSchedules($startDate, $endDate);
-    }
 }

@@ -630,53 +630,45 @@ class ScheduleController extends Controller
     {
         $request->validate([
             'start_date' => 'required|date',
-            'end_date'   => 'required|date|after_or_equal:start_date',
-            'route_id' => 'required|exists:routes,id',
-            'unit_id' => 'required|exists:units,id'
+            'end_date' => 'required|date|after_or_equal:start_date',
         ]);
-
-        $scheduleService = new ScheduleGeneratorService();
         
-        // Optional: Clear existing schedules for the same parameters
-        $clearExisting = $request->input('clear_existing', false);
-        if ($clearExisting) {
-            $deleted = $scheduleService->clearExistingSchedules(
-                $request->route_id,
-                $request->unit_id,
-                $request->start_date,
-                $request->end_date
-            );
-            
-            if ($deleted > 0) {
-                session()->flash('info', "Menghapus {$deleted} jadwal yang sudah ada sebelum membuat yang baru.");
-            }
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+        
+        // Calculate date difference to ensure it's within limits
+        $start = Carbon::parse($startDate);
+        $end = Carbon::parse($endDate);
+        $daysDiff = $start->diffInDays($end) + 1;
+        
+        if ($daysDiff > 15) {
+            return back()->withErrors([
+                'date_range' => 'Schedule generation is limited to 15 days per run.'
+            ]);
         }
-
-        // Generate new schedules
-        $result = $scheduleService->generateSchedules(
-            $request->route_id,
-            $request->unit_id,
-            $request->start_date,
-            $request->end_date
-        );
-
-        if ($result['success']) {
-            $data = $result['data'];
-            $message = "Berhasil membuat {$data['generated_schedules']} jadwal baru.";
-            
-            if (!empty($data['skipped_dates'])) {
-                $message .= " Melewati " . count($data['skipped_dates']) . " tanggal karena tidak ada driver yang tersedia.";
+        
+        try {
+            $result = Schedule::autoGenerate($startDate, $endDate);
+            $createdCount = Schedule::whereBetween('schedule_date', [$startDate, $endDate])->count();
+            if (!isset($result['success']) || $result['success'] === false) {
+                $errorMessage = $result['message'] ?? 'Failed to generate schedules. Please check the logs for details.';
+                return back()->withErrors(['generation' => $errorMessage]);
             }
             
-            if (!empty($data['errors'])) {
-                $message .= " Terdapat " . count($data['errors']) . " error saat pembuatan jadwal.";
-            }
+            $generationResults = [
+                'success' => $result['success'] ?? false,
+                'created' => $result['success'] ?? 0,
+                'skipped' => $result['failed'] ?? 0,
+                'messages' => $result['messages'] ?? [],
+                'failed' => $result['failed'] ?? 0,
+                'actual_in_db' => $createdCount 
+            ];
             
-            return redirect()->route('schedules.index')->with('success', $message);
-        } else {
-            return redirect()->back()
-                ->withInput()
-                ->with('error', $result['message']);
+            return redirect()->route('schedules.index')->with('generation_results', $generationResults)
+                         ->with('success_message', "Successfully generated {$generationResults['created']} schedules. Actual records in database: {$createdCount}");
+        } catch (\Exception $e) {
+            Log::error($e->getTraceAsString());
+            return back()->withErrors(['generation' => 'An error occurred while generating schedules: ' . $e->getMessage()]);
         }
     }
 
