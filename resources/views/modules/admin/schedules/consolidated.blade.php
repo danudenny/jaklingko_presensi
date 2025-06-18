@@ -17,7 +17,7 @@
 <script src="{{ asset('js/schedule/toast.js') }}"></script>
 <script>
     // Function to show loading overlay when exporting PDF
-    function showLoadingOverlay(message = 'Loading...') {
+    function showLoadingOverlay(message = 'Loading...', autoHide = false, hideDelay = 5000) {
         const overlay = document.getElementById('loading-overlay');
         const messageElement = overlay.querySelector('div > div:last-child');
         
@@ -28,10 +28,51 @@
         
         // Show the overlay
         overlay.classList.remove('hidden');
+        overlay.style.display = 'flex';
+        
+        // Auto-hide for PDF exports or other downloads
+        if (autoHide) {
+            setTimeout(() => {
+                hideLoadingOverlay();
+            }, hideDelay);
+        }
         
         // Return true to allow the link's default action to proceed
         return true;
     }
+
+    // Function to hide loading overlay
+    function hideLoadingOverlay() {
+        const overlay = document.getElementById('loading-overlay');
+        overlay.classList.add('hidden');
+        overlay.style.display = 'none';
+    }
+
+    // Function specifically for PDF exports with auto-hide
+    function showPdfLoadingOverlay(message = 'Mengeksport PDF...') {
+        showLoadingOverlay(message, true, 8000); // Auto-hide after 8 seconds
+        return true;
+    }
+
+    // Function for navigation with loading
+    function showNavigationLoading(message = 'Memuat halaman...') {
+        showLoadingOverlay(message, false); // Don't auto-hide for navigation
+        return true;
+    }
+
+    // Hide overlay on page load/back button
+    window.addEventListener('pageshow', function(event) {
+        // Hide overlay when page is shown (including back button)
+        hideLoadingOverlay();
+    });
+
+    // Hide overlay when page becomes visible again (tab switching)
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) {
+            // Page became visible, hide any lingering overlay
+            setTimeout(hideLoadingOverlay, 500);
+        }
+    });
 </script>
 @endpush
 <div class="w-full px-4 container-fluid">
@@ -72,12 +113,12 @@
                             <i class="mr-2 text-green-500 fas fa-file-excel"></i>
                             Excel
                         </a>
-                        <a href="{{ route('schedules.export.matrix-pdf', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver_type' => $selectedDriverType, 'driver' => $selectedDriver, 'unit' => $selectedUnit, 'shift' => $selectedShift]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900" onclick="showLoadingOverlay('Mengeksport Matrix PDF...')">
+                        <a href="{{ route('schedules.export.matrix-pdf', ['month' => $month, 'year' => $year, 'period' => $period, 'route' => $selectedRoute, 'driver_type' => $selectedDriverType, 'driver' => $selectedDriver, 'unit' => $selectedUnit, 'shift' => $selectedShift]) }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900" onclick="return showPdfLoadingOverlay('Mengeksport Matrix PDF...')">
                             <i class="mr-2 text-red-500 fas fa-file-pdf"></i>
                             PDF
                         </a>
                         <div class="my-1 border-t border-gray-100"></div>
-                        <a href="{{ route('schedules.export.summary.form') }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900" onclick="showLoadingOverlay('Memuat halaman export...')">
+                        <a href="{{ route('schedules.export.summary.form') }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900" onclick="return showNavigationLoading('Memuat halaman export...')">
                             <i class="mr-2 text-blue-500 fas fa-chart-line"></i>
                             Summary Report
                         </a>
@@ -402,7 +443,7 @@
     </div>
     
     <!-- Loading Overlay -->
-    <div id="loading-overlay" class="fixed inset-0 z-50 flex items-center justify-center hidden bg-black bg-opacity-50">
+    <div id="loading-overlay" class="fixed inset-0 z-50 items-center justify-center hidden bg-black bg-opacity-50" style="display: none;">
         <div class="p-6 bg-white rounded-lg shadow-xl">
             <div class="flex items-center space-x-4">
                 <div class="w-12 h-12 border-4 border-t-4 border-gray-200 rounded-full loader border-t-indigo-500 animate-spin"></div>

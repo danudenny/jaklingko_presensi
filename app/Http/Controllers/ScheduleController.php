@@ -443,6 +443,13 @@ class ScheduleController extends Controller
         if ($selectedRoute) {
             $query->where('route_id', $selectedRoute);
         }
+        if ($selectedDriverType) {
+            $query->whereHas('driver', function($q) use ($selectedDriverType) {
+                $q->where('type', $selectedDriverType);
+            })->orWhereHas('backupDriver', function($q) use ($selectedDriverType) {
+                $q->where('type', $selectedDriverType);
+            });
+        }
         if ($selectedDriver) {
             $query->where(function($query) use ($selectedDriver) {
                 $query->where('driver_id', $selectedDriver)
@@ -536,6 +543,7 @@ class ScheduleController extends Controller
         $year = $request->query('year', Carbon::now()->year);
         $period = $request->query('period', 1); // Default to first period (1-15)
         $selectedRoute = $request->query('route', null);
+        $selectedDriverType = $request->query('driver_type', null);
         $selectedDriver = $request->query('driver', null);
         $selectedUnit = $request->query('unit', null);
         $selectedShift = $request->query('shift', null);
@@ -554,10 +562,18 @@ class ScheduleController extends Controller
             ->whereBetween('schedule_date', [
                 $startDate->format('Y-m-d'),
                 $endDate->format('Y-m-d')
-            ]);
+            ])
+            ->where('status', 'scheduled'); // Only include schedules with status = 'scheduled'
         // Apply route filter if selected
         if ($selectedRoute) {
             $query->where('route_id', $selectedRoute);
+        }
+        if ($selectedDriverType) {
+            $query->whereHas('driver', function($q) use ($selectedDriverType) {
+                $q->where('type', $selectedDriverType);
+            })->orWhereHas('backupDriver', function($q) use ($selectedDriverType) {
+                $q->where('type', $selectedDriverType);
+            });
         }
         if ($selectedDriver) {
             $query->where(function($query) use ($selectedDriver) {
@@ -575,8 +591,8 @@ class ScheduleController extends Controller
         // Get schedules
         $schedules = $query->get();
         
-        // Pass the correct parameters to the SchedulesMatrixPdfExport constructor: month, year, period
-        $export = new SchedulesMatrixPdfExport($month, $year, $period);
+        // Pass the filtered schedules to the SchedulesMatrixPdfExport constructor
+        $export = new SchedulesMatrixPdfExport($month, $year, $period, $schedules);
         return $export->download();
     }
 

@@ -29,8 +29,9 @@ class SchedulesMatrixPdfExport
      * @param int $month Month number (1-12)
      * @param int $year Year (e.g., 2025)
      * @param int $period Period (1 or 2) - 1 = days 1-15, 2 = days 16-end of month
+     * @param Collection|null $filteredSchedules Pre-filtered schedules (optional)
      */
-    public function __construct($month, $year, $period = 1)
+    public function __construct($month, $year, $period = 1, $filteredSchedules = null)
     {
         $this->month = $month;
         $this->year = $year;
@@ -39,8 +40,13 @@ class SchedulesMatrixPdfExport
         // Calculate date range based on period
         $this->calculateDateRange();
         
-        // Fetch schedules for the date range
-        $this->fetchSchedules();
+        // Use pre-filtered schedules if provided, otherwise fetch all schedules for the date range
+        if ($filteredSchedules !== null) {
+            $this->schedules = $filteredSchedules;
+        } else {
+            // Fetch schedules for the date range (fallback)
+            $this->fetchSchedules();
+        }
         
         // Get all active drivers
         $this->fetchAllDrivers();
