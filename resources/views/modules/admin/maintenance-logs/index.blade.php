@@ -7,10 +7,16 @@
     <x-page-title>
         <x-slot name="title">Log Perawatan</x-slot>
         <x-slot name="actions">
-            <a href="{{ route('maintenance-logs.create') }}" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 active:bg-blue-700 focus:outline-none focus:border-blue-700 focus:ring ring-blue-300 disabled:opacity-25 transition ease-in-out duration-150">
-                <i class="fas fa-plus mr-2"></i>
-                Tambah Log Perawatan
-            </a>
+            <div class="flex space-x-2">
+                <a href="{{ route('maintenance-logs.export.form') }}" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 active:bg-green-700 focus:outline-none focus:border-green-700 focus:ring ring-green-300 disabled:opacity-25 transition ease-in-out duration-150">
+                    <i class="fas fa-download mr-2"></i>
+                    Export Excel
+                </a>
+                <a href="{{ route('maintenance-logs.create') }}" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 active:bg-blue-700 focus:outline-none focus:border-blue-700 focus:ring ring-blue-300 disabled:opacity-25 transition ease-in-out duration-150">
+                    <i class="fas fa-plus mr-2"></i>
+                    Tambah Log Perawatan
+                </a>
+            </div>
         </x-slot>
     </x-page-title>
 

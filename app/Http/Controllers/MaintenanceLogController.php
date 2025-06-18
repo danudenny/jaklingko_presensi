@@ -12,6 +12,8 @@ use App\Models\Unit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
+use App\Exports\MaintenanceLogsExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class MaintenanceLogController extends Controller
 {
@@ -448,5 +450,119 @@ class MaintenanceLogController extends Controller
             return redirect()->back()
                 ->with('error', 'Gagal memperbarui status: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Export maintenance logs to Excel with detailed breakdown.
+     */
+    public function exportToExcel(Request $request)
+    {
+        // Handle different date range types
+        $startDate = null;
+        $endDate = null;
+        $dateRangeType = $request->input('date_range_type', 'custom');
+
+        switch ($dateRangeType) {
+            case 'custom':
+                $startDate = $request->input('start_date');
+                $endDate = $request->input('end_date');
+                break;
+                
+            case 'month':
+                $month = $request->input('selected_month', date('n'));
+                $year = $request->input('selected_year_month', date('Y'));
+                $startDate = sprintf('%d-%02d-01', $year, $month);
+                $endDate = date('Y-m-t', strtotime($startDate)); // Last day of month
+                break;
+                
+            case 'year':
+                $year = $request->input('selected_year', date('Y'));
+                $startDate = $year . '-01-01';
+                $endDate = $year . '-12-31';
+                break;
+                
+            case 'ytd':
+                $startDate = date('Y') . '-01-01';
+                $endDate = date('Y-m-d');
+                break;
+                
+            case 'all':
+                // No date filter
+                $startDate = null;
+                $endDate = null;
+                break;
+        }
+
+        $unitIds = $request->input('unit_ids', 'all');
+        $routeId = $request->input('route_id', 'all');
+
+        // Generate filename based on date range
+        $filenameSuffix = $this->generateFilenameSuffix($dateRangeType, $startDate, $endDate, $request);
+        $fileName = 'maintenance_logs_' . $filenameSuffix . '.xlsx';
+
+        return Excel::download(
+            new MaintenanceLogsExport($startDate, $endDate, null, $unitIds, $routeId), 
+            $fileName
+        );
+    }
+
+    /**
+     * Generate filename suffix based on date range type.
+     */
+    private function generateFilenameSuffix($dateRangeType, $startDate, $endDate, $request)
+    {
+        switch ($dateRangeType) {
+            case 'month':
+                $month = $request->input('selected_month', date('n'));
+                $year = $request->input('selected_year_month', date('Y'));
+                $monthNames = [
+                    1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
+                    7 => 'Jul', 8 => 'Agu', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des'
+                ];
+                return $monthNames[$month] . '_' . $year;
+                
+            case 'year':
+                $year = $request->input('selected_year', date('Y'));
+                return 'tahun_' . $year;
+                
+            case 'ytd':
+                return 'YTD_' . date('Y');
+                
+            case 'all':
+                return 'semua_data_' . date('Y-m-d');
+                
+            case 'custom':
+            default:
+                if ($startDate && $endDate) {
+                    return date('Y-m-d', strtotime($startDate)) . '_to_' . date('Y-m-d', strtotime($endDate));
+                }
+                return date('Y-m-d_H-i-s');
+        }
+    }
+
+    /**
+     * Show export form with filters.
+     */
+    public function showExportForm()
+    {
+        $units = Unit::orderBy('unit_number')->get();
+        $routes = Route::orderBy('route_number')->get();
+
+        return view('modules.admin.maintenance-logs.export', compact('units', 'routes'));
+    }
+
+    /**
+     * Get units assigned to a specific route.
+     */
+    public function getUnitsForRoute($routeId)
+    {
+        if ($routeId === 'all') {
+            $units = Unit::orderBy('unit_number')->get();
+        } else {
+            $route = Route::findOrFail($routeId);
+            $units = $route->units()->orderBy('unit_number')->get();
+        }
+
+        return response()->json($units);
     }
 }

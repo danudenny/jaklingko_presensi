@@ -89,10 +89,13 @@ Route::middleware('auth')->group(function () {
     Route::resource('maintenance-logs', MaintenanceLogController::class);
     Route::get('maintenance-logs/drivers-for-unit/{unitId}', [MaintenanceLogController::class, 'getDriversForUnit']);
     Route::get('maintenance-logs/routes-for-unit/{unitId}', [MaintenanceLogController::class, 'getRoutesForUnit']);
+    Route::get('maintenance-logs/units-for-route/{routeId}', [MaintenanceLogController::class, 'getUnitsForRoute']);
     Route::post('maintenance-logs/driver-from-schedule', [MaintenanceLogController::class, 'getDriverFromSchedule']);
     Route::delete('maintenance-logs/photos/{id}', [MaintenanceLogController::class, 'deletePhoto']);
     Route::patch('maintenance-logs/{maintenanceLog}/update-status', [MaintenanceLogController::class, 'updateStatus'])
         ->name('maintenance-logs.update-status');
+    Route::get('maintenance-logs-export', [MaintenanceLogController::class, 'showExportForm'])->name('maintenance-logs.export.form');
+    Route::post('maintenance-logs-export', [MaintenanceLogController::class, 'exportToExcel'])->name('maintenance-logs.export.excel');
 
     // Kilometer Report Routes
     Route::get('kilometer-reports', [KilometerReportController::class, 'index'])->name('kilometer-reports.index');
