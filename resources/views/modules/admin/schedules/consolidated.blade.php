@@ -147,21 +147,16 @@
 
         <!-- Period Tabs -->
         <div class="mb-6">
-            <h3 class="mb-3 text-lg font-medium text-gray-700">
-                <i class="mr-2 text-indigo-500 fas fa-calendar-week"></i>Pilih Periode
-            </h3>
             <div class="flex max-w-md p-1 space-x-1 bg-gray-100 border border-gray-200 rounded-lg shadow-sm">
                 <a href="{{ route('schedules.index', array_merge(request()->query(), ['period' => 1])) }}" 
                     class="w-1/2 py-2 px-4 text-center rounded-md transition-all duration-200 {{ $period == 1 ? 'bg-white shadow-sm font-medium text-indigo-700' : 'text-gray-600 hover:bg-gray-50' }}">
                     <i class="mr-2 fas fa-calendar-day"></i>
                     Periode 1
-                    <div class="text-xs {{ $period == 1 ? 'text-indigo-500' : 'text-gray-500' }}">1-15 {{ $monthName }}</div>
                 </a>
                 <a href="{{ route('schedules.index', array_merge(request()->query(), ['period' => 2])) }}" 
                     class="w-1/2 py-2 px-4 text-center rounded-md transition-all duration-200 {{ $period == 2 ? 'bg-white shadow-sm font-medium text-indigo-700' : 'text-gray-600 hover:bg-gray-50' }}">
                     <i class="mr-2 fas fa-calendar-day"></i>
                     Periode 2
-                    <div class="text-xs {{ $period == 2 ? 'text-indigo-500' : 'text-gray-500' }}">16-{{ Carbon\Carbon::parse($endDate)->format('d') }} {{ $monthName }}</div>
                 </a>
             </div>
         </div>

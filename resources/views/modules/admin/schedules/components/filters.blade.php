@@ -3,7 +3,7 @@
         <i class="mr-2 text-indigo-500 fas fa-filter"></i>Filter Jadwal
     </h3>
     
-    <form id="filter-form" method="GET" class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-6">
+    <form id="filter-form" method="GET" class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7">
         <div>
             <x-input-label for="month" value="Bulan" class="font-medium text-gray-700" />
             <div class="relative">
@@ -44,6 +44,20 @@
                 </select>
                 <div class="absolute inset-y-0 right-0 flex items-center px-2 text-white bg-indigo-500 rounded-r-md cursor-pointer">
                     <i class="fas fa-clock"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div>
+            <x-input-label for="driver_type" value="Jenis Pengemudi" class="font-medium text-gray-700" />
+            <div class="relative">
+                <select id="driver_type" name="driver_type" class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                    <option value="">-- Semua Jenis --</option>
+                    <option value="batangan" {{ $selectedDriverType == 'batangan' ? 'selected' : '' }}>Batangan</option>
+                    <option value="cadangan" {{ $selectedDriverType == 'cadangan' ? 'selected' : '' }}>Cadangan</option>
+                </select>
+                <div class="absolute inset-y-0 right-0 flex items-center px-2 text-white bg-indigo-500 rounded-r-md cursor-pointer">
+                    <i class="fas fa-user-tag"></i>
                 </div>
             </div>
         </div>
@@ -306,7 +320,7 @@
             </div>
         </div>
         
-        <div class="flex flex-wrap items-center pt-2 space-x-4 md:col-span-2 lg:col-span-6">
+        <div class="flex flex-wrap items-center pt-2 space-x-4 sm:col-span-2 md:col-span-3 lg:col-span-4 xl:col-span-5 2xl:col-span-7">
             <button type="submit" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow-sm bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 focus:outline-none focus:border-indigo-700 focus:ring focus:ring-indigo-200 active:from-indigo-700 active:to-indigo-800">
                 <i class="mr-2 fas fa-search"></i>Terapkan Filter
             </button>
@@ -320,3 +334,41 @@
         </div>
     </form>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const driverTypeSelect = document.getElementById('driver_type');
+    
+    // Function to filter drivers based on selected driver type
+    function filterDriversByType(selectedType) {
+        const batanganDrivers = document.querySelectorAll('[data-driver-type="batangan"]');
+        const cadanganDrivers = document.querySelectorAll('[data-driver-type="cadangan"]');
+        const batanganSection = document.querySelector('[data-driver-type="batangan"]')?.closest('.py-1');
+        const cadanganSection = document.querySelector('[data-driver-type="cadangan"]')?.closest('.py-1');
+        
+        if (selectedType === 'batangan') {
+            // Show only batangan drivers
+            batanganDrivers.forEach(driver => driver.style.display = '');
+            cadanganDrivers.forEach(driver => driver.style.display = 'none');
+        } else if (selectedType === 'cadangan') {
+            // Show only cadangan drivers
+            batanganDrivers.forEach(driver => driver.style.display = 'none');
+            cadanganDrivers.forEach(driver => driver.style.display = '');
+        } else {
+            // Show all drivers
+            batanganDrivers.forEach(driver => driver.style.display = '');
+            cadanganDrivers.forEach(driver => driver.style.display = '');
+        }
+    }
+    
+    // Listen for changes in driver type selection
+    if (driverTypeSelect) {
+        driverTypeSelect.addEventListener('change', function() {
+            filterDriversByType(this.value);
+        });
+        
+        // Apply initial filter on page load
+        filterDriversByType(driverTypeSelect.value);
+    }
+});
+</script>
