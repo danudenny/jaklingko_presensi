@@ -56,8 +56,20 @@
                                 {{ $log->driver->name }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $log->type === 'perbaikan' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800' }}">
-                                    {{ ucfirst($log->type) }}
+                                @php
+                                    $typeColors = [
+                                        'perbaikan' => 'bg-blue-100 text-blue-800',
+                                        'penggantian' => 'bg-green-100 text-green-800',
+                                        'tidak_ada_perbaikan' => 'bg-gray-100 text-gray-800'
+                                    ];
+                                    $typeLabels = [
+                                        'perbaikan' => 'Perbaikan',
+                                        'penggantian' => 'Penggantian',
+                                        'tidak_ada_perbaikan' => 'Tidak Ada Perbaikan'
+                                    ];
+                                @endphp
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $typeColors[$log->type] ?? 'bg-gray-100 text-gray-800' }}">
+                                    {{ $typeLabels[$log->type] ?? ucfirst($log->type) }}
                                 </span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

@@ -57,6 +57,7 @@
                     <select name="type" id="type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
                         <option value="perbaikan" {{ $maintenanceLog->type === 'perbaikan' ? 'selected' : '' }}>Perbaikan</option>
                         <option value="penggantian" {{ $maintenanceLog->type === 'penggantian' ? 'selected' : '' }}>Penggantian</option>
+                        <option value="tidak_ada_perbaikan" {{ $maintenanceLog->type === 'tidak_ada_perbaikan' ? 'selected' : '' }}>Tidak Ada Perbaikan</option>
                     </select>
                     <x-input-error for="type" class="mt-2" />
                 </div>
@@ -189,12 +190,30 @@
     // Handle maintenance type change
     document.getElementById('type').addEventListener('change', function() {
         const categoryContainer = document.getElementById('categoryContainer');
+        const partsInput = document.getElementById('parts');
+        const sourceInput = document.getElementById('source_of_sparepart');
+        
         if (this.value === 'penggantian') {
             categoryContainer.classList.remove('hidden');
             document.getElementById('category').setAttribute('required', 'required');
+            partsInput.setAttribute('required', 'required');
+            sourceInput.setAttribute('required', 'required');
+        } else if (this.value === 'tidak_ada_perbaikan') {
+            categoryContainer.classList.add('hidden');
+            document.getElementById('category').removeAttribute('required');
+            partsInput.removeAttribute('required');
+            sourceInput.removeAttribute('required');
+            if (partsInput.value === '' || partsInput.value === 'Tidak ada') {
+                partsInput.value = 'Tidak ada';
+            }
+            if (sourceInput.value === '' || sourceInput.value === 'Tidak diperlukan') {
+                sourceInput.value = 'Tidak diperlukan';
+            }
         } else {
             categoryContainer.classList.add('hidden');
             document.getElementById('category').removeAttribute('required');
+            partsInput.setAttribute('required', 'required');
+            sourceInput.setAttribute('required', 'required');
         }
     });
 

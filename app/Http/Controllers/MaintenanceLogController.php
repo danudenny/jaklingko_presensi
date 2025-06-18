@@ -122,10 +122,10 @@ class MaintenanceLogController extends Controller
             'time_reported' => 'required',
             'shift' => 'nullable|string',
             'description' => 'required|string',
-            'type' => 'required|in:perbaikan,penggantian',
-            'parts' => 'required|string',
+            'type' => 'required|in:perbaikan,penggantian,tidak_ada_perbaikan',
+            'parts' => 'required_unless:type,tidak_ada_perbaikan|string',
             'category' => 'required_if:type,penggantian|nullable|in:baru,bekas',
-            'source_of_sparepart' => 'required|string',
+            'source_of_sparepart' => 'required_unless:type,tidak_ada_perbaikan|string',
             'costs' => 'nullable|array',
             'costs.*.description' => 'required|string',
             'costs.*.amount' => 'required|numeric|min:0',
@@ -154,6 +154,21 @@ class MaintenanceLogController extends Controller
         DB::beginTransaction();
 
         try {
+            // Set default values for "tidak_ada_perbaikan" type
+            $parts = $request->type === 'tidak_ada_perbaikan' 
+                ? ($request->parts ?: 'Tidak ada') 
+                : $request->parts;
+                
+            $sourceOfSparepart = $request->type === 'tidak_ada_perbaikan' 
+                ? ($request->source_of_sparepart ?: 'Tidak diperlukan') 
+                : $request->source_of_sparepart;
+                
+            $costs = $request->type === 'tidak_ada_perbaikan' && (!$request->costs || empty(array_filter($request->costs)))
+                ? [['description' => 'Tidak ada biaya', 'amount' => 0]]
+                : $request->costs;
+                
+            $status = $request->type === 'tidak_ada_perbaikan' ? 'in_progress' : 'pending';
+            
             // Create the maintenance log
             $maintenanceLog = MaintenanceLog::create([
                 'unit_id' => $request->unit_id,
@@ -164,13 +179,13 @@ class MaintenanceLogController extends Controller
                 'shift' => $request->shift,
                 'description' => $request->description,
                 'type' => $request->type,
-                'parts' => $request->parts,
+                'parts' => $parts,
                 'category' => $request->type === 'penggantian' ? $request->category : null,
-                'source_of_sparepart' => $request->source_of_sparepart,
-                'costs' => $request->costs,
+                'source_of_sparepart' => $sourceOfSparepart,
+                'costs' => $costs,
                 'on_schedule' => $onSchedule,
                 'schedule_history_id' => $scheduleHistoryId,
-                'status' => 'pending',
+                'status' => $status,
             ]);
 
             // Upload and store photos
@@ -254,10 +269,10 @@ class MaintenanceLogController extends Controller
     {
         $validated = $request->validate([
             'description' => 'required|string',
-            'type' => 'required|in:perbaikan,penggantian',
-            'parts' => 'required|string',
+            'type' => 'required|in:perbaikan,penggantian,tidak_ada_perbaikan',
+            'parts' => 'required_unless:type,tidak_ada_perbaikan|string',
             'category' => 'required_if:type,penggantian|nullable|in:baru,bekas',
-            'source_of_sparepart' => 'required|string',
+            'source_of_sparepart' => 'required_unless:type,tidak_ada_perbaikan|string',
             'costs' => 'nullable|array',
             'costs.*.description' => 'required|string',
             'costs.*.amount' => 'required|numeric|min:0',
@@ -269,14 +284,27 @@ class MaintenanceLogController extends Controller
         DB::beginTransaction();
 
         try {
+            // Set default values for "tidak_ada_perbaikan" type
+            $parts = $request->type === 'tidak_ada_perbaikan' 
+                ? ($request->parts ?: 'Tidak ada') 
+                : $request->parts;
+                
+            $sourceOfSparepart = $request->type === 'tidak_ada_perbaikan' 
+                ? ($request->source_of_sparepart ?: 'Tidak diperlukan') 
+                : $request->source_of_sparepart;
+                
+            $costs = $request->type === 'tidak_ada_perbaikan' && (!$request->costs || empty(array_filter($request->costs)))
+                ? [['description' => 'Tidak ada biaya', 'amount' => 0]]
+                : $request->costs;
+            
             // Update the maintenance log
             $maintenanceLog->update([
                 'description' => $request->description,
                 'type' => $request->type,
-                'parts' => $request->parts,
+                'parts' => $parts,
                 'category' => $request->type === 'penggantian' ? $request->category : null,
-                'source_of_sparepart' => $request->source_of_sparepart,
-                'costs' => $request->costs,
+                'source_of_sparepart' => $sourceOfSparepart,
+                'costs' => $costs,
                 'status' => $request->status,
             ]);
 

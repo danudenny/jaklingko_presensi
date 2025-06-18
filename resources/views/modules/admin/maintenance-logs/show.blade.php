@@ -82,7 +82,14 @@
                     <!-- Maintenance Type -->
                     <div>
                         <span class="text-sm font-medium text-gray-500">Tipe Perawatan:</span>
-                        <p class="text-sm text-gray-900">{{ ucfirst($maintenanceLog->type) }}</p>
+                        @php
+                            $typeLabels = [
+                                'perbaikan' => 'Perbaikan',
+                                'penggantian' => 'Penggantian',
+                                'tidak_ada_perbaikan' => 'Tidak Ada Perbaikan'
+                            ];
+                        @endphp
+                        <p class="text-sm text-gray-900">{{ $typeLabels[$maintenanceLog->type] ?? ucfirst($maintenanceLog->type) }}</p>
                     </div>
 
                     <!-- Parts -->

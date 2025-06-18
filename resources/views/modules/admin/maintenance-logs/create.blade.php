@@ -93,6 +93,7 @@
                         <option value="">Pilih Tipe</option>
                         <option value="perbaikan" {{ old('type') == 'perbaikan' ? 'selected' : '' }}>Perbaikan</option>
                         <option value="penggantian" {{ old('type') == 'penggantian' ? 'selected' : '' }}>Penggantian</option>
+                        <option value="tidak_ada_perbaikan" {{ old('type') == 'tidak_ada_perbaikan' ? 'selected' : '' }}>Tidak Ada Perbaikan</option>
                     </select>
                     <x-input-error for="type" class="mt-2" />
                 </div>
@@ -199,12 +200,30 @@
     // Handle maintenance type change
     document.getElementById('type').addEventListener('change', function() {
         const categoryContainer = document.getElementById('categoryContainer');
+        const partsInput = document.getElementById('parts');
+        const sourceInput = document.getElementById('source_of_sparepart');
+        
         if (this.value === 'penggantian') {
             categoryContainer.classList.remove('hidden');
             document.getElementById('category').setAttribute('required', 'required');
+            partsInput.setAttribute('required', 'required');
+            sourceInput.setAttribute('required', 'required');
+            partsInput.value = '';
+            sourceInput.value = '';
+        } else if (this.value === 'tidak_ada_perbaikan') {
+            categoryContainer.classList.add('hidden');
+            document.getElementById('category').removeAttribute('required');
+            partsInput.removeAttribute('required');
+            sourceInput.removeAttribute('required');
+            partsInput.value = 'Tidak ada';
+            sourceInput.value = 'Tidak diperlukan';
         } else {
             categoryContainer.classList.add('hidden');
             document.getElementById('category').removeAttribute('required');
+            partsInput.setAttribute('required', 'required');
+            sourceInput.setAttribute('required', 'required');
+            partsInput.value = '';
+            sourceInput.value = '';
         }
     });
 

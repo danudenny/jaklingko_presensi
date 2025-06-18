@@ -13,6 +13,7 @@ use App\Models\MaintenanceLogPhoto;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class UnitProblemController extends Controller
 {
@@ -138,6 +139,11 @@ class UnitProblemController extends Controller
                 }
             }
             
+            // If needs_repair is false, automatically create maintenance log
+            if (!$request->has('needs_repair') || !$request->needs_repair) {
+                $this->createMaintenanceLogForNonRepair($unitProblem);
+            }
+            
             DB::commit();
             
             return redirect()->route('unit-problems.index')
@@ -234,6 +240,20 @@ class UnitProblemController extends Controller
                 }
             }
             
+            // If needs_repair is false, automatically create maintenance log
+            if (!$request->has('needs_repair') || !$request->needs_repair) {
+                // Check if maintenance log already exists for this unit problem
+                $existingMaintenanceLog = MaintenanceLog::where('unit_id', $unitProblem->unit_id)
+                    ->where('date_reported', $unitProblem->date_reported)
+                    ->where('time_reported', $unitProblem->time_reported)
+                    ->where('type', 'tidak_ada_perbaikan')
+                    ->first();
+                    
+                if (!$existingMaintenanceLog) {
+                    $this->createMaintenanceLogForNonRepair($unitProblem);
+                }
+            }
+            
             DB::commit();
             
             return redirect()->route('unit-problems.show', $unitProblem)
@@ -282,6 +302,80 @@ class UnitProblemController extends Controller
             
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+    
+    private function createMaintenanceLogForNonRepair(UnitProblem $unitProblem)
+    {
+        try {
+            $unit = Unit::findOrFail($unitProblem->unit_id);
+            $route = $unit->routes->first();
+            
+            if (!$route) {
+                // Log error but don't fail the main transaction
+                Log::warning("Unit {$unit->unit_number} tidak memiliki rute yang terkait untuk maintenance log");
+                return;
+            }
+            
+            $maintenanceLog = MaintenanceLog::create([
+                'unit_id' => $unitProblem->unit_id,
+                'route_id' => $route->id,
+                'driver_id' => $unitProblem->driver_id,
+                'date_reported' => $unitProblem->date_reported,
+                'time_reported' => $unitProblem->time_reported,
+                'description' => $unitProblem->description,
+                'type' => 'tidak_ada_perbaikan',
+                'parts' => 'Tidak ada',
+                'source_of_sparepart' => 'Tidak diperlukan',
+                'costs' => [
+                    [
+                        'description' => 'Tidak ada biaya',
+                        'amount' => 0
+                    ]
+                ],
+                'status' => 'in_progress',
+                'on_schedule' => $unitProblem->on_schedule,
+                'schedule_history_id' => $unitProblem->schedule_history_id,
+            ]);
+            
+            // Copy photos from unit problem to maintenance log
+            foreach ($unitProblem->photos as $photo) {
+                $originalPath = $photo->photo_path;
+                $newPath = str_replace('unit-problems', 'maintenance-logs', $originalPath);
+                
+                if (Storage::disk('public')->exists($originalPath)) {
+                    Storage::disk('public')->copy($originalPath, $newPath);
+                    
+                    MaintenanceLogPhoto::create([
+                        'maintenance_log_id' => $maintenanceLog->id,
+                        'photo_path' => $newPath,
+                    ]);
+                }
+            }
+            
+            // Update unit status to maintenance
+            $unit->status = 'maintenance';
+            $unit->save();
+            
+            // Update affected schedules
+            $schedules = Schedule::where('unit_id', $unitProblem->unit_id)
+                ->where('schedule_date', '>=', $unitProblem->date_reported)
+                ->whereIn('status', ['active', 'scheduled', 'confirmed'])
+                ->get();
+                
+            foreach ($schedules as $schedule) {
+                $originalStatus = $schedule->status;
+                $schedule->status = 'maintenance';
+                $schedule->notes = json_encode([
+                    'maintenance_log_id' => $maintenanceLog->id,
+                    'maintenance_reason' => $unitProblem->description,
+                    'original_status' => $originalStatus
+                ]);
+                $schedule->save();
+            }
+            
+        } catch (\Exception $e) {
+            Log::error("Failed to create maintenance log for non-repair unit problem {$unitProblem->id}: " . $e->getMessage());
         }
     }
     
