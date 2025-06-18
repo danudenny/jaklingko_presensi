@@ -29,6 +29,7 @@
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Waktu</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shift</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jadwal</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Butuh Perbaikan</th>
                         <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
                     </tr>
                 </thead>
@@ -58,20 +59,34 @@
                                 {{ $problem->on_schedule == 0 ? 'Dalam Jadwal' : 'Diluar Jadwal' }}
                             </span>
                         </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $problem->needs_repair ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-800' }}">
+                                {{ $problem->needs_repair ? 'Ya' : 'Tidak' }}
+                            </span>
+                        </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <a href="{{ route('unit-problems.show', $problem) }}" class="text-blue-600 hover:text-blue-900 mr-2">
+                            <a href="{{ route('unit-problems.show', $problem) }}" class="text-blue-600 hover:text-blue-900 mr-2" title="Lihat Detail">
                                 <i class="fas fa-eye"></i>
                             </a>
-                            <a href="{{ route('unit-problems.edit', $problem) }}" class="text-indigo-600 hover:text-indigo-900 mr-2">
+                            <a href="{{ route('unit-problems.edit', $problem) }}" class="text-indigo-600 hover:text-indigo-900 mr-2" title="Edit">
                                 <i class="fas fa-edit"></i>
                             </a>
-                            <a href="{{ route('unit-problems.convert-to-maintenance', ['unit_problem' => $problem->id]) }}" class="text-green-600 hover:text-green-900 mr-2" title="Kirim ke Log Perawatan" onclick="return confirm('Apakah Anda yakin ingin mengkonversi laporan ini ke Log Perawatan?')">
-                                <i class="fas fa-tools"></i>
-                            </a>
+                            @if($problem->needs_repair)
+                                <a href="{{ route('unit-problems.convert-to-maintenance', ['unit_problem' => $problem->id]) }}" 
+                                   class="text-green-600 hover:text-green-900 mr-2" 
+                                   title="Kirim ke Log Perawatan" 
+                                   onclick="return confirm('Apakah Anda yakin ingin mengkonversi laporan ini ke Log Perawatan?')">
+                                    <i class="fas fa-tools"></i>
+                                </a>
+                            @else
+                                <span class="text-gray-400 mr-2 cursor-not-allowed" title="Tidak dapat dikirim ke Log Perawatan - Tidak memerlukan perbaikan">
+                                    <i class="fas fa-tools"></i>
+                                </span>
+                            @endif
                             <form class="inline-block delete-form" method="POST" action="{{ route('unit-problems.destroy', $problem) }}">
                                 @csrf
                                 @method('DELETE')
-                                <button type="submit" class="text-red-600 hover:text-red-900" onclick="return confirm('Apakah Anda yakin ingin menghapus laporan ini?')">
+                                <button type="submit" class="text-red-600 hover:text-red-900" title="Hapus" onclick="return confirm('Apakah Anda yakin ingin menghapus laporan ini?')">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </form>
@@ -79,7 +94,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="8" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">Tidak ada laporan masalah unit</td>
+                        <td colspan="9" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">Tidak ada laporan masalah unit</td>
                     </tr>
                     @endforelse
                 </tbody>

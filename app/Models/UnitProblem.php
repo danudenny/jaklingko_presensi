@@ -21,11 +21,13 @@ class UnitProblem extends Model
         'location',
         'on_schedule',
         'schedule_history_id',
+        'needs_repair',
     ];
 
     protected $casts = [
         'date_reported' => 'date',
         'on_schedule' => 'boolean',
+        'needs_repair' => 'boolean',
     ];
 
     /**

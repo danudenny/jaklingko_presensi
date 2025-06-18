@@ -22,6 +22,41 @@ The export functionality creates an Excel file with two sheets:
 - **Photo Details**: Each photo is listed with its absolute URL path
 - Photos use absolute URLs that can be accessed directly from the web
 
+## Related Features
+
+### Unit Problems - "Needs Repair" Toggle
+
+A new feature has been added to the Unit Problems module that complements the maintenance log export:
+
+#### Feature Overview
+- **Toggle Control**: A visual toggle switch labeled "Butuh Perbaikan" (Needs Repair)
+- **Purpose**: Indicates whether a reported unit problem requires repair work
+- **Integration**: This field can help prioritize which unit problems should be converted to maintenance logs
+
+#### UI/UX Details
+- **Visual Toggle**: Modern slide toggle with green color when active
+- **Real-time Label**: Label changes from "Tidak" (No) to "Ya" (Yes) when toggled
+- **Forms**: Available in both Create and Edit forms for unit problems
+- **Help Text**: "Centang jika masalah ini memerlukan perbaikan unit"
+
+#### Database Schema
+```sql
+-- Migration: add_needs_repair_to_unit_problems_table
+ALTER TABLE unit_problems ADD COLUMN needs_repair BOOLEAN DEFAULT FALSE;
+```
+
+#### Implementation Details
+- **Model**: `UnitProblem` model updated with `needs_repair` in `$fillable` and `$casts`
+- **Controller**: Both `store()` and `update()` methods handle the new field
+- **Validation**: Boolean validation in form requests
+- **Frontend**: Toggle switch with JavaScript for real-time label updates
+
+### Usage Workflow
+1. **Unit Problem Reporting**: When creating/editing a unit problem, use the toggle to indicate if repair is needed
+2. **Problem Assessment**: The "Butuh Perbaikan" field helps maintenance staff prioritize issues
+3. **Maintenance Conversion**: Problems marked as needing repair can be prioritized for conversion to maintenance logs
+4. **Export Integration**: Maintenance logs created from these problems can be exported with full cost breakdown
+
 ## Enhanced Export Filters
 
 The export supports the following advanced filters:

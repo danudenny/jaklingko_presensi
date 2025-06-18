@@ -23,15 +23,34 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <!-- Unit -->
                 <div>
-                    <x-input-label for="unit_id" :value="__('Unit')" />
-                    <select id="unit_id" name="unit_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" required>
-                        <option value="">Pilih Unit</option>
-                        @foreach($units as $unit)
-                            <option value="{{ $unit->id }}" {{ old('unit_id') == $unit->id ? 'selected' : '' }}>
-                                {{ $unit->unit_number }} - {{ $unit->plate_number }}
-                            </option>
-                        @endforeach
-                    </select>
+                    <x-input-label for="unit_search" :value="__('Unit')" />
+                    <div class="relative">
+                        <input type="text" 
+                               id="unit_search" 
+                               placeholder="Cari unit..."
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                               autocomplete="off"
+                               value="{{ old('unit_id') ? $units->firstWhere('id', old('unit_id'))?->unit_number . ' - ' . $units->firstWhere('id', old('unit_id'))?->plate_number : '' }}">
+                        <input type="hidden" name="unit_id" id="unit_id" value="{{ old('unit_id') }}" required>
+                        
+                        <!-- Dropdown results -->
+                        <div id="unit_dropdown" class="absolute z-10 hidden w-full max-h-60 overflow-y-auto bg-white border border-gray-300 rounded-md shadow-lg">
+                            <div id="unit_list" class="p-2 space-y-1">
+                                @foreach($units as $unit)
+                                    <div class="unit-item flex items-center hover:bg-gray-50 p-2 rounded cursor-pointer" 
+                                         data-unit-id="{{ $unit->id }}" 
+                                         data-unit-number="{{ $unit->unit_number }}"
+                                         data-plate-number="{{ $unit->plate_number }}"
+                                         onclick="selectUnit({{ $unit->id }}, '{{ $unit->unit_number }}', '{{ $unit->plate_number }}')">
+                                        <div class="flex-1">
+                                            <div class="text-sm font-medium text-gray-900">{{ $unit->unit_number }}</div>
+                                            <div class="text-xs text-gray-500">{{ $unit->plate_number }}</div>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    </div>
                     <x-input-error :messages="$errors->get('unit_id')" class="mt-2" />
                 </div>
 
@@ -90,6 +109,23 @@
                 <x-input-error :messages="$errors->get('on_schedule')" class="mt-2" />
             </div>
 
+            <!-- Needs Repair Toggle -->
+            <div class="mb-6">
+                <label class="flex items-center">
+                    <span class="text-sm font-medium text-gray-700 mr-3">Butuh Perbaikan</span>
+                    <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                        <input type="checkbox" name="needs_repair" id="needs_repair" value="1" 
+                               class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-transform duration-200 ease-in-out transform"
+                               {{ old('needs_repair') ? 'checked' : '' }}>
+                        <label for="needs_repair" 
+                               class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer transition-colors duration-200 ease-in-out"></label>
+                    </div>
+                    <span id="needs_repair_text" class="text-sm text-gray-600">{{ old('needs_repair') ? 'Ya' : 'Tidak' }}</span>
+                </label>
+                <p class="mt-1 text-xs text-gray-500">Centang jika masalah ini memerlukan perbaikan unit</p>
+                <x-input-error :messages="$errors->get('needs_repair')" class="mt-2" />
+            </div>
+
             <!-- Hidden field for schedule history ID -->
             <input type="hidden" id="schedule_history_id" name="schedule_history_id" value="{{ old('schedule_history_id') }}">
 
@@ -122,7 +158,15 @@
                 </div>
                 <div id="photo-preview" class="mt-4 grid grid-cols-3 gap-4"></div>
                 <x-input-error :messages="$errors->get('photos')" class="mt-2" />
-                <x-input-error :messages="$errors->get('photos.*')" class="mt-2" />
+                @if($errors->has('photos.*'))
+                    <div class="mt-2">
+                        @foreach($errors->get('photos.*') as $photoErrors)
+                            @foreach($photoErrors as $error)
+                                <p class="text-sm text-red-600">{{ $error }}</p>
+                            @endforeach
+                        @endforeach
+                    </div>
+                @endif
             </div>
 
             <div class="flex justify-end">
@@ -135,9 +179,111 @@
 </div>
 
 @push('scripts')
+<style>
+    .toggle-checkbox:checked {
+        transform: translateX(100%);
+        border-color: #10b981;
+    }
+    
+    .toggle-checkbox:checked + .toggle-label {
+        background-color: #10b981;
+    }
+    
+    .toggle-label {
+        border: 2px solid #d1d5db;
+    }
+    
+    .toggle-checkbox {
+        top: 0;
+        left: 0;
+        z-index: 2;
+    }
+    
+    .toggle-checkbox:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+    }
+
+    /* Unit search dropdown styling */
+    #unit_dropdown {
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    }
+    
+    .unit-item:hover {
+        background-color: #f9fafb;
+    }
+    
+    .unit-item {
+        transition: background-color 0.15s ease;
+    }
+    
+    #unit_search:focus {
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    
+    /* Hide scrollbar but keep functionality */
+    #unit_dropdown::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    #unit_dropdown::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+    
+    #unit_dropdown::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 3px;
+    }
+    
+    #unit_dropdown::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+    
+    /* Photo preview styling */
+    .photo-remove-btn {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        background-color: #dc2626;
+        color: white;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        border: none;
+        cursor: pointer;
+        opacity: 0;
+        transition: all 0.2s ease;
+        z-index: 10;
+    }
+    
+    .photo-remove-btn:hover {
+        background-color: #b91c1c;
+        transform: scale(1.1);
+    }
+    
+    .photo-preview-item:hover .photo-remove-btn {
+        opacity: 1;
+    }
+    
+    .photo-preview-item {
+        position: relative;
+        transition: transform 0.15s ease;
+    }
+    
+    .photo-preview-item:hover {
+        transform: scale(1.02);
+    }
+</style>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const unitSelect = document.getElementById('unit_id');
+        const unitSearchInput = document.getElementById('unit_search');
+        const unitIdInput = document.getElementById('unit_id');
+        const unitDropdown = document.getElementById('unit_dropdown');
         const dateInput = document.getElementById('date_reported');
         const timeInput = document.getElementById('time_reported');
         const driverSelect = document.getElementById('driver_id');
@@ -147,13 +293,72 @@
         const driverStatusDiv = document.getElementById('driver-status');
         const photoInput = document.getElementById('photos');
         const photoPreview = document.getElementById('photo-preview');
+        const needsRepairToggle = document.getElementById('needs_repair');
+        const needsRepairText = document.getElementById('needs_repair_text');
         
         // Store schedule data globally
         let scheduleData = null;
         
+        // Initialize selected files array
+        window.selectedFiles = [];
+        
+        // Unit search functionality
+        function setupUnitSearch() {
+            // Show/hide dropdown
+            unitSearchInput.addEventListener('focus', function() {
+                unitDropdown.classList.remove('hidden');
+                filterUnits();
+            });
+
+            unitSearchInput.addEventListener('blur', function() {
+                // Delay hiding to allow clicking on options
+                setTimeout(() => {
+                    unitDropdown.classList.add('hidden');
+                }, 200);
+            });
+
+            // Search functionality
+            unitSearchInput.addEventListener('input', function() {
+                filterUnits();
+                unitDropdown.classList.remove('hidden');
+                
+                // Clear selection if input doesn't match any unit
+                if (this.value === '') {
+                    unitIdInput.value = '';
+                }
+            });
+        }
+
+        // Filter units based on search input
+        function filterUnits() {
+            const searchTerm = unitSearchInput.value.toLowerCase();
+            const unitItems = document.querySelectorAll('.unit-item');
+            
+            unitItems.forEach(item => {
+                const unitNumber = item.getAttribute('data-unit-number').toLowerCase();
+                const plateNumber = item.getAttribute('data-plate-number').toLowerCase();
+                
+                if (unitNumber.includes(searchTerm) || plateNumber.includes(searchTerm)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        // Select unit function (called from onclick)
+        window.selectUnit = function(unitId, unitNumber, plateNumber) {
+            unitIdInput.value = unitId;
+            unitSearchInput.value = unitNumber + ' - ' + plateNumber;
+            unitDropdown.classList.add('hidden');
+            
+            // Trigger load driver from schedule when unit is selected
+            loadDriverFromSchedule();
+        };
+        
         // Function to load drivers from schedule
         function loadDriverFromSchedule() {
-            const unitId = unitSelect.value;
+            const unitId = unitIdInput.value;
             const date = dateInput.value;
             
             if (!unitId || !date) {
@@ -280,7 +485,7 @@
                 driverStatusDiv.innerHTML = '<span class="text-yellow-600">Tidak ada pengemudi dalam jadwal untuk shift ini</span>';
                 
                 // Load drivers assigned to this unit
-                loadDriversForUnit(unitSelect.value);
+                loadDriversForUnit(unitIdInput.value);
                 
                 // Remove readonly attributes
                 driverSelect.removeAttribute('readonly');
@@ -324,12 +529,19 @@
                 });
         }
         
-        // Event listeners for unit and date changes
-        unitSelect.addEventListener('change', loadDriverFromSchedule);
+        // Initialize unit search
+        setupUnitSearch();
+        
+        // Event listeners for date changes (unit is now handled by search)
         dateInput.addEventListener('change', loadDriverFromSchedule);
         
         // Event listener for shift changes
         shiftSelect.addEventListener('change', updateDriverBasedOnShift);
+        
+        // Needs repair toggle functionality
+        needsRepairToggle.addEventListener('change', function() {
+            needsRepairText.textContent = this.checked ? 'Ya' : 'Tidak';
+        });
         
         // Photo preview functionality
         photoInput.addEventListener('change', function() {
@@ -341,25 +553,65 @@
                 return;
             }
             
-            for (let i = 0; i < this.files.length; i++) {
-                const file = this.files[i];
+            // Convert FileList to Array for easier manipulation
+            window.selectedFiles = Array.from(this.files);
+            renderPhotoPreview();
+        });
+        
+        // Function to render photo preview
+        function renderPhotoPreview() {
+            photoPreview.innerHTML = '';
+            
+            if (window.selectedFiles.length === 0) {
+                const emptyMessage = document.createElement('div');
+                emptyMessage.className = 'col-span-3 text-center text-gray-500 text-sm py-4';
+                emptyMessage.textContent = 'Tidak ada foto yang dipilih';
+                photoPreview.appendChild(emptyMessage);
+                return;
+            }
+            
+            window.selectedFiles.forEach((file, index) => {
                 const reader = new FileReader();
                 
                 reader.onload = function(e) {
                     const div = document.createElement('div');
-                    div.className = 'relative';
+                    div.className = 'photo-preview-item relative';
                     
                     const img = document.createElement('img');
                     img.src = e.target.result;
                     img.className = 'h-32 w-full object-cover rounded-md';
                     
+                    // Add remove button
+                    const removeButton = document.createElement('button');
+                    removeButton.type = 'button';
+                    removeButton.className = 'photo-remove-btn';
+                    removeButton.innerHTML = '<i class="fas fa-times"></i>';
+                    removeButton.onclick = () => removePhoto(index);
+                    removeButton.title = 'Hapus foto';
+                    
                     div.appendChild(img);
+                    div.appendChild(removeButton);
                     photoPreview.appendChild(div);
                 }
                 
                 reader.readAsDataURL(file);
-            }
-        });
+            });
+        }
+        
+        // Function to remove photo from selection
+        function removePhoto(index) {
+            window.selectedFiles.splice(index, 1);
+            
+            // Update the file input
+            const dt = new DataTransfer();
+            window.selectedFiles.forEach(file => {
+                dt.items.add(file);
+            });
+            photoInput.files = dt.files;
+            
+            // Re-render preview
+            renderPhotoPreview();
+        }
     });
 </script>
 @endpush

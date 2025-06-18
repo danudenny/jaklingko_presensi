@@ -93,6 +93,7 @@ class UnitProblemController extends Controller
             'photos' => 'required|array|min:1|max:3',
             'photos.*' => 'required|image|max:2048',
             'on_schedule' => 'boolean',
+            'needs_repair' => 'boolean',
         ]);
         
         $onSchedule = false;
@@ -123,6 +124,7 @@ class UnitProblemController extends Controller
                 'location' => $request->location,
                 'on_schedule' => $onSchedule,
                 'schedule_history_id' => $scheduleHistoryId,
+                'needs_repair' => $request->has('needs_repair') && $request->needs_repair,
             ]);
             
             if ($request->hasFile('photos')) {
@@ -179,6 +181,7 @@ class UnitProblemController extends Controller
             'photos' => 'nullable|array|max:3',
             'photos.*' => 'image|max:2048', // 2MB max per image
             'on_schedule' => 'boolean',
+            'needs_repair' => 'boolean',
         ]);
         
         $onSchedule = false;
@@ -209,6 +212,7 @@ class UnitProblemController extends Controller
                 'location' => $request->location,
                 'on_schedule' => $onSchedule,
                 'schedule_history_id' => $scheduleHistoryId,
+                'needs_repair' => $request->has('needs_repair') && $request->needs_repair,
             ]);
             
             if ($request->hasFile('photos')) {

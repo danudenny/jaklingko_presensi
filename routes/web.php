@@ -84,7 +84,6 @@ Route::middleware('auth')->group(function () {
     Route::delete('unit-problems/photos/{id}', [UnitProblemController::class, 'deletePhoto'])->name('unit-problems.delete-photo');
     Route::get('unit-problems/{unit_problem}/convert-to-maintenance', [UnitProblemController::class, 'convertToMaintenance'])
         ->name('unit-problems.convert-to-maintenance');
-
     // Maintenance Log Routes
     Route::resource('maintenance-logs', MaintenanceLogController::class);
     Route::get('maintenance-logs/drivers-for-unit/{unitId}', [MaintenanceLogController::class, 'getDriversForUnit']);
