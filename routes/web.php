@@ -140,10 +140,21 @@ Route::middleware('auth')->group(function () {
         Route::get('/export/excel', [ScheduleController::class, 'exportExcel'])->name('export.excel');
         Route::get('/export/pdf', [ScheduleController::class, 'exportPdf'])->name('export.pdf');
         Route::get('/export/matrix-pdf', [ScheduleController::class, 'exportMatrixPdf'])->name('export.matrix-pdf');
+        Route::get('/export/summary', [ScheduleController::class, 'exportForm'])->name('export.summary.form');
+        Route::post('/export/summary/excel', [ScheduleController::class, 'exportSummaryExcel'])->name('export.summary.excel');
+        Route::post('/export/summary/refresh-materialized', [ScheduleController::class, 'refreshMaterializedSummary'])->name('export.summary.refresh-materialized');
+        Route::get('/export/summary/materialized-stats', [ScheduleController::class, 'getMaterializedSummaryStats'])->name('export.summary.materialized-stats');
+        Route::get('/export/download/{filename}', [ScheduleController::class, 'downloadExport'])->name('export.download');
+        Route::get('/units-for-route/{routeId}', [ScheduleController::class, 'getUnitsForRoute'])->name('units-for-route');
         Route::get('/generate', [ScheduleController::class, 'generateForm'])->name('generate.form');
         Route::post('/generate', [ScheduleController::class, 'generate'])->name('generate');
         Route::post('/reset-all', [ScheduleController::class, 'resetAll'])->name('reset-all');
         Route::post('/update', [ScheduleController::class, 'update'])->name('update');
+        Route::get('/export/summary/test', function() {
+            $service = new \App\Services\ScheduleSummaryMaterializedService();
+            $data = $service->getSummaryDataGroupedByMonth();
+            return response()->json($data);
+        })->name('export.summary.test');
     });
 
     // Leave Request routes

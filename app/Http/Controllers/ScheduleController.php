@@ -18,8 +18,12 @@ use App\Services\ScheduleGeneratorService;
 use App\Exports\SchedulesExport;
 use App\Exports\SchedulesPdfExport;
 use App\Exports\SchedulesMatrixPdfExport;
+use App\Exports\ScheduleSummaryExport;
+use App\Exports\ScheduleSummaryMaterializedExport;
+use App\Exports\ScheduleSummaryMaterializedMultiSheetExport;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class ScheduleController extends Controller
 {
@@ -869,6 +873,210 @@ class ScheduleController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Terjadi kesalahan saat memperbarui jadwal: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Show the form for exporting schedule summary
+     *
+     * @return \Illuminate\View\View
+     */
+    public function exportForm()
+    {
+        $routes = Route::orderBy('route_number')->get();
+        return view('modules.admin.schedules.export', compact('routes'));
+    }
+
+    /**
+     * Export schedule summary to Excel with optimized memory usage
+     *
+     * @param Request $request
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse
+     */
+    public function exportSummaryExcel(Request $request)
+    {
+        // Validate the request
+        $request->validate([
+            'date_range_type' => 'required|in:custom,month,year,ytd,all',
+            'start_date' => 'required_if:date_range_type,custom|date|nullable',
+            'end_date' => 'required_if:date_range_type,custom|date|nullable|after_or_equal:start_date',
+            'selected_month' => 'required_if:date_range_type,month|integer|between:1,12|nullable',
+            'selected_year_month' => 'required_if:date_range_type,month|integer|nullable',
+            'selected_year' => 'required_if:date_range_type,year|integer|nullable',
+            'route_id' => 'nullable',
+            'unit_ids' => 'nullable',
+            'driver_type' => 'nullable|in:batangan,cadangan',
+        ]);
+        
+        // Calculate date range based on type
+        $startDate = null;
+        $endDate = null;
+        $dateRangeType = $request->input('date_range_type');
+
+        switch ($dateRangeType) {
+            case 'custom':
+                $startDate = $request->input('start_date');
+                $endDate = $request->input('end_date');
+                break;
+            case 'month':
+                $month = $request->input('selected_month');
+                $year = $request->input('selected_year_month');
+                $startDate = Carbon::createFromDate($year, $month, 1)->format('Y-m-d');
+                $endDate = Carbon::createFromDate($year, $month, 1)->endOfMonth()->format('Y-m-d');
+                break;
+            case 'year':
+                $year = $request->input('selected_year');
+                $startDate = Carbon::createFromDate($year, 1, 1)->format('Y-m-d');
+                $endDate = Carbon::createFromDate($year, 12, 31)->format('Y-m-d');
+                break;
+            case 'ytd':
+                $startDate = Carbon::now()->startOfYear()->format('Y-m-d');
+                $endDate = Carbon::now()->format('Y-m-d');
+                break;
+            case 'all':
+                // No date filtering
+                break;
+        }
+
+        // Get filters
+        $routeId = $request->input('route_id') !== 'all' ? $request->input('route_id') : null;
+        $unitIds = $request->input('unit_ids') !== 'all' ? $request->input('unit_ids') : null;
+        $driverType = $request->input('driver_type');
+
+        // Generate filename
+        $filename = 'schedule-summary-' . date('Y-m-d-His');
+        if ($dateRangeType === 'month') {
+            $monthName = Carbon::createFromDate($request->input('selected_year_month'), $request->input('selected_month'), 1)->format('F-Y');
+            $filename = 'schedule-summary-' . strtolower($monthName);
+        } elseif ($dateRangeType === 'year') {
+            $filename = 'schedule-summary-' . $request->input('selected_year');
+        } elseif ($dateRangeType === 'ytd') {
+            $filename = 'schedule-summary-ytd-' . date('Y');
+        }
+
+        try {
+            // Use the lightning-fast multi-sheet materialized export
+            $export = new ScheduleSummaryMaterializedMultiSheetExport($startDate, $endDate, $routeId, $unitIds, $driverType);
+            
+            Log::info("Starting multi-sheet materialized schedule summary export", [
+                'user_id' => auth()->id(),
+                'filename' => $filename,
+                'memory_before' => memory_get_usage(true),
+                'filters' => compact('startDate', 'endDate', 'routeId', 'unitIds', 'driverType')
+            ]);
+
+            return Excel::download($export, $filename . '.xlsx');
+
+        } catch (\Throwable $e) {
+            Log::error('Schedule summary export failed', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'memory_usage' => memory_get_usage(true),
+                'memory_peak' => memory_get_peak_usage(true)
+            ]);
+
+            if (strpos($e->getMessage(), 'memory') !== false) {
+                return redirect()->back()
+                    ->withInput()
+                    ->with('error', 'Data terlalu besar untuk diekspor. Silakan gunakan filter tanggal yang lebih spesifik untuk mengurangi jumlah data.');
+            }
+
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Terjadi kesalahan saat mengekspor data: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Download completed export file
+     *
+     * @param string $filename
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse
+     */
+    public function downloadExport($filename)
+    {
+        $filePath = 'exports/' . $filename . '.xlsx';
+        
+        if (!Storage::disk('local')->exists($filePath)) {
+            abort(404, 'File tidak ditemukan atau sudah dihapus.');
+        }
+        
+        // Check if user has permission to download this file
+        // You might want to add additional security checks here
+        
+        Log::info("Export file downloaded", [
+            'user_id' => auth()->id(),
+            'filename' => $filename,
+            'file_size' => Storage::disk('local')->size($filePath)
+        ]);
+        
+        return Storage::disk('local')->download($filePath, $filename . '.xlsx');
+    }
+
+    /**
+     * Get units for a specific route (for AJAX)
+     *
+     * @param int $routeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getUnitsForRoute($routeId)
+    {
+        $units = Unit::whereHas('routes', function($query) use ($routeId) {
+            $query->where('route_id', $routeId);
+        })
+        ->where('status', 'aktif')
+        ->orderBy('unit_number')
+        ->get(['id', 'unit_number']);
+
+        return response()->json($units);
+    }
+
+    /**
+     * Refresh materialized summary data for faster exports
+     */
+    public function refreshMaterializedSummary(Request $request)
+    {
+        $materializedService = new \App\Services\ScheduleSummaryMaterializedService();
+        
+        try {
+            $result = $materializedService->refreshMaterializedData();
+            
+            return response()->json([
+                'success' => true,
+                'message' => $result['message'],
+                'data' => [
+                    'records' => $result['records'],
+                    'execution_time_ms' => $result['execution_time_ms']
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to refresh materialized data: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get materialized summary data statistics
+     */
+    public function getMaterializedSummaryStats(Request $request)
+    {
+        $materializedService = new \App\Services\ScheduleSummaryMaterializedService();
+        
+        try {
+            $stats = $materializedService->getDataStats();
+            
+            return response()->json([
+                'success' => true,
+                'data' => $stats
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get statistics: ' . $e->getMessage()
             ], 500);
         }
     }

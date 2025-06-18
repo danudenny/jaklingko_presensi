@@ -76,6 +76,11 @@
                             <i class="mr-2 text-red-500 fas fa-file-pdf"></i>
                             PDF
                         </a>
+                        <div class="my-1 border-t border-gray-100"></div>
+                        <a href="{{ route('schedules.export.summary.form') }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900" onclick="showLoadingOverlay('Memuat halaman export...')">
+                            <i class="mr-2 text-blue-500 fas fa-chart-line"></i>
+                            Summary Report
+                        </a>
                         @if(app()->environment('local'))
                         <div class="my-1 border-t border-gray-100"></div>
                         <form action="{{ route('schedules.reset-all') }}" method="POST" onsubmit="return confirm('PERINGATAN: Semua data jadwal akan dihapus. Apakah Anda yakin?');">
