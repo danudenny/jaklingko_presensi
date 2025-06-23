@@ -5,7 +5,12 @@
 @push('styles')
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/airbnb.css">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <style>
+        .select2-container--default .select2-selection--single {
+            height: 42px !important;
+            margin-top: 0.25rem !important;
+        }
         .status-badge {
             display: inline-flex;
             align-items: center;
@@ -47,6 +52,15 @@
         .tab-content.active {
             display: block;
         }
+
+        .select2-container--default .select2-selection--single {
+            height: 38px;
+            border-radius: 0.375rem;
+            border: 1px solid #d1d5db;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 36px;
+        }
     </style>
 @endpush
 
@@ -61,6 +75,82 @@
             </a>
         </x-slot>
     </x-page-title>
+
+    <!-- Filter Bar -->
+    <x-card class="mb-6">
+        <form method="GET" action="{{ route('leave-requests.index') }}" x-data="leaveFilter()">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <!-- Month -->
+                <div>
+                    <x-input-label value="Bulan" />
+                    <select name="month" class="border-gray-300 rounded-md w-full mt-1">
+                        <option value="">Semua</option>
+                        @php
+                            $months = [
+                                1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 
+                                4 => 'April', 5 => 'Mei', 6 => 'Juni',
+                                7 => 'Juli', 8 => 'Agustus', 9 => 'September',
+                                10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+                            ];
+                            $currentMonth = now()->month;
+                        @endphp
+                        @foreach($months as $num => $name)
+                            <option value="{{ $num }}" {{ (isset($month) ? $month == $num : $currentMonth == $num) ? 'selected' : '' }}>{{ $name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <!-- Year -->
+                <div>
+                    <x-input-label value="Tahun" />
+                    @php $currentYear = now()->year; @endphp
+                    <select name="year" class="border-gray-300 rounded-md w-full mt-1">
+                        <option value="">Semua</option>
+                        @for($y=$currentYear-2;$y<=$currentYear+1;$y++)
+                            <option value="{{ $y }}" {{ (isset($year) ? $year == $y : $currentYear == $y) ? 'selected' : '' }}>{{ $y }}</option>
+                        @endfor
+                    </select>
+                </div>
+
+                <!-- Driver -->
+                <div>
+                    <x-input-label value="Nama Pengemudi" />
+                    <select name="driver" class="driver-select border-gray-300 rounded-md w-full mt-1">
+                        <option value="">Semua</option>
+                        @foreach($drivers as $d)
+                            <option value="{{ $d->id }}" {{ (isset($driver) && $driver == $d->id) ? 'selected' : '' }}>{{ $d->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <!-- Route -->
+                <div>
+                    <x-input-label value="Rute" />
+                    <select name="route" x-model="selectedRoute" @change="fetchUnits" class="border-gray-300 rounded-md w-full mt-1">
+                        <option value="">Semua</option>
+                        @foreach($routes as $r)
+                            <option value="{{ $r->id }}" {{ (isset($route) && $route == $r->id) ? 'selected' : '' }}>{{ $r->route_number }} - {{ $r->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <!-- Unit -->
+                <div>
+                    <x-input-label value="Unit" />
+                    <select name="unit" x-model="selectedUnit" class="border-gray-300 rounded-md w-full mt-1" x-bind:disabled="units.length === 0">
+                        <option value="">Semua</option>
+                        <template x-for="u in units" :key="u.id">
+                            <option x-bind:value="u.id" x-text="u.unit_number + ' - ' + (u.plate_number ?? '-')"></option>
+                        </template>
+                    </select>
+                </div>
+            </div>
+            <div class="flex justify-end mt-4">
+                <a href="{{ route('leave-requests.index') }}" class="inline-flex items-center px-4 py-2 bg-gray-200 border border-transparent rounded-md text-xs text-gray-700 hover:bg-gray-300 mr-2">Reset</a>
+                <button type="submit" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md text-xs text-white hover:bg-blue-500">Filter</button>
+            </div>
+        </form>
+    </x-card>
 
     <x-card class="mb-6">
         <!-- Tab Navigation -->
@@ -350,35 +440,62 @@
 </div>
 
 @push('scripts')
-<script>
-    function openRejectModal(id) {
-        document.getElementById('rejectForm').action = `/leave-requests/${id}`;
-        document.getElementById('rejectModal').classList.remove('hidden');
-    }
-
-    function closeRejectModal() {
-        document.getElementById('rejectModal').classList.add('hidden');
-        document.getElementById('admin_notes').value = '';
-    }
-
-    function switchTab(tabName) {
-        // Hide all tab contents
-        document.querySelectorAll('.tab-content').forEach(tab => {
-            tab.classList.remove('active');
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('.driver-select').select2({
+                placeholder: 'Cari pengemudi...',
+                allowClear: true,
+                width: '100%'
+            });
         });
-        
-        // Deactivate all tab buttons
-        document.querySelectorAll('.tab-button').forEach(button => {
-            button.classList.remove('active');
+    </script>
+    <script>
+        function openRejectModal(id) {
+            document.getElementById('rejectForm').action = `/leave-requests/${id}`;
+            document.getElementById('rejectModal').classList.remove('hidden');
+        }
+
+        function closeRejectModal() {
+            document.getElementById('rejectModal').classList.add('hidden');
+            document.getElementById('admin_notes').value = '';
+        }
+
+        function switchTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Deactivate all tab buttons
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            // Show the selected tab content
+            document.getElementById(`content-${tabName}`).classList.add('active');
+            
+            // Activate the selected tab button
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        }
+        // Alpine component for filter
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('leaveFilter', () => ({
+                selectedRoute: '{{ $route }}',
+                units: @json($units),
+                selectedUnit: '{{ $unit }}',
+                fetchUnits(event){
+                    const routeId = this.selectedRoute;
+                    if(!routeId){ this.units = []; return; }
+                    fetch('/drivers/get-units-for-route?route_id=' + routeId)
+                        .then(r => r.json())
+                        .then(res => {
+                            if(res.success){ this.units = res.data; }
+                        });
+                }
+            }));
         });
-        
-        // Show the selected tab content
-        document.getElementById(`content-${tabName}`).classList.add('active');
-        
-        // Activate the selected tab button
-        document.getElementById(`tab-${tabName}`).classList.add('active');
-    }
-</script>
+    </script>
 @endpush
 
 @endsection

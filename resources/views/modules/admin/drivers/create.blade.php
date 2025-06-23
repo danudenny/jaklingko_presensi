@@ -103,9 +103,16 @@
                             @endforeach
                         </div>
                         <div class="mt-1 text-xs text-gray-500">
-                            <span x-show="driver_type === 'batangan'" class="text-amber-600">
-                                <i class="fas fa-exclamation-triangle mr-1"></i> Driver batangan hanya dapat ditugaskan ke 1 rute
-                            </span>
+                            <template x-if="driver_type === 'batangan'">
+                                <span class="text-amber-600">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i> Driver batangan hanya dapat ditugaskan ke 1 rute
+                                </span>
+                            </template>
+                            <template x-if="driver_type === 'cadangan'">
+                                <span class="text-green-600">
+                                    <i class="fas fa-info-circle mr-1"></i> Driver cadangan dapat ditugaskan ke lebih dari 1 rute
+                                </span>
+                            </template>
                         </div>
                         <x-input-error :message="$errors->first('routes')" class="mt-2" />
                     </div>
@@ -129,7 +136,13 @@
                             </div>
 
                             <div x-show="!loadingUnits && availableUnits.length > 0" class="mb-3">
-                                <input type="text" x-model="unitSearch" placeholder="Cari unit..." class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                <div class="flex justify-between items-center mb-2">
+                                        <input type="text" x-model="unitSearch" placeholder="Cari unit..." class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 mr-2">
+                                        <div class="whitespace-nowrap space-x-2">
+                                            <button type="button" @click="selectAllUnits" class="text-xs text-blue-600 hover:underline">Pilih Semua</button>
+                                            <button type="button" @click="clearUnitSelections" class="text-xs text-red-600 hover:underline">Bersihkan</button>
+                                        </div>
+                                    </div>
                             </div>
 
                             <div x-show="!loadingUnits && availableUnits.length > 0" class="grid grid-cols-1 gap-2">
@@ -216,6 +229,8 @@
             },
             
             handleRouteChange(event) {
+                // Refresh driver_type in case user changed it
+                this.driver_type = document.getElementById('type').value;
                 const routeId = event.target.value;
                 const isChecked = event.target.checked;
                 
@@ -232,7 +247,10 @@
                         // Clear selectedRoutes array
                         this.selectedRoutes = [routeId];
                     } else {
-                        this.selectedRoutes.push(routeId);
+                        // Avoid duplicate insertions
+                        if (!this.selectedRoutes.includes(routeId)) {
+                            this.selectedRoutes.push(routeId);
+                        }
                     }
                     
                     // Load units for this route
@@ -252,6 +270,27 @@
             },
             
             handleUnitChange(event) {
+                const unitId = event.target.value;
+                const isChecked = event.target.checked;
+                // Update selectedUnits array
+                if (isChecked) {
+                    if (!this.selectedUnits.includes(unitId)) {
+                        this.selectedUnits.push(unitId);
+                    }
+                } else {
+                    this.selectedUnits = this.selectedUnits.filter(id => id !== unitId);
+                }
+            },
+
+            selectAllUnits() {
+                this.selectedUnits = this.availableUnits.map(u => u.id.toString());
+            },
+
+            clearUnitSelections() {
+                this.selectedUnits = [];
+            },
+
+            get filteredUnits() {
                 const unitId = event.target.value;
                 const isChecked = event.target.checked;
                 

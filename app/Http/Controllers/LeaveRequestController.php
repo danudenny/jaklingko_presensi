@@ -19,25 +19,78 @@ class LeaveRequestController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
+        $drivers = Driver::orderBy('name')->get();
+        
+        // Capture filter inputs
+        $month  = $request->input('month');
+        $year   = $request->input('year');
+        $driver = $request->input('driver');
+        $route  = $request->input('route');
+        $unit   = $request->input('unit');
+
+        // Helper closure to apply filters to a query
+        $applyFilters = function ($query) use ($month,$year,$driver,$route,$unit) {
+            if ($month) {
+                $query->whereMonth('start_date', $month);
+            }
+            if ($year) {
+                $query->whereYear('start_date', $year);
+            }
+            if ($driver) {
+                $query->whereHas('driver', function($q) use ($driver){
+                    $q->where('name','like','%'.$driver.'%');
+                });
+            }
+            if ($route) {
+                $query->whereHas('driver.routes', function($q) use ($route){
+                    $q->where('routes.id',$route);
+                });
+            }
+            if ($unit) {
+                $query->whereHas('driver.units', function($q) use ($unit){
+                    $q->where('units.id',$unit);
+                });
+            }
+        };
+
         $pendingRequests = LeaveRequest::with('driver')
             ->pending()
+            ->tap($applyFilters)
             ->orderBy('start_date')
             ->get();
 
         $approvedRequests = LeaveRequest::with('driver')
             ->approved()
+            ->tap($applyFilters)
             ->where('end_date', '>=', Carbon::today())
             ->orderBy('start_date')
             ->get();
 
         $rejectedRequests = LeaveRequest::with('driver')
             ->rejected()
+            ->tap($applyFilters)
             ->orderBy('created_at', 'desc')
             ->get();
 
-        return view('modules.admin.leave-requests.index', compact('pendingRequests', 'approvedRequests', 'rejectedRequests'));
+        // For filter dropdowns
+        $routes = \App\Models\Route::active()->orderBy('route_number')->get();
+        $units  = [];
+        if($route){
+            $selectedRoute = \App\Models\Route::find($route);
+            if($selectedRoute){
+                $units = $selectedRoute->units()->active()->get();
+            }
+        }
+
+        return view('modules.admin.leave-requests.index', compact(
+            'pendingRequests', 
+            'approvedRequests', 
+            'rejectedRequests',
+            'routes','units','month','year','driver','route','unit',
+            'drivers'
+        ));
     }
 
     /**
