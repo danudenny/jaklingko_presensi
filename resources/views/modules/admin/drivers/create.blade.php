@@ -81,41 +81,8 @@
                 </div>
 
                 <!-- Right Column: Route and Unit Selection -->
-                <div x-data="routeUnitSelector()">
-                    <h2 class="text-lg font-medium text-gray-900 mb-4">Penugasan Rute & Unit</h2>
-
-                    <!-- Routes Selection -->
-                    <div class="mb-6">
-                        <div class="flex items-center justify-between mb-2">
-                            <x-input-label for="routes" value="Rute" class="text-base font-medium" />
-                            <span class="text-xs text-gray-500" x-text="selectedRoutes.length + ' rute dipilih'"></span>
-                        </div>
-
-                        <div class="border border-gray-300 rounded-md p-4 max-h-60 overflow-y-auto bg-white">
-                            @foreach($routes as $route)
-                                <div class="flex items-center mb-3 p-2 hover:bg-gray-50 rounded border border-gray-100">
-                                    <input type="checkbox" id="route_{{ $route->id }}" name="routes[]" value="{{ $route->id }}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 route-checkbox" @change="handleRouteChange($event)">
-                                    <label for="route_{{ $route->id }}" class="ml-3 text-sm text-gray-700 font-medium">{{ $route->route_number }} - {{ $route->name }}</label>
-                                    <span class="ml-auto px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $route->status === 'aktif' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                        {{ ucfirst($route->status) }}
-                                    </span>
-                                </div>
-                            @endforeach
-                        </div>
-                        <div class="mt-1 text-xs text-gray-500">
-                            <template x-if="driver_type === 'batangan'">
-                                <span class="text-amber-600">
-                                    <i class="fas fa-exclamation-triangle mr-1"></i> Driver batangan hanya dapat ditugaskan ke 1 rute
-                                </span>
-                            </template>
-                            <template x-if="driver_type === 'cadangan'">
-                                <span class="text-green-600">
-                                    <i class="fas fa-info-circle mr-1"></i> Driver cadangan dapat ditugaskan ke lebih dari 1 rute
-                                </span>
-                            </template>
-                        </div>
-                        <x-input-error :message="$errors->first('routes')" class="mt-2" />
-                    </div>
+                <div x-data="unitSelector()">
+                    <h2 class="text-lg font-medium text-gray-900 mb-4">Penugasan Unit</h2>
 
                     <!-- Units Selection -->
                     <div class="mb-4">
@@ -132,17 +99,17 @@
 
                             <div x-show="!loadingUnits && availableUnits.length === 0" class="text-sm text-gray-500 py-4 text-center">
                                 <i class="fas fa-info-circle mr-1 text-blue-500"></i>
-                                Pilih rute terlebih dahulu untuk melihat unit yang tersedia
+                                Tidak ada unit yang tersedia
                             </div>
 
                             <div x-show="!loadingUnits && availableUnits.length > 0" class="mb-3">
                                 <div class="flex justify-between items-center mb-2">
-                                        <input type="text" x-model="unitSearch" placeholder="Cari unit..." class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 mr-2">
-                                        <div class="whitespace-nowrap space-x-2">
-                                            <button type="button" @click="selectAllUnits" class="text-xs text-blue-600 hover:underline">Pilih Semua</button>
-                                            <button type="button" @click="clearUnitSelections" class="text-xs text-red-600 hover:underline">Bersihkan</button>
-                                        </div>
+                                    <input type="text" x-model="unitSearch" placeholder="Cari unit..." class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 mr-2">
+                                    <div class="whitespace-nowrap space-x-2">
+                                        <button type="button" @click="selectAllUnits" class="text-xs text-blue-600 hover:underline">Pilih Semua</button>
+                                        <button type="button" @click="clearUnitSelections" class="text-xs text-red-600 hover:underline">Bersihkan</button>
                                     </div>
+                                </div>
                             </div>
 
                             <div x-show="!loadingUnits && availableUnits.length > 0" class="grid grid-cols-1 gap-2">
@@ -157,6 +124,11 @@
                                     </div>
                                 </template>
                             </div>
+                        </div>
+                        <div class="mt-1 text-xs text-gray-500">
+                            <span class="text-blue-600">
+                                <i class="fas fa-info-circle mr-1"></i> Rute akan otomatis ditentukan berdasarkan unit yang dipilih
+                            </span>
                         </div>
                         <x-input-error :message="$errors->first('units')" class="mt-2" />
                     </div>
@@ -180,22 +152,22 @@
 
 @push('scripts')
 <script>
-    function routeUnitSelector() {
+    function unitSelector() {
         return {
-            search: '',
             unitSearch: '',
             driver_type: document.getElementById('type').value,
-            selectedRoutes: [],
             availableUnits: [],
             selectedUnits: [],
             loadingUnits: false,
             
-            async loadUnitsForRoute(routeId) {
-                if (!routeId) return;
-                
+            init() {
+                this.loadAllUnits();
+            },
+            
+            async loadAllUnits() {
                 this.loadingUnits = true;
                 try {
-                    const url = '/drivers/get-units-for-route?route_id=' + routeId;
+                    const url = '/drivers/get-all-units';
                     const response = await fetch(url, {
                         headers: {
                             'X-Requested-With': 'XMLHttpRequest',
@@ -211,14 +183,8 @@
                     const data = await response.json();
                     
                     if (data.success) {
-                        // Add units from this route to available units
-                        this.availableUnits = [...this.availableUnits, ...data.data];
-                        // Remove duplicates
-                        this.availableUnits = this.availableUnits.filter((unit, index, self) =>
-                            index === self.findIndex((u) => u.id === unit.id)
-                        );
+                        this.availableUnits = data.data;
                     } else {
-                        // Handle error silently
                         console.error('Error loading units:', data);
                     }
                 } catch (error) {
@@ -228,50 +194,10 @@
                 }
             },
             
-            handleRouteChange(event) {
-                // Refresh driver_type in case user changed it
-                this.driver_type = document.getElementById('type').value;
-                const routeId = event.target.value;
-                const isChecked = event.target.checked;
-                
-                // Update selectedRoutes array
-                if (isChecked) {
-                    // For batangan drivers, only allow one route
-                    if (this.driver_type === 'batangan' && this.selectedRoutes.length > 0) {
-                        // Uncheck all other route checkboxes
-                        document.querySelectorAll('.route-checkbox:checked').forEach(checkbox => {
-                            if (checkbox.value !== routeId) {
-                                checkbox.checked = false;
-                            }
-                        });
-                        // Clear selectedRoutes array
-                        this.selectedRoutes = [routeId];
-                    } else {
-                        // Avoid duplicate insertions
-                        if (!this.selectedRoutes.includes(routeId)) {
-                            this.selectedRoutes.push(routeId);
-                        }
-                    }
-                    
-                    // Load units for this route
-                    this.loadUnitsForRoute(routeId);
-                } else {
-                    // Remove from selectedRoutes
-                    this.selectedRoutes = this.selectedRoutes.filter(id => id !== routeId);
-                    
-                    // Remove units associated with this route from availableUnits
-                    // This is a simplified approach; in a real app, you'd need to track which units came from which route
-                    // For now, we'll just reload all units for the remaining selected routes
-                    this.availableUnits = [];
-                    if (this.selectedRoutes.length > 0) {
-                        this.selectedRoutes.forEach(id => this.loadUnitsForRoute(id));
-                    }
-                }
-            },
-            
             handleUnitChange(event) {
                 const unitId = event.target.value;
                 const isChecked = event.target.checked;
+                
                 // Update selectedUnits array
                 if (isChecked) {
                     if (!this.selectedUnits.includes(unitId)) {
@@ -288,20 +214,6 @@
 
             clearUnitSelections() {
                 this.selectedUnits = [];
-            },
-
-            get filteredUnits() {
-                const unitId = event.target.value;
-                const isChecked = event.target.checked;
-                
-                // Update selectedUnits array
-                if (isChecked) {
-                    if (!this.selectedUnits.includes(unitId)) {
-                        this.selectedUnits.push(unitId);
-                    }
-                } else {
-                    this.selectedUnits = this.selectedUnits.filter(id => id !== unitId);
-                }
             },
             
             get filteredUnits() {

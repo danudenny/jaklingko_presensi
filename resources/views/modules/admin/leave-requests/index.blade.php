@@ -5,7 +5,6 @@
 @push('styles')
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/airbnb.css">
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <style>
         .select2-container--default .select2-selection--single {
             height: 42px !important;
@@ -115,7 +114,7 @@
                 <!-- Driver -->
                 <div>
                     <x-input-label value="Nama Pengemudi" />
-                    <select name="driver" class="driver-select border-gray-300 rounded-md w-full mt-1">
+                    <select name="driver" class="border-gray-300 rounded-md w-full mt-1">
                         <option value="">Semua</option>
                         @foreach($drivers as $d)
                             <option value="{{ $d->id }}" {{ (isset($driver) && $driver == $d->id) ? 'selected' : '' }}>{{ $d->name }}</option>
@@ -127,9 +126,11 @@
                 <div>
                     <x-input-label value="Rute" />
                     <select name="route" x-model="selectedRoute" @change="fetchUnits" class="border-gray-300 rounded-md w-full mt-1">
-                        <option value="">Semua</option>
+                        <option value="">Semua Rute</option>
                         @foreach($routes as $r)
-                            <option value="{{ $r->id }}" {{ (isset($route) && $route == $r->id) ? 'selected' : '' }}>{{ $r->route_number }} - {{ $r->name }}</option>
+                            <option value="{{ $r->id }}" {{ $route == $r->id ? 'selected' : '' }}>
+                                {{ $r->route_number }} - {{ $r->name }}
+                            </option>
                         @endforeach
                     </select>
                 </div>
@@ -440,16 +441,6 @@
 </div>
 
 @push('scripts')
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <script>
-        $(document).ready(function() {
-            $('.driver-select').select2({
-                placeholder: 'Cari pengemudi...',
-                allowClear: true,
-                width: '100%'
-            });
-        });
-    </script>
     <script>
         function openRejectModal(id) {
             document.getElementById('rejectForm').action = `/leave-requests/${id}`;
@@ -462,22 +453,17 @@
         }
 
         function switchTab(tabName) {
-            // Hide all tab contents
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
             });
-            
-            // Deactivate all tab buttons
             document.querySelectorAll('.tab-button').forEach(button => {
                 button.classList.remove('active');
             });
-            
-            // Show the selected tab content
             document.getElementById(`content-${tabName}`).classList.add('active');
-            
-            // Activate the selected tab button
             document.getElementById(`tab-${tabName}`).classList.add('active');
         }
+    </script>
+    <script>
         // Alpine component for filter
         document.addEventListener('alpine:init', () => {
             Alpine.data('leaveFilter', () => ({

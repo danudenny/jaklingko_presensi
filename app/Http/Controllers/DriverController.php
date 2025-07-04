@@ -122,6 +122,27 @@ class DriverController extends Controller
             ], 500);
         }
     }
+    
+    /**
+     * Get all units (AJAX endpoint)
+     */
+    public function getAllUnits(Request $request)
+    {
+        try {
+            // Get all active units
+            $units = Unit::where('status', 'aktif')->get();
+            
+            return response()->json([
+                'success' => true,
+                'data' => $units
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error fetching units: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 
     /**
      * Store a newly created resource in storage.
@@ -138,18 +159,9 @@ class DriverController extends Controller
             'phone' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:255',
             'status' => 'required|string|in:aktif,nonaktif',
-            'routes' => 'required|array',
-            'routes.*' => 'exists:routes,id',
             'units' => 'required|array',
             'units.*' => 'exists:units,id',
         ]);
-
-        // Check if driver type is 'batangan' and trying to assign more than 1 route
-        if ($validated['type'] === 'batangan' && count($validated['routes']) > 1) {
-            return redirect()->back()
-                ->with('error', 'Driver batangan hanya dapat ditugaskan ke 1 rute.')
-                ->withInput();
-        }
 
         $driver = Driver::create([
             'name' => $validated['name'],
@@ -163,11 +175,31 @@ class DriverController extends Controller
             'status' => $validated['status'],
         ]);
         
-        // Attach routes
-        $driver->routes()->attach($validated['routes']);
-        
         // Attach units
         $driver->units()->attach($validated['units']);
+        
+        // Get routes from units and attach them to the driver
+        $routeIds = [];
+        $units = Unit::whereIn('id', $validated['units'])->get();
+        
+        foreach ($units as $unit) {
+            $unitRoutes = $unit->routes()->pluck('routes.id')->toArray();
+            $routeIds = array_merge($routeIds, $unitRoutes);
+        }
+        
+        // Remove duplicates
+        $routeIds = array_unique($routeIds);
+        
+        // Check if driver type is 'batangan' and trying to assign more than 1 route
+        if ($validated['type'] === 'batangan' && count($routeIds) > 1) {
+            // For batangan drivers, only use the first route
+            $routeIds = [reset($routeIds)];
+        }
+        
+        // Attach routes
+        if (!empty($routeIds)) {
+            $driver->routes()->attach($routeIds);
+        }
 
         return redirect()->route('drivers.index')
             ->with('success', 'Driver created successfully.');

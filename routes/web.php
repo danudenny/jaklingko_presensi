@@ -61,6 +61,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/drivers/import', [DriverController::class, 'importForm'])->name('drivers.import');
     Route::post('/drivers/import', [DriverController::class, 'import'])->name('drivers.import.process');
     Route::get('/drivers/get-units-for-route', [DriverController::class, 'getUnitsForRoute'])->name('drivers.get-units-for-route');
+    Route::get('/drivers/get-all-units', [DriverController::class, 'getAllUnits'])->name('drivers.get-all-units');
     Route::resource('drivers', DriverController::class);
     Route::get('/driver/schedule/settings', [DriverScheduleSettingsController::class, 'index'])->name('driver.schedule.settings');
     Route::post('/driver/schedule/settings/update', [DriverScheduleSettingsController::class, 'update'])->name('driver.schedule.settings.update');

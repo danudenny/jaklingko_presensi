@@ -7,6 +7,7 @@ use App\Models\Driver;
 use App\Models\Schedule;
 use App\Models\DriverHistory;
 use App\Models\DriverScheduleHistory;
+use App\Models\Route;
 use App\Mail\LeaveRequestNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -22,74 +23,27 @@ class LeaveRequestController extends Controller
     public function index(Request $request)
     {
         $drivers = Driver::orderBy('name')->get();
+        $routes = Route::active()->orderBy('route_number')->get();
+        $route = $request->input('route');
         
-        // Capture filter inputs
-        $month  = $request->input('month');
-        $year   = $request->input('year');
-        $driver = $request->input('driver');
-        $route  = $request->input('route');
-        $unit   = $request->input('unit');
-
-        // Helper closure to apply filters to a query
-        $applyFilters = function ($query) use ($month,$year,$driver,$route,$unit) {
-            if ($month) {
-                $query->whereMonth('start_date', $month);
-            }
-            if ($year) {
-                $query->whereYear('start_date', $year);
-            }
-            if ($driver) {
-                $query->whereHas('driver', function($q) use ($driver){
-                    $q->where('name','like','%'.$driver.'%');
-                });
-            }
-            if ($route) {
-                $query->whereHas('driver.routes', function($q) use ($route){
-                    $q->where('routes.id',$route);
-                });
-            }
-            if ($unit) {
-                $query->whereHas('driver.units', function($q) use ($unit){
-                    $q->where('units.id',$unit);
-                });
-            }
-        };
-
-        $pendingRequests = LeaveRequest::with('driver')
-            ->pending()
-            ->tap($applyFilters)
-            ->orderBy('start_date')
-            ->get();
-
-        $approvedRequests = LeaveRequest::with('driver')
-            ->approved()
-            ->tap($applyFilters)
-            ->where('end_date', '>=', Carbon::today())
-            ->orderBy('start_date')
-            ->get();
-
-        $rejectedRequests = LeaveRequest::with('driver')
-            ->rejected()
-            ->tap($applyFilters)
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        // For filter dropdowns
-        $routes = \App\Models\Route::active()->orderBy('route_number')->get();
-        $units  = [];
-        if($route){
-            $selectedRoute = \App\Models\Route::find($route);
-            if($selectedRoute){
-                $units = $selectedRoute->units()->active()->get();
-            }
+        $query = LeaveRequest::with('driver');
+        
+        // Filter by driver if selected
+        if ($request->has('driver') && $request->driver) {
+            $query->where('driver_id', $request->driver);
         }
+        
+        $pendingRequests = $query->clone()->pending()->orderBy('start_date')->get();
+        $approvedRequests = $query->clone()->approved()->where('end_date', '>=', Carbon::today())->orderBy('start_date')->get();
+        $rejectedRequests = $query->clone()->rejected()->orderBy('created_at', 'desc')->get();
 
         return view('modules.admin.leave-requests.index', compact(
             'pendingRequests', 
             'approvedRequests', 
             'rejectedRequests',
-            'routes','units','month','year','driver','route','unit',
-            'drivers'
+            'drivers',
+            'routes',
+            'route'
         ));
     }
 
