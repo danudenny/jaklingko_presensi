@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
+use App\Models\Unit;
 
 class LeaveRequestController extends Controller
 {
@@ -25,7 +26,8 @@ class LeaveRequestController extends Controller
         $drivers = Driver::orderBy('name')->get();
         $routes = Route::active()->orderBy('route_number')->get();
         $route = $request->input('route');
-        
+        $units = Unit::active()->orderBy('unit_number')->get();
+        $unit = $request->input('unit');
         $query = LeaveRequest::with('driver');
         
         // Filter by driver if selected
@@ -43,7 +45,9 @@ class LeaveRequestController extends Controller
             'rejectedRequests',
             'drivers',
             'routes',
-            'route'
+            'route',
+            'units',
+            'unit'
         ));
     }
 

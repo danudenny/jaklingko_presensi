@@ -20,6 +20,10 @@
                     <i class="mr-2 fas fa-cog"></i>
                     Pengaturan Jadwal
                 </a>
+                <a href="{{ route('driver.schedule.settings') }}" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out bg-blue-600 border border-transparent rounded-md hover:bg-blue-500 active:bg-blue-700 focus:outline-none focus:border-blue-700 focus:ring ring-blue-300 disabled:opacity-25">
+                    <i class="mr-2 fas fa-cog"></i>
+                    Export
+                </a>
             </div>
         </x-slot>
     </x-page-title>
