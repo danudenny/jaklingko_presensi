@@ -70,55 +70,73 @@ class DriversImport implements ToCollection, WithHeadingRow, WithValidation
                 continue;
             }
             
-            $route = null;
+            // Process routes (handle comma-separated values)
+            $routeIds = [];
             if ($routeNumber) {
-                $possibleRouteNumbers = [
-                    $routeNumber,
-                ];
+                // Split by comma and trim whitespace
+                $routeNumberList = array_map('trim', explode(',', $routeNumber));
                 
-                if (!str_starts_with(strtoupper($routeNumber), 'JAK')) {
-                    $possibleRouteNumbers[] = 'JAK' . $routeNumber;
-                }
-                
-                if (str_starts_with(strtoupper($routeNumber), 'JAK')) {
-                    $possibleRouteNumbers[] = substr($routeNumber, 3);
-                }
-                
-                if (is_numeric($routeNumber) && intval($routeNumber) < 10) {
-                    $possibleRouteNumbers[] = 'JAK0' . intval($routeNumber);
-                }
-                
-                if (str_starts_with(strtoupper($routeNumber), 'JAK') && strlen($routeNumber) == 4 && is_numeric(substr($routeNumber, 3))) {
-                    $digit = substr($routeNumber, 3);
-                    if (intval($digit) < 10) {
-                        $possibleRouteNumbers[] = 'JAK0' . intval($digit);
+                foreach ($routeNumberList as $singleRouteNumber) {
+                    $possibleRouteNumbers = [
+                        $singleRouteNumber,
+                    ];
+                    
+                    if (!str_starts_with(strtoupper($singleRouteNumber), 'JAK')) {
+                        $possibleRouteNumbers[] = 'JAK' . $singleRouteNumber;
                     }
-                }
-                
-                if (is_numeric($routeNumber) && intval($routeNumber) >= 10) {
-                    $possibleRouteNumbers[] = 'JAK' . $routeNumber;
-                }
-                
-                Log::info("Trying route number formats:", $possibleRouteNumbers);
-                
-                foreach ($possibleRouteNumbers as $format) {
-                    $route = Route::where('route_number', $format)->first();
-                    if ($route) {
-                        Log::info("Found route with format: {$format}");
-                        break;
+                    
+                    if (str_starts_with(strtoupper($singleRouteNumber), 'JAK')) {
+                        $possibleRouteNumbers[] = substr($singleRouteNumber, 3);
                     }
-                }
-                
-                if (!$route) {
-                    Log::warning("Route not found after trying all formats: {$routeNumber}");
+                    
+                    if (is_numeric($singleRouteNumber) && intval($singleRouteNumber) < 10) {
+                        $possibleRouteNumbers[] = 'JAK0' . intval($singleRouteNumber);
+                    }
+                    
+                    if (str_starts_with(strtoupper($singleRouteNumber), 'JAK') && strlen($singleRouteNumber) == 4 && is_numeric(substr($singleRouteNumber, 3))) {
+                        $digit = substr($singleRouteNumber, 3);
+                        if (intval($digit) < 10) {
+                            $possibleRouteNumbers[] = 'JAK0' . intval($digit);
+                        }
+                    }
+                    
+                    if (is_numeric($singleRouteNumber) && intval($singleRouteNumber) >= 10) {
+                        $possibleRouteNumbers[] = 'JAK' . $singleRouteNumber;
+                    }
+                    
+                    Log::info("Trying route number formats for {$singleRouteNumber}:", $possibleRouteNumbers);
+                    
+                    $routeFound = false;
+                    foreach ($possibleRouteNumbers as $format) {
+                        $route = Route::where('route_number', $format)->first();
+                        if ($route) {
+                            $routeIds[] = $route->id;
+                            Log::info("Found route with format: {$format}");
+                            $routeFound = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!$routeFound) {
+                        Log::warning("Route not found after trying all formats: {$singleRouteNumber}");
+                    }
                 }
             }
             
-            $unit = null;
+            // Process units (handle comma-separated values)
+            $unitIds = [];
             if ($unitNumber) {
-                $unit = Unit::where('unit_number', $unitNumber)->first();
-                if (!$unit) {
-                    Log::warning("Unit not found: {$unitNumber}");
+                // Split by comma and trim whitespace
+                $unitNumberList = array_map('trim', explode(',', $unitNumber));
+                
+                foreach ($unitNumberList as $singleUnitNumber) {
+                    $unit = Unit::where('unit_number', $singleUnitNumber)->first();
+                    if ($unit) {
+                        $unitIds[] = $unit->id;
+                        Log::info("Found unit: {$singleUnitNumber}");
+                    } else {
+                        Log::warning("Unit not found: {$singleUnitNumber}");
+                    }
                 }
             }
             
@@ -142,23 +160,31 @@ class DriversImport implements ToCollection, WithHeadingRow, WithValidation
                 $driver->update($driverData);
                 Log::info("Updated driver: {$driverName}");
                 
-                if ($route) {
-                    $driver->routes()->sync([$route->id]);
+                // Update route relationships if any routes were found
+                if (!empty($routeIds)) {
+                    $driver->routes()->sync($routeIds);
+                    Log::info("Synced routes for driver: {$driverName}", ['route_ids' => $routeIds]);
                 }
                 
-                if ($unit) {
-                    $driver->units()->sync([$unit->id]);
+                // Update unit relationships if any units were found
+                if (!empty($unitIds)) {
+                    $driver->units()->sync($unitIds);
+                    Log::info("Synced units for driver: {$driverName}", ['unit_ids' => $unitIds]);
                 }
             } else {
                 $driver = Driver::create($driverData);
                 Log::info("Created new driver: {$driverName}");
                 
-                if ($route) {
-                    $driver->routes()->attach($route->id);
+                // Attach route relationships if any routes were found
+                if (!empty($routeIds)) {
+                    $driver->routes()->attach($routeIds);
+                    Log::info("Attached routes to new driver: {$driverName}", ['route_ids' => $routeIds]);
                 }
                 
-                if ($unit) {
-                    $driver->units()->attach($unit->id);
+                // Attach unit relationships if any units were found
+                if (!empty($unitIds)) {
+                    $driver->units()->attach($unitIds);
+                    Log::info("Attached units to new driver: {$driverName}", ['unit_ids' => $unitIds]);
                 }
             }
         }

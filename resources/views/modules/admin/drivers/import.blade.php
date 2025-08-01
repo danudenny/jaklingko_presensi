@@ -12,9 +12,9 @@
                     <i class="fas fa-arrow-left mr-1"></i>
                     Kembali
                 </a>
-                <a href="{{ asset('templates/driver_import_template.xlsx') }}" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 active:bg-green-700 focus:outline-none focus:border-green-700 focus:ring ring-green-300 disabled:opacity-25 transition ease-in-out duration-150">
+                <a href="{{ route('drivers.import.template') }}" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-500 active:bg-green-700 focus:outline-none focus:border-green-700 focus:ring ring-green-300 disabled:opacity-25 transition ease-in-out duration-150">
                     <i class="fas fa-download mr-1"></i>
-                    Download Template
+                    Download Template (Real Data)
                 </a>
             </div>
         </x-slot>
@@ -33,10 +33,13 @@
                             </div>
                             <div class="ml-3">
                                 <p class="text-sm text-blue-700">
-                                    Silakan unduh template Excel terlebih dahulu. Pastikan data yang dimasukkan sesuai dengan format yang telah ditentukan.
+                                    Silakan unduh template Excel terlebih dahulu. Template ini berisi data pengemudi yang sudah ada di sistem. Pastikan data yang dimasukkan sesuai dengan format yang telah ditentukan.
                                 </p>
                                 <p class="text-sm text-blue-700 mt-2">
                                     <strong>Catatan:</strong> Jika nama pengemudi sudah ada di sistem, data akan diperbarui. Jika belum ada, data baru akan ditambahkan.
+                                </p>
+                                <p class="text-sm text-blue-700 mt-2">
+                                    <strong>Format Multiple Rute & Unit:</strong> Untuk pengemudi dengan beberapa rute atau unit, pisahkan dengan koma. Contoh: "JAK1, JAK2" atau "B1234, B5678".
                                 </p>
                             </div>
                         </div>
@@ -72,8 +75,8 @@
                             <h3 class="text-sm font-medium text-gray-700 mb-2">Format Kolom Excel:</h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-gray-600">
                                 <div>
-                                    <p>- Route (No. Rute)</p>
-                                    <p>- Unit (No. Unit)</p>
+                                    <p>- Route (No. Rute, bisa dipisahkan dengan koma untuk multiple rute)</p>
+                                    <p>- Unit (No. Unit, bisa dipisahkan dengan koma untuk multiple unit)</p>
                                     <p>- NAMA PRAMUDI</p>
                                     <p>- Type (Batangan/Cadangan)</p>
                                     <p>- No KTP</p>

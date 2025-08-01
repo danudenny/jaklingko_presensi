@@ -81,8 +81,38 @@
                 </div>
 
                 <!-- Right Column: Route and Unit Selection -->
-                <div x-data="unitSelector()">
-                    <h2 class="text-lg font-medium text-gray-900 mb-4">Penugasan Unit</h2>
+                <div x-data="routeUnitSelector()">
+                    <h2 class="text-lg font-medium text-gray-900 mb-4">Penugasan Rute & Unit</h2>
+
+                    <!-- Routes Selection -->
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between mb-2">
+                            <x-input-label for="routes" value="Rute" class="text-base font-medium" />
+                            <span class="text-xs text-gray-500" x-text="selectedRoutes.length + ' rute dipilih'"></span>
+                        </div>
+
+                        <div class="border border-gray-300 rounded-md p-4 max-h-60 overflow-y-auto bg-white">
+                            @foreach($routes as $route)
+                                <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="route_{{ $route->id }}" value="{{ $route->id }}" name="routes[]" class="route-checkbox h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" @change="handleRouteChange($event)" {{ in_array($route->id, old('routes', [])) ? 'checked' : '' }}>
+                                        <label for="route_{{ $route->id }}" class="ml-2 block text-sm text-gray-900">
+                                            {{ $route->route_number }} - {{ $route->name }}
+                                        </label>
+                                    </div>
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $route->status == 'aktif' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                        {{ ucfirst($route->status) }}
+                                    </span>
+                                </div>
+                            @endforeach
+                        </div>
+                        <div class="mt-1 text-xs text-gray-500">
+                            <span x-show="driver_type === 'batangan'" class="text-amber-600">
+                                <i class="fas fa-exclamation-triangle mr-1"></i> Driver batangan hanya dapat ditugaskan ke 1 rute
+                            </span>
+                        </div>
+                        <x-input-error :message="$errors->first('routes')" class="mt-2" />
+                    </div>
 
                     <!-- Units Selection -->
                     <div class="mb-4">
@@ -152,23 +182,30 @@
 
 @push('scripts')
 <script>
-    function unitSelector() {
+    function routeUnitSelector() {
         return {
             unitSearch: '',
             driver_type: document.getElementById('type').value,
             availableUnits: [],
             selectedUnits: [],
+            selectedRoutes: [],
             loadingUnits: false,
             
             init() {
-                this.loadAllUnits();
+                // Initialize selectedRoutes from any pre-checked route checkboxes
+                this.selectedRoutes = Array.from(document.querySelectorAll('.route-checkbox:checked')).map(cb => cb.value);
+                
+                // Load units for any pre-selected routes
+                if (this.selectedRoutes.length > 0) {
+                    this.selectedRoutes.forEach(routeId => this.loadUnitsForRoute(routeId));
+                }
             },
             
-            async loadAllUnits() {
+            async loadUnitsForRoute(routeId) {
                 this.loadingUnits = true;
                 try {
-                    const url = '/drivers/get-all-units';
-                    const response = await fetch(url, {
+                    const url = '/drivers/get-units-for-route';
+                    const response = await fetch(`${url}?route_id=${routeId}`, {
                         headers: {
                             'X-Requested-With': 'XMLHttpRequest',
                             'Accept': 'application/json',
@@ -183,14 +220,58 @@
                     const data = await response.json();
                     
                     if (data.success) {
-                        this.availableUnits = data.data;
+                        // Add new units to availableUnits if they're not already there
+                        data.data.forEach(unit => {
+                            if (!this.availableUnits.some(u => u.id === unit.id)) {
+                                this.availableUnits.push(unit);
+                            }
+                        });
                     } else {
-                        console.error('Error loading units:', data);
+                        console.error('Error loading units for route:', data);
                     }
                 } catch (error) {
-                    console.error('Error loading units:', error);
+                    console.error('Error loading units for route:', error);
                 } finally {
                     this.loadingUnits = false;
+                }
+            },
+            
+            handleRouteChange(event) {
+                const routeId = event.target.value;
+                const isChecked = event.target.checked;
+                
+                if (isChecked) {
+                    // For batangan drivers, only allow one route
+                    if (this.driver_type === 'batangan' && this.selectedRoutes.length > 0) {
+                        // Uncheck previously selected route
+                        const previousRouteId = this.selectedRoutes[0];
+                        const previousCheckbox = document.getElementById('route_' + previousRouteId);
+                        if (previousCheckbox) {
+                            previousCheckbox.checked = false;
+                        }
+                        
+                        // Clear selectedRoutes array
+                        this.selectedRoutes = [routeId];
+                    } else {
+                        // For cadangan drivers, allow multiple routes
+                        if (!this.selectedRoutes.includes(routeId)) {
+                            this.selectedRoutes.push(routeId);
+                        }
+                    }
+
+                    // Load units for this route
+                    this.loadUnitsForRoute(routeId);
+                } else {
+                    // Remove from selectedRoutes
+                    this.selectedRoutes = this.selectedRoutes.filter(id => id !== routeId);
+
+                    // Remove units associated with this route from availableUnits
+                    // This is a simplified approach; in a real app, you'd need to track which units came from which route
+                    // For now, we'll just reload all units for the remaining selected routes
+                    this.availableUnits = [];
+                    if (this.selectedRoutes.length > 0) {
+                        this.selectedRoutes.forEach(id => this.loadUnitsForRoute(id));
+                    }
                 }
             },
             
@@ -209,11 +290,24 @@
             },
 
             selectAllUnits() {
-                this.selectedUnits = this.availableUnits.map(u => u.id.toString());
+                this.selectedUnits = this.filteredUnits.map(unit => unit.id.toString());
+                
+                // Update checkbox states in the DOM
+                this.filteredUnits.forEach(unit => {
+                    const checkbox = document.getElementById('unit_' + unit.id);
+                    if (checkbox) {
+                        checkbox.checked = true;
+                    }
+                });
             },
 
             clearUnitSelections() {
                 this.selectedUnits = [];
+                
+                // Update checkbox states in the DOM
+                document.querySelectorAll('.unit-checkbox').forEach(checkbox => {
+                    checkbox.checked = false;
+                });
             },
             
             get filteredUnits() {

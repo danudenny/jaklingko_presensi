@@ -60,8 +60,11 @@ Route::middleware('auth')->group(function () {
     // Driver routes
     Route::get('/drivers/import', [DriverController::class, 'importForm'])->name('drivers.import');
     Route::post('/drivers/import', [DriverController::class, 'import'])->name('drivers.import.process');
+    Route::get('/drivers/import/template', [DriverController::class, 'generateImportTemplate'])->name('drivers.import.template');
+    Route::get('/drivers/export', [DriverController::class, 'exportToExcel'])->name('drivers.export');
     Route::get('/drivers/get-units-for-route', [DriverController::class, 'getUnitsForRoute'])->name('drivers.get-units-for-route');
     Route::get('/drivers/get-all-units', [DriverController::class, 'getAllUnits'])->name('drivers.get-all-units');
+    Route::post('/drivers/{driver}/toggle-status', [DriverController::class, 'toggleStatus'])->name('drivers.toggle-status');
     Route::resource('drivers', DriverController::class);
     Route::get('/driver/schedule/settings', [DriverScheduleSettingsController::class, 'index'])->name('driver.schedule.settings');
     Route::post('/driver/schedule/settings/update', [DriverScheduleSettingsController::class, 'update'])->name('driver.schedule.settings.update');

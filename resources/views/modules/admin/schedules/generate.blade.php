@@ -348,13 +348,13 @@
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;  // +1 to include start day
                     
                     // If the range is more than 15 days (service limitation), adjust the end date
-                    if (diffDays > 15) {
-                        const maxDate = new Date(startDate);
-                        maxDate.setDate(maxDate.getDate() + 14);  // +14 since we're including start date
-                        instance.setDate([startDate, maxDate]);
-                        alert("Maksimal rentang waktu adalah 15 hari untuk pembuatan jadwal. Tanggal akhir telah disesuaikan.");
-                        return;
-                    }
+                    // if (diffDays > 15) {
+                    //     const maxDate = new Date(startDate);
+                    //     maxDate.setDate(maxDate.getDate() + 14);  // +14 since we're including start date
+                    //     instance.setDate([startDate, maxDate]);
+                    //     alert("Maksimal rentang waktu adalah 15 hari untuk pembuatan jadwal. Tanggal akhir telah disesuaikan.");
+                    //     return;
+                    // }
                     
                     // Update hidden inputs
                     $("#start_date").val(formatDate(startDate));

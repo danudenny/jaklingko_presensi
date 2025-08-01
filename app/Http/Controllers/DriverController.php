@@ -12,6 +12,8 @@ use Illuminate\Foundation\Application;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class DriverController extends Controller
 {
@@ -161,6 +163,8 @@ class DriverController extends Controller
             'status' => 'required|string|in:aktif,nonaktif',
             'units' => 'required|array',
             'units.*' => 'exists:units,id',
+            'routes' => 'nullable|array',
+            'routes.*' => 'exists:routes,id',
         ]);
 
         $driver = Driver::create([
@@ -178,17 +182,23 @@ class DriverController extends Controller
         // Attach units
         $driver->units()->attach($validated['units']);
         
-        // Get routes from units and attach them to the driver
+        // Use routes directly selected from the form if available, otherwise get from units
         $routeIds = [];
-        $units = Unit::whereIn('id', $validated['units'])->get();
         
-        foreach ($units as $unit) {
-            $unitRoutes = $unit->routes()->pluck('routes.id')->toArray();
-            $routeIds = array_merge($routeIds, $unitRoutes);
+        if ($request->has('routes') && is_array($request->routes)) {
+            $routeIds = $request->routes;
+        } else {
+            // Get routes from units if no routes were directly selected
+            $units = Unit::whereIn('id', $validated['units'])->get();
+            
+            foreach ($units as $unit) {
+                $unitRoutes = $unit->routes()->pluck('routes.id')->toArray();
+                $routeIds = array_merge($routeIds, $unitRoutes);
+            }
+            
+            // Remove duplicates
+            $routeIds = array_unique($routeIds);
         }
-        
-        // Remove duplicates
-        $routeIds = array_unique($routeIds);
         
         // Check if driver type is 'batangan' and trying to assign more than 1 route
         if ($validated['type'] === 'batangan' && count($routeIds) > 1) {
@@ -358,6 +368,267 @@ class DriverController extends Controller
             return redirect()->back()
                 ->with('error', 'Import failed: ' . $e->getMessage())
                 ->withInput();
+        }
+    }
+
+    /**
+     * Generate import template with existing driver data
+     */
+    public function generateImportTemplate()
+    {
+        try {
+            // Create a new spreadsheet
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            
+            // Set headers
+            $headers = [
+                'Route', 'Unit', 'NAMA PRAMUDI', 'Type', 'No KTP', 'No KPP', 'No KK', 
+                'No Rekening', 'Telepon', 'Email', 'Status'
+            ];
+            
+            // Apply header styling
+            $sheet->getStyle('A1:K1')->getFont()->setBold(true);
+            $sheet->getStyle('A1:K1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
+            $sheet->getStyle('A1:K1')->getFill()->getStartColor()->setRGB('DDEBF7');
+            
+            // Set column widths
+            $sheet->getColumnDimension('A')->setWidth(10);
+            $sheet->getColumnDimension('B')->setWidth(10);
+            $sheet->getColumnDimension('C')->setWidth(25);
+            $sheet->getColumnDimension('D')->setWidth(15);
+            $sheet->getColumnDimension('E')->setWidth(20);
+            $sheet->getColumnDimension('F')->setWidth(15);
+            $sheet->getColumnDimension('G')->setWidth(15);
+            $sheet->getColumnDimension('H')->setWidth(20);
+            $sheet->getColumnDimension('I')->setWidth(15);
+            $sheet->getColumnDimension('J')->setWidth(25);
+            $sheet->getColumnDimension('K')->setWidth(10);
+            
+            // Set headers
+            for ($i = 0; $i < count($headers); $i++) {
+                $sheet->setCellValue(chr(65 + $i) . '1', $headers[$i]);
+            }
+            
+            // Get existing drivers with their relationships
+            $drivers = Driver::with(['routes', 'units'])->orderBy('name')->get();
+            
+            // Add driver data
+            $row = 2;
+            foreach ($drivers as $driver) {
+                // Get all routes and units for this driver as comma-separated strings
+                $routeNumbers = $driver->routes->pluck('route_number')->implode(', ');
+                $unitNumbers = $driver->units->pluck('unit_number')->implode(', ');
+                
+                $sheet->setCellValue('A' . $row, $routeNumbers);
+                $sheet->setCellValue('B' . $row, $unitNumbers);
+                $sheet->setCellValue('C' . $row, $driver->name);
+                $sheet->setCellValue('D' . $row, ucfirst($driver->type));
+                $sheet->setCellValue('E' . $row, $driver->ktp);
+                $sheet->setCellValue('F' . $row, $driver->kpp);
+                $sheet->setCellValue('G' . $row, $driver->kk);
+                $sheet->setCellValue('H' . $row, $driver->rekening);
+                $sheet->setCellValue('I' . $row, $driver->phone);
+                $sheet->setCellValue('J' . $row, $driver->email);
+                $sheet->setCellValue('K' . $row, ucfirst($driver->status));
+                
+                $row++;
+            }
+            
+            // Add an empty row for new driver template
+            $sheet->setCellValue('C' . $row, '(New Driver Name)');
+            $sheet->setCellValue('D' . $row, 'Batangan');
+            $sheet->setCellValue('K' . $row, 'Aktif');
+            
+            // Apply styling to the table
+            $lastRow = $row;
+            $styleArray = [
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                    ],
+                ],
+            ];
+            $sheet->getStyle('A1:K' . $lastRow)->applyFromArray($styleArray);
+            
+            // Create writer
+            $writer = new Xlsx($spreadsheet);
+            
+            // Set the appropriate headers for download
+            $filename = 'driver_import_template_' . date('Y-m-d') . '.xlsx';
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment;filename="' . $filename . '"');
+            header('Cache-Control: max-age=0');
+            
+            // Save to output
+            $writer->save('php://output');
+            exit;
+            
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->with('error', 'Failed to generate template: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Toggle driver status between aktif and nonaktif
+     */
+    public function toggleStatus(Request $request, Driver $driver): JsonResponse
+    {
+        try {
+            // Toggle between aktif and nonaktif
+            $newStatus = $driver->status === 'aktif' ? 'nonaktif' : 'aktif';
+            
+            // Update the driver status
+            $driver->status = $newStatus;
+            $driver->save();
+            
+            return response()->json([
+                'success' => true,
+                'message' => "Status pengemudi berhasil diubah menjadi " . ucfirst($newStatus),
+                'status' => $newStatus,
+                'statusLabel' => ucfirst($newStatus === 'aktif' ? 'Aktif' : 'Non Aktif')
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengubah status: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    /**
+     * Export drivers data to Excel
+     */
+    public function exportToExcel(Request $request)
+    {
+        try {
+            // Create new spreadsheet
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            
+            // Define headers
+            $headers = [
+                'No', 'Nama', 'Tipe', 'Rute', 'Unit', 'No KTP', 'No KPP', 'No KK',
+                'No Rekening', 'Telepon', 'Email', 'Status', 'Tanggal Dibuat'
+            ];
+            
+            // Apply header styling
+            $sheet->getStyle('A1:M1')->getFont()->setBold(true);
+            $sheet->getStyle('A1:M1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
+            $sheet->getStyle('A1:M1')->getFill()->getStartColor()->setRGB('DDEBF7');
+            
+            // Set column widths
+            $sheet->getColumnDimension('A')->setWidth(5);
+            $sheet->getColumnDimension('B')->setWidth(25);
+            $sheet->getColumnDimension('C')->setWidth(15);
+            $sheet->getColumnDimension('D')->setWidth(20);
+            $sheet->getColumnDimension('E')->setWidth(20);
+            $sheet->getColumnDimension('F')->setWidth(20);
+            $sheet->getColumnDimension('G')->setWidth(15);
+            $sheet->getColumnDimension('H')->setWidth(15);
+            $sheet->getColumnDimension('I')->setWidth(20);
+            $sheet->getColumnDimension('J')->setWidth(15);
+            $sheet->getColumnDimension('K')->setWidth(25);
+            $sheet->getColumnDimension('L')->setWidth(15);
+            $sheet->getColumnDimension('M')->setWidth(20);
+            
+            // Set headers
+            for ($i = 0; $i < count($headers); $i++) {
+                $sheet->setCellValue(chr(65 + $i) . '1', $headers[$i]);
+            }
+            
+            // Build query with filters from request
+            $query = Driver::with(['units', 'routes']);
+
+            // Filter by name
+            if ($request->has('name') && !empty($request->name)) {
+                $query->where('name', 'like', '%' . $request->name . '%');
+            }
+
+            // Filter by KTP
+            if ($request->has('ktp') && !empty($request->ktp)) {
+                $query->where('ktp', 'like', '%' . $request->ktp . '%');
+            }
+
+            // Filter by type
+            if ($request->has('type') && !empty($request->type)) {
+                $query->where('type', $request->type);
+            }
+
+            // Filter by status
+            if ($request->has('status') && !empty($request->status)) {
+                $query->where('status', $request->status);
+            }
+
+            // Filter by unit
+            if ($request->has('unit') && !empty($request->unit)) {
+                $query->whereHas('units', function ($q) use ($request) {
+                    $q->where('units.id', $request->unit);
+                });
+            }
+
+            // Filter by route
+            if ($request->has('route') && !empty($request->route)) {
+                $query->whereHas('routes', function ($q) use ($request) {
+                    $q->where('routes.id', $request->route);
+                });
+            }
+            
+            // Get drivers data
+            $drivers = $query->orderBy('name')->get();
+            
+            // Add driver data
+            $row = 2;
+            foreach ($drivers as $index => $driver) {
+                // Get all routes and units for this driver
+                $routeNumbers = $driver->routes->pluck('route_number')->implode(', ');
+                $unitNumbers = $driver->units->pluck('unit_number')->implode(', ');
+                
+                $sheet->setCellValue('A' . $row, $index + 1);
+                $sheet->setCellValue('B' . $row, $driver->name);
+                $sheet->setCellValue('C' . $row, ucfirst($driver->type));
+                $sheet->setCellValue('D' . $row, $routeNumbers);
+                $sheet->setCellValue('E' . $row, $unitNumbers);
+                $sheet->setCellValue('F' . $row, $driver->ktp);
+                $sheet->setCellValue('G' . $row, $driver->kpp);
+                $sheet->setCellValue('H' . $row, $driver->kk);
+                $sheet->setCellValue('I' . $row, $driver->rekening);
+                $sheet->setCellValue('J' . $row, $driver->phone);
+                $sheet->setCellValue('K' . $row, $driver->email);
+                $sheet->setCellValue('L' . $row, ucfirst($driver->status));
+                $sheet->setCellValue('M' . $row, $driver->created_at ? $driver->created_at->format('Y-m-d H:i:s') : '');
+                
+                $row++;
+            }
+            
+            // Apply styling to the table
+            $lastRow = $row - 1;
+            $styleArray = [
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                    ],
+                ],
+            ];
+            $sheet->getStyle('A1:M' . $lastRow)->applyFromArray($styleArray);
+            
+            // Create writer
+            $writer = new Xlsx($spreadsheet);
+            
+            // Set the appropriate headers for download
+            $filename = 'daftar_pengemudi_' . date('Y-m-d') . '.xlsx';
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment;filename="' . $filename . '"');
+            header('Cache-Control: max-age=0');
+            
+            // Save to output
+            $writer->save('php://output');
+            exit;
+            
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->with('error', 'Failed to export data: ' . $e->getMessage());
         }
     }
 }

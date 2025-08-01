@@ -14,7 +14,6 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\View;
-use Illuminate\Contracts\View\View as ViewContract;
 use Maatwebsite\Excel\Facades\Excel;
 use Maatwebsite\Excel\Concerns\FromView;
 use Maatwebsite\Excel\Concerns\WithTitle;
@@ -121,7 +120,7 @@ class GlobalKilometerReportController extends Controller
                 $unitId = $report->unit_id;
                 $routeId = $report->route_id;
                 $driverId = $report->driver_id;
-                $report_date = $report->report_report_date->format('Y-m-d');
+                $date = $report->date->format('Y-m-d');
                 
                 // Initialize arrays if not set
                 if (!isset($reportsByRouteUnitDriverDate[$routeId])) {
@@ -201,7 +200,7 @@ class GlobalKilometerReportController extends Controller
         $schedules = Schedule::whereBetween('schedule_date', [$startDate, $endDate])
             ->get()
             ->groupBy(function ($schedule) {
-                return $schedule->schedule_date->format('Y-m-d');
+                return $schedule->date->format('Y-m-d');
             });
         
         $title = "Laporan Kilometer Global - ";
@@ -273,7 +272,7 @@ class GlobalKilometerReportController extends Controller
                 $this->data = $data;
             }
             
-            public function view(): ViewContract
+            public function view(): View
             {
                 return view('modules.admin.global-kilometer-reports.exports.excel', $this->data);
             }
@@ -477,7 +476,7 @@ class GlobalKilometerReportController extends Controller
                 $unitId = $report->unit_id;
                 $routeId = $report->route_id;
                 $driverId = $report->driver_id;
-                $date = $report->report_date->format('Y-m-d');
+                $date = $report->date->format('Y-m-d');
                 
                 // Initialize arrays if not set
                 if (!isset($reportsByRouteUnitDriverDate[$routeId])) {
