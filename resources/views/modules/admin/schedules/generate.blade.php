@@ -623,7 +623,17 @@
         const text = document.getElementById('generation-type-text');
         
         if (!routeId) {
-            indicator.classList.add('hidden');
+            text.textContent = 'Mode: Semua Rute - Jadwal akan dibuat untuk semua rute aktif';
+            indicator.classList.remove('hidden');
+            // Set purple classes for all routes mode
+            indicator.classList.remove('bg-blue-50', 'border-blue-200', 'bg-green-50', 'border-green-200');
+            indicator.classList.add('bg-purple-50', 'border-purple-200');
+            // Update icon color
+            const icon = indicator.querySelector('i');
+            if (icon) {
+                icon.classList.remove('text-blue-500', 'text-green-500');
+                icon.classList.add('text-purple-500');
+            }
             return;
         }
         
@@ -657,20 +667,66 @@
     $(document).ready(function() {
         // Add form validation
         $('#generate-form').on('submit', function(e) {
-            // Validate route selection
+            // Get form values
             const routeId = $('#route_id').val();
             const startDate = $('#start_date').val();
             const endDate = $('#end_date').val();
+            const clearExisting = $('#clear_existing').is(':checked');
             
-            if (!routeId) {
-                toastr.error('Silakan pilih rute terlebih dahulu.', 'Error');
+            // Validate date selection
+            if (!startDate || !endDate) {
+                toastr.error('Silakan pilih tanggal mulai dan tanggal akhir terlebih dahulu.', 'Error');
                 e.preventDefault();
                 return false;
             }
             
-            if (!startDate || !endDate) {
-                toastr.error('Silakan pilih tanggal mulai dan tanggal akhir terlebih dahulu.', 'Error');
-                e.preventDefault();
+            // If no route is selected, we'll handle the "all routes" case
+            if (!routeId) {
+                e.preventDefault(); // Prevent default form submission
+                
+                // Show confirmation dialog
+                if (!confirm('Anda akan membuat jadwal untuk SEMUA RUTE AKTIF. Proses ini mungkin memerlukan waktu yang cukup lama. Lanjutkan?')) {
+                    return false;
+                }
+                
+                // Show loading state
+                $('#button-icon').addClass('hidden');
+                $('#button-text').text('Memproses Semua Rute...');
+                $('#loading-spinner').removeClass('hidden');
+                $('#submit-button').attr('disabled', true).addClass('opacity-75');
+                
+                // Get all active routes from the select options
+                const routeSelect = document.getElementById('route_id');
+                const routes = [];
+                
+                // Skip the first option which is the placeholder
+                for (let i = 1; i < routeSelect.options.length; i++) {
+                    const option = routeSelect.options[i];
+                    routes.push({
+                        id: option.value,
+                        route_number: option.text
+                    });
+                }
+                
+                if (routes.length === 0) {
+                    toastr.error('Tidak ada rute aktif yang ditemukan.', 'Error');
+                    $('#button-icon').removeClass('hidden');
+                    $('#button-text').text('Buat Jadwal');
+                    $('#loading-spinner').addClass('hidden');
+                    $('#submit-button').attr('disabled', false).removeClass('opacity-75');
+                    return;
+                }
+                
+                // Show info about processing all routes
+                toastr.info(
+                    `Memproses pembuatan jadwal untuk ${routes.length} rute aktif. ` +
+                    `Proses ini mungkin memerlukan waktu beberapa saat.`,
+                    'Memproses Semua Rute'
+                );
+                
+                // Process routes sequentially
+                processRoutes(routes, 0, startDate, endDate, clearExisting);
+                
                 return false;
             }
 
@@ -688,7 +744,13 @@
             
             // Show toast notification with generation type info
             const unitId = $('#unit_id').val();
-            const generationType = unitId ? 'unit spesifik' : 'seluruh rute';
+            let generationType;
+            
+            if (unitId) {
+                generationType = 'unit spesifik';
+            } else {
+                generationType = 'seluruh rute';
+            }
             
             toastr.info(
                 `Memproses pembuatan jadwal ${generationType} untuk ${diffDays} hari dari ${formatDisplayDate(start)} hingga ${formatDisplayDate(end)}. ` +
@@ -698,7 +760,7 @@
             
             // Log form submission for debugging
             console.log('Form submitted with dates:', {
-                route_id: routeId,
+                route_id: routeId || 'all_routes',
                 unit_id: unitId || 'all_units_in_route',
                 start_date: startDate,
                 end_date: endDate,
@@ -715,6 +777,56 @@
             updateGenerationTypeIndicator(routeId, unitId);
         });
 
+        // Function to process routes sequentially
+        function processRoutes(routes, index, startDate, endDate, clearExisting) {
+            if (index >= routes.length) {
+                // All routes processed
+                toastr.success('Pembuatan jadwal untuk semua rute selesai!', 'Sukses');
+                $('#button-icon').removeClass('hidden');
+                $('#button-text').text('Buat Jadwal');
+                $('#loading-spinner').addClass('hidden');
+                $('#submit-button').attr('disabled', false).removeClass('opacity-75');
+                
+                // Redirect to schedules index after all routes are processed
+                window.location.href = '{{ route("schedules.index") }}';
+                return;
+            }
+            
+            const route = routes[index];
+            const routeId = route.id;
+            const routeName = route.route_number;
+            
+            // Update progress indicator
+            $('#button-text').text(`Memproses Rute ${index + 1}/${routes.length}: ${routeName}`);
+            
+            // Submit form for this route
+            $.ajax({
+                url: '{{ route("schedules.generate") }}',
+                type: 'POST',
+                data: {
+                    _token: '{{ csrf_token() }}',
+                    route_id: routeId,
+                    start_date: startDate,
+                    end_date: endDate,
+                    clear_existing: clearExisting ? 1 : 0
+                },
+                success: function(response) {
+                    console.log(`Route ${routeName} processed successfully`);
+                    toastr.info(`Rute ${routeName} berhasil diproses (${index + 1}/${routes.length})`, 'Proses');
+                    
+                    // Process next route
+                    processRoutes(routes, index + 1, startDate, endDate, clearExisting);
+                },
+                error: function(error) {
+                    console.error(`Error processing route ${routeName}:`, error);
+                    toastr.warning(`Gagal memproses rute ${routeName}. Melanjutkan ke rute berikutnya.`, 'Peringatan');
+                    
+                    // Continue with next route despite error
+                    processRoutes(routes, index + 1, startDate, endDate, clearExisting);
+                }
+            });
+        }
+        
         // ...existing initialization code...
     });
 </script>
