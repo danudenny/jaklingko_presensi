@@ -411,12 +411,12 @@ class ScheduleGeneratorService
         
         // Apply unit-based pattern offset to reduce conflicts across units
         $unitOffset = $this->getUnitPatternOffset($unitId);
-        $patternPosition = ((($dayPosition - 1) + $unitOffset) % 15) + 1; // Cycle every 15 days with offset
+        $patternPosition = ((($dayPosition - 1) + $unitOffset) % 20) + 1; // Cycle every 20 days with offset
 
         // Get pattern for this day position
         $pattern = $this->getPatternForDay($patternPosition);
         
-        Log::info("Pattern Day {$patternPosition}/15 (Unit {$unitId} offset: {$unitOffset}): Driver1={$pattern['driver1']}, Driver2={$pattern['driver2']}");
+        Log::info("Pattern Day {$patternPosition}/20 (Unit {$unitId} offset: {$unitOffset}): Driver1={$pattern['driver1']}, Driver2={$pattern['driver2']}");
         
         // Sort drivers consistently for pattern assignment
         $sortedDrivers = $batanganDrivers->sortBy('id')->values();
@@ -847,19 +847,20 @@ class ScheduleGeneratorService
     }
 
     /**
-     * Get the pattern for a specific day (1-15)
+     * Get the pattern for a specific day (1-20)
      *
-     * @param int $day Day position (1-15)
+     * @param int $day Day position (1-20)
      * @return array Pattern for driver1 and driver2
      */
     private function getPatternForDay(int $day): array
     {
-        // Updated Pattern for 15 days:
-        // D1  D2  D3  D4  D5  D6  D7  D8  D9  D10 D11 D12 D13 D14 D15
-        // S   S   -   P   P   P   P   P   P   P   P   P   P   P   S   (Driver 1)
-        // P   P   P   S   S   S   S   S   S   S   S   S   S   S   -   (Driver 2)
+        // Extended Pattern for 20 days:
+        // D1  D2  D3  D4  D5  D6  D7  D8  D9  D10 D11 D12 D13 D14 D15 D16 D17 D18 D19 D20
+        // S   S   -   P   P   P   P   P   P   P   P   P   P   P   S   S   -   P   P   P   (Driver 1)
+        // P   P   P   S   S   S   S   S   S   S   S   S   S   S   -   P   S   S   S   S   (Driver 2)
         
         $patterns = [
+            // First 15 days (original pattern)
             1  => ['driver1' => self::SHIFT_SIANG, 'driver2' => self::SHIFT_PAGI],
             2  => ['driver1' => self::SHIFT_SIANG, 'driver2' => self::SHIFT_PAGI],
             3  => ['driver1' => '-', 'driver2' => self::SHIFT_PAGI],
@@ -875,6 +876,13 @@ class ScheduleGeneratorService
             13 => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
             14 => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
             15 => ['driver1' => self::SHIFT_SIANG, 'driver2' => '-'],
+            
+            // Extended pattern for days 16-20
+            16 => ['driver1' => self::SHIFT_SIANG, 'driver2' => self::SHIFT_PAGI],
+            17 => ['driver1' => '-', 'driver2' => self::SHIFT_SIANG],
+            18 => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
+            19 => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
+            20 => ['driver1' => self::SHIFT_PAGI, 'driver2' => self::SHIFT_SIANG],
         ];
 
         return $patterns[$day] ?? ['driver1' => '-', 'driver2' => '-'];
@@ -882,17 +890,17 @@ class ScheduleGeneratorService
 
     /**
      * Get unit-specific pattern offset to prevent conflicts across units
-     * This ensures each unit has a different starting point in the 15-day cycle,
+     * This ensures each unit has a different starting point in the 20-day cycle,
      * reducing scheduling conflicts for cadangan drivers who work multiple units.
      *
      * @param int $unitId
-     * @return int Offset value (0-14)
+     * @return int Offset value (0-19)
      */
     private function getUnitPatternOffset(int $unitId): int
     {
         // Use hash-based approach for better distribution across units
         // This ensures consistent offset for same unit across generations
-        return abs(crc32("unit_pattern_$unitId")) % 15;
+        return abs(crc32("unit_pattern_$unitId")) % 20;
     }
 
     /**
