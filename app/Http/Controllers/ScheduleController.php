@@ -526,7 +526,28 @@ class ScheduleController extends Controller
         // Get schedules - only include those with status = 'scheduled'
         $schedules = $query->where('status', 'scheduled')->get();
         
-        $export = new SchedulesPdfExport($schedules);
+        // Prepare filters array for PDF export
+        $filters = [];
+        if ($selectedRoute) {
+            $route = \App\Models\Route::find($selectedRoute);
+            $filters['routes'] = [$route->name ?? 'Unknown Route'];
+        }
+        if ($selectedDriver) {
+            $driver = \App\Models\Driver::find($selectedDriver);
+            $filters['drivers'] = [$driver->name ?? 'Unknown Driver'];
+        }
+        if ($selectedUnit) {
+            $unit = \App\Models\Unit::find($selectedUnit);
+            $filters['units'] = [$unit->unit_number ?? 'Unknown Unit'];
+        }
+        if ($selectedDriverType) {
+            $filters['driver_types'] = [ucfirst($selectedDriverType)];
+        }
+        if ($selectedShift) {
+            $filters['shifts'] = [ucfirst($selectedShift)];
+        }
+        
+        $export = new SchedulesPdfExport($schedules, $startDate->format('Y-m-d'), $endDate->format('Y-m-d'), $filters);
         return $export->download();
     }
 

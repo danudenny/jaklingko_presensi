@@ -101,7 +101,7 @@
         <tr>
             <td>
                 <div class="label">Total Jadwal</div>
-                <div class="value">{{ $schedules->count() }}</div>
+                <div class="value">{{ $totalSchedules }}</div>
             </td>
             <td>
                 <div class="label">Shift Pagi</div>
@@ -122,38 +122,58 @@
         </tr>
     </table>
     
-    <table class="data">
-        <thead>
-            <tr>
-                <th>No.</th>
-                <th>Tanggal</th>
-                <th>Pengemudi</th>
-                <th>Tipe</th>
-                <th>Rute</th>
-                <th>Unit</th>
-                <th>Plat Nomor</th>
-                <th>Shift</th>
-                <th>Status</th>
-                <th>Backup</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($schedules as $index => $schedule)
+    @foreach($schedulesByUnit as $unitNumber => $unitSchedules)
+        @if(!$loop->first)
+            <div class="page-break"></div>
+        @endif
+        
+        <!-- Unit Header -->
+        @php
+            $firstSchedule = $unitSchedules->first();
+            $routeNumber = $firstSchedule && $firstSchedule->route ? $firstSchedule->route->route_number : 'N/A';
+        @endphp
+        <div style="margin: 20px 0 15px 0; padding: 10px; background-color: #f8f9fa; border-left: 4px solid #007bff;">
+            <h2 style="margin: 0; font-size: 16px; color: #007bff;">{{ $routeNumber }} : KWK-{{ $unitNumber }}</h2>
+            <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">
+                Total Jadwal: {{ $unitSchedules->count() }} | 
+                Pagi: {{ $unitSchedules->where('shift', 'pagi')->count() + $unitSchedules->where('shift', 'morning')->count() }} | 
+                Siang: {{ $unitSchedules->where('shift', 'siang')->count() + $unitSchedules->where('shift', 'evening')->count() }}
+            </p>
+        </div>
+
+        <table class="data">
+            <thead>
                 <tr>
-                    <td>{{ $index + 1 }}</td>
-                    <td>{{ \Carbon\Carbon::parse($schedule->schedule_date)->format('d/m/Y') }}</td>
-                    <td>{{ $schedule->driver->name }}</td>
-                    <td>{{ ucfirst($schedule->driver->type) }}</td>
-                    <td>{{ $schedule->route->name }} ({{ $schedule->route->route_number }})</td>
-                    <td>{{ $schedule->unit->unit_number }}</td>
-                    <td>{{ $schedule->unit->plate_number }}</td>
-                    <td>{{ ($schedule->shift == 'pagi' || $schedule->shift == 'morning') ? 'Pagi' : 'Siang' }}</td>
-                    <td>{{ ucfirst(str_replace('_', ' ', $schedule->status)) }}</td>
-                    <td>{{ $schedule->backup_driver_id ? $schedule->backupDriver->name : '-' }}</td>
+                    <th>No.</th>
+                    <th>Tanggal</th>
+                    <th>Pengemudi</th>
+                    <th>Tipe</th>
+                    <th>Plat Nomor</th>
+                    <th>Shift</th>
+                    <th>Status</th>
+                    <th>Backup</th>
                 </tr>
-            @endforeach
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach($unitSchedules as $index => $schedule)
+                    <tr>
+                        <td>{{ $index + 1 }}</td>
+                        <td>{{ \Carbon\Carbon::parse($schedule->schedule_date)->format('d/m/Y') }}</td>
+                        <td>{{ $schedule->driver ? $schedule->driver->name : '-' }}</td>
+                        <td>{{ $schedule->driver ? ucfirst($schedule->driver->type) : '-' }}</td>
+                        <td>{{ $schedule->unit ? $schedule->unit->plate_number : '-' }}</td>
+                        <td>{{ ($schedule->shift == 'pagi' || $schedule->shift == 'morning') ? 'Pagi' : 'Siang' }}</td>
+                        <td>{{ ucfirst(str_replace('_', ' ', $schedule->status)) }}</td>
+                        <td>{{ $schedule->backup_driver_id && $schedule->backupDriver ? $schedule->backupDriver->name : '-' }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+        
+        @if(!$loop->last)
+            <div style="margin: 20px 0;"></div>
+        @endif
+    @endforeach
     
     <div class="footer">
         Laporan ini dicetak pada {{ \Carbon\Carbon::now()->format('d M Y H:i:s') }}

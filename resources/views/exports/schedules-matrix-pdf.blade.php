@@ -226,140 +226,137 @@
     
     <div class="section-title">Pengemudi dengan Jadwal</div>
     
+    @foreach($routeUnitDrivers as $groupIndex => $routeUnitDriver)
+        @php
+            $unit = $routeUnitDriver['unit'];
+            $route = $routeUnitDriver['route'];
+            $driverShifts = $routeUnitDriver['driver_shifts'];
+        @endphp
+        
+        @if(!$loop->first)
+            <div class="page-break"></div>
+        @endif
+        
+        <!-- Unit Header -->
+        <div style="margin: 20px 0 15px 0; padding: 10px; background-color: #f8f9fa; border-left: 4px solid #007bff;">
+            <h2 style="margin: 0; font-size: 16px; color: #007bff;">{{ $route->route_number }} : KWK-{{ $unit->unit_number }}</h2>
+            <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">
+                Unit: {{ $unit->unit_number }} | Route: {{ $route->name }} | Total Pengemudi: {{ count($driverShifts) }}
+            </p>
+        </div>
+
+        <table class="matrix">
+            <thead>
+                <tr>
+                    <th style="width: 150px;">Pengemudi</th>
+                    <th style="width: 50px;">Shift</th>
+                    @foreach($dateHeaders as $date => $day)
+                        <th>{{ $day }}</th>
+                    @endforeach
+                    <th style="width: 50px;">Total</th>
+                </tr>
+            </thead>
+        <tbody>
+            @foreach($driverShifts as $driverId => $shifts)
+                @foreach($shifts as $shiftName => $shiftData)
+                    <tr class="{{ $shiftData['driver']->type === 'cadangan' ? 'cadangan-driver' : '' }} {{ $unit->is_renops ? 'unit-renops' : '' }}">
+                        <td class="info-cell driver-cell">
+                            <strong>{{ $shiftData['driver']->name }}</strong>
+                            <div class="driver-type">{{ ucfirst($shiftData['driver']->type) }}</div>
+                        </td>
+                        
+                        <td class="info-cell @if($shiftName == 'pagi') shift-pagi @else shift-siang @endif">
+                            {{ ucfirst($shiftName) }}
+                        </td>
+                        
+                        @foreach($dateRange as $date)
+                            <td>
+                                @if(in_array($date, $shiftData['dates'] ?? []))
+                                    @php
+                                        $checkboxClass = 'checked';
+                                        // Apply different colors based on driver type and unit properties
+                                        if ($shiftData['driver']->type === 'cadangan') {
+                                            $checkboxClass = 'cadangan';
+                                        } elseif ($unit->is_renops) {
+                                            $checkboxClass = 'renops';
+                                        } elseif ($shiftData['driver']->status === 'cuti' || $shiftData['driver']->status === 'on_leave') {
+                                            $checkboxClass = 'on-leave';
+                                        }
+                                    @endphp
+                                    <div class="checkbox {{ $checkboxClass }}"></div>
+                                @elseif(in_array($date, $shiftData['backup_dates'] ?? []))
+                                    <div class="checkbox backup"></div>
+                                @else
+                                    <div class="checkbox"></div>
+                                @endif
+                            </td>
+                        @endforeach
+                        
+                        <td class="total-column">
+                            @php
+                                $totalAssigned = count($shiftData['dates'] ?? []);
+                                $totalBackup = count($shiftData['backup_dates'] ?? []);
+                                $total = $totalAssigned + $totalBackup;
+                            @endphp
+                            {{ $total }}
+                        </td>
+                    </tr>
+                @endforeach
+            @endforeach
+            
+            @if(!$loop->last)
+                <tr class="spacer-row">
+                    <td colspan="{{ 4 + count($dateRange) + 1 }}" style="padding: 2px; border: none;"></td>
+                </tr>
+            @endif
+        </tbody>
+    </table>
+    
+    @if(!$loop->last)
+        <div style="margin: 20px 0;"></div>
+    @endif
+@endforeach
+    
+@if($unassignedDrivers->count() > 0)
+    <div class="section-title">Pengemudi Tanpa Jadwal ({{ $unassignedDrivers->count() }} orang)</div>
+    
     <table class="matrix">
         <thead>
             <tr>
-                <th style="width: 80px;">Unit</th>
-                <th style="width: 80px;">Rute</th>
-                <th style="width: 150px;">Pengemudi</th>
-                <th style="width: 50px;">Shift</th>
+                <th colspan="2">Informasi Pengemudi</th>
+                <th>Tipe</th>
                 @foreach($dateHeaders as $date => $day)
                     <th>{{ $day }}</th>
                 @endforeach
-                <th style="width: 50px;">Total</th>
+                <th>Total</th>
             </tr>
         </thead>
         <tbody>
-            @foreach($routeUnitDrivers as $index => $routeUnitDriver)
-                @php
-                    $unit = $routeUnitDriver['unit'];
-                    $route = $routeUnitDriver['route'];
-                    $driverShifts = $routeUnitDriver['driver_shifts'];
-                    $isFirstInGroup = true;
-                @endphp
-                
-                @foreach($driverShifts as $driverId => $shifts)
-                    @foreach($shifts as $shiftName => $shiftData)
-                        <tr class="{{ $shiftData['driver']->type === 'cadangan' ? 'cadangan-driver' : '' }} {{ $unit->is_renops ? 'unit-renops' : '' }}">
-                            <td class="info-cell unit-cell">
-                                @if($isFirstInGroup)
-                                    <strong>{{ $unit->unit_number }}</strong>
-                                    @php $isFirstInGroup = false; @endphp
-                                @else
-                                    <span style="color: #999;">{{ $unit->unit_number }}</span>
-                                @endif
-                            </td>
-                            <td class="info-cell route-cell">
-                                @if($loop->parent->first && $loop->first)
-                                    <strong>{{ $route->route_number }}</strong>
-                                @else
-                                    <span style="color: #999;">{{ $route->route_number }}</span>
-                                @endif
-                            </td>
-                            
-                            <td class="info-cell driver-cell">
-                                {{ $shiftData['driver']->name }}
-                                <div class="driver-type">({{ ucfirst($shiftData['driver']->type) }})</div>
-                            </td>
-                            
-                            <td class="info-cell @if($shiftName == 'pagi') shift-pagi @else shift-siang @endif">
-                                {{ ucfirst($shiftName) }}
-                            </td>
-                            
-                            @foreach($dateRange as $date)
-                                <td>
-                                    @if(in_array($date, $shiftData['dates'] ?? []))
-                                        @php
-                                            $checkboxClass = 'checked';
-                                            // Apply different colors based on driver type and unit properties
-                                            if ($shiftData['driver']->type === 'cadangan') {
-                                                $checkboxClass = 'cadangan';
-                                            } elseif ($unit->is_renops) {
-                                                $checkboxClass = 'renops';
-                                            } elseif ($shiftData['driver']->status === 'cuti' || $shiftData['driver']->status === 'on_leave') {
-                                                $checkboxClass = 'on-leave';
-                                            }
-                                        @endphp
-                                        <div class="checkbox {{ $checkboxClass }}"></div>
-                                    @elseif(in_array($date, $shiftData['backup_dates'] ?? []))
-                                        <div class="checkbox backup"></div>
-                                    @else
-                                        <div class="checkbox"></div>
-                                    @endif
-                                </td>
-                            @endforeach
-                            
-                            <td class="total-column">
-                                @php
-                                    $totalAssigned = count($shiftData['dates'] ?? []);
-                                    $totalBackup = count($shiftData['backup_dates'] ?? []);
-                                    $total = $totalAssigned + $totalBackup;
-                                @endphp
-                                {{ $total }}
-                            </td>
-                        </tr>
-                    @endforeach
+            @foreach($unassignedDrivers->chunk(10) as $driverChunk)
+                @foreach($driverChunk as $index => $driver)
+                    <tr>
+                        <td style="text-align: center; width: 5%;">{{ $index + 1 }}</td>
+                        <td class="info-cell driver-cell" style="width: 25%;">{{ $driver->name }}</td>
+                        <td style="text-align: center; width: 10%;">{{ ucfirst($driver->type) }}</td>
+                        @foreach($dateRange as $date)
+                            <td><div class="checkbox"></div></td>
+                        @endforeach
+                        <td class="total-column">0</td>
+                    </tr>
                 @endforeach
                 
                 @if(!$loop->last)
                     <tr class="spacer-row">
-                        <td colspan="{{ 4 + count($dateRange) + 1 }}" style="padding: 2px; border: none;"></td>
+                        <td colspan="{{ 3 + count($dateRange) + 1 }}" style="padding: 2px; border: none;"></td>
                     </tr>
                 @endif
             @endforeach
         </tbody>
     </table>
+@endif
     
-    @if($unassignedDrivers->count() > 0)
-        <div class="section-title">Pengemudi Tanpa Jadwal ({{ $unassignedDrivers->count() }} orang)</div>
-        
-        <table class="matrix">
-            <thead>
-                <tr>
-                    <th colspan="2">Informasi Pengemudi</th>
-                    <th>Tipe</th>
-                    @foreach($dateHeaders as $date => $day)
-                        <th>{{ $day }}</th>
-                    @endforeach
-                    <th>Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($unassignedDrivers->chunk(10) as $driverChunk)
-                    @foreach($driverChunk as $index => $driver)
-                        <tr>
-                            <td style="text-align: center; width: 5%;">{{ $index + 1 }}</td>
-                            <td class="info-cell driver-cell" style="width: 25%;">{{ $driver->name }}</td>
-                            <td style="text-align: center; width: 10%;">{{ ucfirst($driver->type) }}</td>
-                            @foreach($dateRange as $date)
-                                <td><div class="checkbox"></div></td>
-                            @endforeach
-                            <td class="total-column">0</td>
-                        </tr>
-                    @endforeach
-                    
-                    @if(!$loop->last)
-                        <tr class="spacer-row">
-                            <td colspan="{{ 3 + count($dateRange) + 1 }}" style="padding: 2px; border: none;"></td>
-                        </tr>
-                    @endif
-                @endforeach
-            </tbody>
-        </table>
-    @endif
-    
-    <div class="footer">
-        Laporan ini dicetak pada {{ \Carbon\Carbon::now()->format('d M Y H:i:s') }}
-    </div>
+<div class="footer">
+    Laporan ini dicetak pada {{ \Carbon\Carbon::now()->format('d M Y H:i:s') }}
+</div>
 </body>
 </html>
