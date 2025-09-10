@@ -15,6 +15,7 @@ use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use App\Services\ScheduleGeneratorService;
+use App\Services\ScheduleCompletionService;
 use App\Exports\SchedulesExport;
 use App\Exports\SchedulesPdfExport;
 use App\Exports\SchedulesMatrixPdfExport;
@@ -248,31 +249,7 @@ class ScheduleController extends Controller
                 
                 $unitSchedules = $routeSchedules->where('unit_id', $unit->id);
                 if ($unitSchedules->isEmpty()) {
-                    // Even if there are no schedules, we still want to include all drivers assigned to this unit
-                    $unitDrivers = $allActiveDrivers->filter(function($driver) use ($unit) {
-                        return $driver->units->contains('id', $unit->id);
-                    });
-                    
-                    foreach ($unitDrivers as $driver) {
-                        $driverMatrix = [
-                            'driver' => $driver,
-                            'shifts' => [
-                                'pagi' => [
-                                    'dates' => [],
-                                    'backup_dates' => [],
-                                    'maintenance_dates' => []
-                                ],
-                                'siang' => [
-                                    'dates' => [],
-                                    'backup_dates' => [],
-                                    'maintenance_dates' => []
-                                ]
-                            ]
-                        ];
-                        $unitMatrix['drivers'][] = $driverMatrix;
-                    }
-                    
-                    $routeMatrix['units'][] = $unitMatrix;
+                    // Skip units with no schedules in this period
                     continue;
                 }
                 
@@ -370,31 +347,8 @@ class ScheduleController extends Controller
                     $unitMatrix['drivers'][] = $driverMatrix;
                 }
                 
-                // Add drivers assigned to this unit but without any schedules
-                foreach ($unitDrivers as $driver) {
-                    // Skip if already processed
-                    if (in_array($driver->id, $driverIdsWithSchedules) || in_array($driver->id, $backupDriverIdsWithSchedules)) {
-                        continue;
-                    }
-                    
-                    $driverMatrix = [
-                        'driver' => $driver,
-                        'shifts' => [
-                            'pagi' => [
-                                'dates' => [],
-                                'backup_dates' => [],
-                                'maintenance_dates' => []
-                            ],
-                            'siang' => [
-                                'dates' => [],
-                                'backup_dates' => [],
-                                'maintenance_dates' => []
-                            ]
-                        ]
-                    ];
-                    
-                    $unitMatrix['drivers'][] = $driverMatrix;
-                }
+                // Skip adding drivers without any schedules in this period
+                // This ensures only drivers with actual schedules are shown in the table
                 
                 $routeMatrix['units'][] = $unitMatrix;
             }
@@ -703,14 +657,90 @@ class ScheduleController extends Controller
 
         if ($result['success']) {
             $data = $result['data'];
-            $message = "Berhasil membuat {$data['generated_schedules']} jadwal baru.";
+            $initialSchedules = $data['generated_schedules'] ?? 0;
+            $completionSchedules = $data['completion_schedules'] ?? 0;
+            $totalSchedules = $data['total_schedules'] ?? $initialSchedules;
+            
+            $message = "Berhasil membuat {$totalSchedules} jadwal menggunakan two-pass approach.";
+            
+            if ($completionSchedules > 0) {
+                $message .= " (Phase 1: {$initialSchedules} initial, Phase 2: {$completionSchedules} completion)";
+            }
             
             if (!empty($data['skipped_dates'])) {
-                $message .= " Melewati " . count($data['skipped_dates']) . " tanggal karena tidak ada driver yang tersedia.";
+                $message .= " Melewati " . count($data['skipped_dates']) . " tanggal pada phase 1.";
             }
             
             if (!empty($data['errors'])) {
-                $message .= " Terdapat " . count($data['errors']) . " error saat pembuatan jadwal.";
+                $message .= " Terdapat " . count($data['errors']) . " peringatan selama proses.";
+            }
+            
+            // Add completion summary if available
+            if (isset($data['completion_result']['data']['unit_results'])) {
+                $incompleteDaysFixed = 0;
+                foreach ($data['completion_result']['data']['unit_results'] as $unitResult) {
+                    $incompleteDaysFixed += $unitResult['incomplete_days_found'] ?? 0;
+                }
+                if ($incompleteDaysFixed > 0) {
+                    $message .= " Phase 2 melengkapi {$incompleteDaysFixed} hari yang tidak lengkap.";
+                }
+            }
+            
+            return redirect()->route('schedules.index')->with('success', $message);
+        } else {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', $result['message']);
+        }
+    }
+
+    /**
+     * Show the completion form
+     */
+    public function completeForm()
+    {
+        return view('modules.admin.schedules.complete');
+    }
+
+    /**
+     * Complete incomplete schedules using the completion service
+     */
+    public function completeSchedules(Request $request)
+    {
+        $request->validate([
+            'route_id' => 'required|exists:routes,id',
+            'unit_id' => 'nullable|exists:units,id',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $completionService = new ScheduleCompletionService();
+        
+        $result = $completionService->completeSchedules(
+            $request->route_id,
+            $request->unit_id,
+            $request->start_date,
+            $request->end_date
+        );
+
+        if ($result['success']) {
+            $data = $result['data'];
+            $completedSchedules = $data['completed_schedules'] ?? 0;
+            
+            $message = "Schedule completion finished. Added {$completedSchedules} shifts to complete incomplete days.";
+            
+            if (isset($data['unit_results'])) {
+                $incompleteDaysFixed = 0;
+                foreach ($data['unit_results'] as $unitResult) {
+                    $incompleteDaysFixed += $unitResult['incomplete_days_found'] ?? 0;
+                }
+                if ($incompleteDaysFixed > 0) {
+                    $message .= " Fixed {$incompleteDaysFixed} incomplete days.";
+                }
+            }
+            
+            if (!empty($data['errors'])) {
+                $message .= " Terdapat " . count($data['errors']) . " peringatan selama proses.";
             }
             
             return redirect()->route('schedules.index')->with('success', $message);

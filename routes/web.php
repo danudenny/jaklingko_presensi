@@ -152,6 +152,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/units-for-route/{routeId}', [ScheduleController::class, 'getUnitsForRoute'])->name('units-for-route');
         Route::get('/generate', [ScheduleController::class, 'generateForm'])->name('generate.form');
         Route::post('/generate', [ScheduleController::class, 'generate'])->name('generate');
+        Route::get('/complete', [ScheduleController::class, 'completeForm'])->name('complete.form');
+        Route::post('/complete', [ScheduleController::class, 'completeSchedules'])->name('complete');
         Route::post('/reset-all', [ScheduleController::class, 'resetAll'])->name('reset-all');
         Route::post('/update', [ScheduleController::class, 'update'])->name('update');
         Route::get('/export/summary/test', function() {

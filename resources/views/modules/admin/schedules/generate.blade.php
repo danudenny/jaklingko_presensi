@@ -192,7 +192,7 @@
                 <div class="flex items-center justify-end mt-6">
                     <button type="submit" id="submit-button" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                         <i class="mr-2 fas fa-calendar-plus" id="button-icon"></i>
-                        <span id="button-text">Buat Jadwal</span>
+                        <span id="button-text">Buat Jadwal (Two-Pass)</span>
                         <span id="loading-spinner" class="hidden ml-2">
                             <i class="fas fa-spinner fa-spin"></i>
                         </span>
@@ -202,6 +202,31 @@
                     <div id="generation-type" class="hidden px-3 py-2 ml-4 text-xs border border-blue-200 rounded-md bg-blue-50">
                         <i class="mr-1 text-blue-500 fas fa-info-circle"></i>
                         <span id="generation-type-text"></span>
+                    </div>
+                </div>
+                
+                <!-- Two-Pass Approach Info -->
+                <div class="p-4 mt-4 border border-green-200 rounded-md bg-green-50">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <i class="text-green-400 fas fa-check-circle"></i>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-green-800">
+                                Two-Pass Schedule Generation
+                            </h3>
+                            <div class="mt-2 text-sm text-green-700">
+                                <p>Sistem sekarang menggunakan pendekatan dua tahap untuk memastikan semua hari memiliki 2 shift (pagi & siang):</p>
+                                <ul class="mt-1 ml-5 list-disc">
+                                    <li><strong>Phase 1:</strong> Membuat jadwal menggunakan pattern batangan + cadangan backup</li>
+                                    <li><strong>Phase 2:</strong> Melengkapi hari yang masih kurang shift secara otomatis</li>
+                                </ul>
+                                <p class="mt-2 text-xs">
+                                    <i class="mr-1 fas fa-lightbulb"></i>
+                                    Ini mengatasi masalah single-shift days yang terjadi pada pattern tertentu.
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </form>

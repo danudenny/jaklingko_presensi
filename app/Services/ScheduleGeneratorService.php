@@ -173,31 +173,55 @@ class ScheduleGeneratorService
                 $allValidationIssues = array_merge($allValidationIssues, $unitValidationIssues);
             }
 
+            // PHASE 2: Complete incomplete days using ScheduleCompletionService
+            Log::info("=== STARTING PHASE 2: SCHEDULE COMPLETION ===");
+            $completionService = new \App\Services\ScheduleCompletionService();
+            $completionResult = $completionService->completeSchedules($routeId, $unitId, $startDate, $endDate);
+            
+            $completionSchedules = [];
+            $completionErrors = [];
+            
+            if ($completionResult['success']) {
+                $completionSchedules = $completionResult['data']['schedules'] ?? [];
+                $completionErrors = $completionResult['data']['errors'] ?? [];
+                Log::info("Schedule completion added " . count($completionSchedules) . " shifts to fill gaps");
+            } else {
+                $completionErrors[] = "Schedule completion failed: " . $completionResult['message'];
+                Log::error("Schedule completion failed: " . $completionResult['message']);
+            }
+
             DB::commit();
 
+            $totalSchedules = count($allGeneratedSchedules) + count($completionSchedules);
+            $totalErrors = array_merge($allErrors, $completionErrors);
+
             $successMessage = $unitId 
-                ? "Jadwal berhasil dibuat untuk unit {$unitId} menggunakan pattern 15 hari dengan driver cadangan sebagai backup"
-                : "Jadwal berhasil dibuat untuk " . count($targetUnits) . " unit dalam route {$routeId} menggunakan pattern 15 hari dengan unit-based rotation";
+                ? "Jadwal berhasil dibuat untuk unit {$unitId} menggunakan two-pass approach: " . count($allGeneratedSchedules) . " initial + " . count($completionSchedules) . " completion = {$totalSchedules} total shifts"
+                : "Jadwal berhasil dibuat untuk " . count($targetUnits) . " unit dalam route {$routeId} menggunakan two-pass approach: " . count($allGeneratedSchedules) . " initial + " . count($completionSchedules) . " completion = {$totalSchedules} total shifts";
 
             return [
                 'success' => true,
                 'message' => $successMessage,
                 'data' => [
                     'generated_schedules' => count($allGeneratedSchedules),
+                    'completion_schedules' => count($completionSchedules),
+                    'total_schedules' => $totalSchedules,
                     'processed_units' => count($targetUnits),
                     'skipped_dates' => $allSkippedDates,
-                    'errors' => $allErrors,
+                    'errors' => $totalErrors,
                     'validation_issues' => $allValidationIssues,
-                    'schedules' => $allGeneratedSchedules,
+                    'schedules' => array_merge($allGeneratedSchedules, $completionSchedules),
                     'unit_results' => $unitResults,
+                    'completion_result' => $completionResult,
                     'pattern_info' => [
                         'total_days' => count($dateRange),
                         'pattern_cycles' => ceil(count($dateRange) / 15),
-                        'pattern_type' => '15-day fixed pattern for batangan drivers + cadangan backup',
-                        'coverage_strategy' => 'Multi-phase: 1) Batangan pattern, 2) Cadangan backup, 3) Batangan fallback',
+                        'pattern_type' => 'Two-pass approach: 1) 15-day fixed pattern + 2) Completion service',
+                        'coverage_strategy' => 'Phase 1: Batangan pattern + Cadangan backup + Batangan fallback, Phase 2: Aggressive completion',
                         'unit_rotation' => 'Enabled - each unit has different pattern offset to reduce conflicts',
                         'max_shifts_per_day' => 2,
-                        'conflict_prevention' => 'Enabled'
+                        'conflict_prevention' => 'Enabled',
+                        'completion_enabled' => true
                     ]
                 ]
             ];
