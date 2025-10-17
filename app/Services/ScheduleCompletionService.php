@@ -19,8 +19,8 @@ class ScheduleCompletionService
     const DRIVER_TYPE_CADANGAN = 'cadangan';
     const STATUS_AKTIF = 'aktif';
     const SCHEDULE_STATUS_SCHEDULED = 'scheduled';
-    const BATANGAN_BASE_MAX_SHIFTS = 14;
-    const CADANGAN_BASE_MAX_SHIFTS = 13;
+    const BATANGAN_BASE_MAX_SHIFTS = 12;
+    const CADANGAN_BASE_MAX_SHIFTS = 12;
 
     /**
      * Complete missing shifts for incomplete days in a date range
@@ -207,13 +207,13 @@ class ScheduleCompletionService
 
         // Separate drivers by type
         $cadanganDrivers = $availableDrivers->where('type', self::DRIVER_TYPE_CADANGAN);
-        $batanganDrivers = $availableDrivers->where('type', self::DRIVER_TYPE_BATANGAN);
 
-        // Try to fill each missing shift
+        // Try to fill each missing shift with CADANGAN drivers ONLY
+        // Batangan drivers should already be assigned to their designated shifts in Phase 1
         foreach ($missingShifts as $shift) {
             $assignedDriver = null;
 
-            // Phase 1: Try cadangan drivers first (they have lower monthly limits)
+            // Try cadangan drivers to fill gaps
             Log::info("🎯 Trying cadangan drivers for {$shift} shift on {$dateString}");
             $sortedCadanganDrivers = $this->sortDriversForDistribution($cadanganDrivers, $monthStart, $monthEnd, $dateString);
             
@@ -243,66 +243,9 @@ class ScheduleCompletionService
                 }
             }
 
-            // Phase 2: If no cadangan driver available, try batangan drivers
+            // If no driver available, log warning but don't force assignment
             if (!$assignedDriver) {
-                Log::info("🔄 Trying batangan drivers for {$shift} shift on {$dateString}");
-                $sortedBatanganDrivers = $this->sortDriversForDistribution($batanganDrivers, $monthStart, $monthEnd, $dateString);
-                
-                foreach ($sortedBatanganDrivers as $driver) {
-                    if ($this->canDriverTakeShift($driver, $unitId, $dateString, $shift, $monthStart, $monthEnd)) {
-                        $schedule = Schedule::create([
-                            'route_id' => $routeId,
-                            'unit_id' => $unitId,
-                            'driver_id' => $driver->id,
-                            'schedule_date' => $dateString,
-                            'shift' => $shift,
-                            'status' => self::SCHEDULE_STATUS_SCHEDULED
-                        ]);
-                        
-                        $schedules[] = $schedule;
-                        $assignedDriver = $driver;
-                        
-                        $monthlyCount = Schedule::where('driver_id', $driver->id)
-                            ->whereBetween('schedule_date', [
-                                $monthStart->format('Y-m-d'),
-                                $monthEnd->format('Y-m-d')
-                            ])
-                            ->count();
-                        
-                        Log::info("✓ COMPLETION: Batangan driver {$driver->name} ({$driver->id}) assigned {$shift} shift on {$dateString} (Monthly: {$monthlyCount}/" . self::BATANGAN_BASE_MAX_SHIFTS . ")");
-                        break;
-                    }
-                }
-            }
-
-            // Phase 3: If still no driver, try with relaxed constraints
-            if (!$assignedDriver) {
-                Log::info("🆘 Trying with relaxed constraints for {$shift} shift on {$dateString}");
-                $allDrivers = $availableDrivers->sortBy('name');
-                
-                foreach ($allDrivers as $driver) {
-                    // Check basic availability only (skip monthly limits temporarily)
-                    if ($this->canDriverTakeShiftRelaxed($driver, $unitId, $dateString, $shift)) {
-                        $schedule = Schedule::create([
-                            'route_id' => $routeId,
-                            'unit_id' => $unitId,
-                            'driver_id' => $driver->id,
-                            'schedule_date' => $dateString,
-                            'shift' => $shift,
-                            'status' => self::SCHEDULE_STATUS_SCHEDULED
-                        ]);
-                        
-                        $schedules[] = $schedule;
-                        $assignedDriver = $driver;
-                        
-                        Log::info("⚠️ COMPLETION (RELAXED): Driver {$driver->name} ({$driver->id}) assigned {$shift} shift on {$dateString} - exceeding normal limits");
-                        break;
-                    }
-                }
-            }
-
-            if (!$assignedDriver) {
-                Log::error("❌ FAILED to assign {$shift} shift on {$dateString} - no available drivers");
+                Log::warning("⚠️ COMPLETION: No cadangan driver available for {$shift} shift on {$dateString} - shift remains empty");
             }
         }
 
@@ -402,19 +345,6 @@ class ScheduleCompletionService
 
         // Check shift sequence rules
         return $this->checkShiftSequenceRules($driver->id, $unitId, $dateString, $shift);
-    }
-
-    /**
-     * Check if driver can take a shift with relaxed constraints (for emergency completion)
-     */
-    private function canDriverTakeShiftRelaxed(Driver $driver, int $unitId, string $dateString, string $shift): bool
-    {
-        // Only check if driver already has a shift on this date
-        $existingShift = Schedule::where('driver_id', $driver->id)
-            ->where('schedule_date', $dateString)
-            ->first();
-        
-        return !$existingShift;
     }
 
     /**

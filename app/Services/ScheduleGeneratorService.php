@@ -167,10 +167,11 @@ class ScheduleGeneratorService
                     'coverage_stats' => $coverageStats,
                     'pattern_info' => [
                         'total_days' => count($dateRange),
-                        'pattern_cycles' => ceil(count($dateRange) / 15),
+                        'assignment_type' => 'Simple fixed assignment',
                         'batangan_drivers_used' => $availableDrivers->where('type', self::DRIVER_TYPE_BATANGAN)->count(),
                         'cadangan_drivers_used' => $availableDrivers->where('type', self::DRIVER_TYPE_CADANGAN)->count(),
-                        'unit_pattern_offset' => $this->getUnitPatternOffset($unit->id),
+                        'batangan_max_days' => self::BATANGAN_BASE_MAX_SHIFTS,
+                        'cadangan_max_days' => self::CADANGAN_BASE_MAX_SHIFTS,
                     ],
                 ];
 
@@ -223,10 +224,10 @@ class ScheduleGeneratorService
                     'completion_result' => $completionResult,
                     'pattern_info' => [
                         'total_days' => count($dateRange),
-                        'pattern_cycles' => ceil(count($dateRange) / 15),
-                        'pattern_type' => 'Two-pass approach: 1) 15-day fixed pattern + 2) Completion service',
-                        'coverage_strategy' => 'Phase 1: Batangan pattern + Cadangan backup + Batangan fallback, Phase 2: Aggressive completion',
-                        'unit_rotation' => 'Enabled - each unit has different pattern offset to reduce conflicts',
+                        'pattern_type' => 'Simple fixed assignment: Batangan A->Pagi (12 days max), B->Siang (12 days max), then Cadangan fills remaining',
+                        'coverage_strategy' => 'Phase 1: Batangan simple assignment (max 12 days each), Phase 2: Cadangan fills gaps',
+                        'batangan_max_shifts' => self::BATANGAN_BASE_MAX_SHIFTS,
+                        'cadangan_max_shifts' => self::CADANGAN_BASE_MAX_SHIFTS,
                         'max_shifts_per_day' => 2,
                         'conflict_prevention' => 'Enabled',
                         'completion_enabled' => true,
@@ -348,7 +349,9 @@ class ScheduleGeneratorService
     }
 
     /**
-     * Generate schedules for a specific date using predefined pattern with cadangan backup
+     * Generate schedules for a specific date using simple shift assignment
+     * Batangan drivers: max 12 days, assigned to either pagi or siang consistently
+     * Cadangan drivers: fill remaining days after batangan limit reached
      *
      * @param  \Illuminate\Database\Eloquent\Collection  $availableDrivers
      */
@@ -385,30 +388,23 @@ class ScheduleGeneratorService
             }
         }
 
-        // Phase 1: Apply batangan pattern (if we have at least 2 batangan drivers)
+        // Phase 1: Assign batangan drivers to their designated shifts (max 12 days each)
         if ($batanganDrivers->count() >= 2) {
-            Log::info('🎯 Starting Phase 1: Batangan Pattern Application');
-            $patternSchedules = $this->applyBatanganPattern(
+            Log::info('🎯 Starting Phase 1: Batangan Simple Assignment (max 12 days each)');
+            $batanganSchedules = $this->assignBatanganSimple(
                 $routeId, $unitId, $date, $batanganDrivers, $dateRange, $monthStart, $monthEnd, $assignedShifts
             );
-            $schedules = array_merge($schedules, $patternSchedules);
+            $schedules = array_merge($schedules, $batanganSchedules);
         } else {
-            Log::info("⚠ Insufficient batangan drivers ({$batanganDrivers->count()}/2 required), skipping pattern for {$dateString}");
+            Log::info("⚠ Insufficient batangan drivers ({$batanganDrivers->count()}/2 required), skipping batangan assignment for {$dateString}");
         }
 
         // Phase 2: Fill remaining slots with cadangan drivers
-        Log::info('🔄 Starting Phase 2: Cadangan Driver Backup');
+        Log::info('🔄 Starting Phase 2: Cadangan Driver Fill');
         $cadanganSchedules = $this->fillWithCadanganDrivers(
             $routeId, $unitId, $dateString, $cadanganDrivers, $monthStart, $monthEnd, $assignedShifts
         );
         $schedules = array_merge($schedules, $cadanganSchedules);
-
-        // Phase 3: Fill any remaining empty slots with available batangan drivers (fallback)
-        Log::info('🆘 Starting Phase 3: Batangan Fallback');
-        $fallbackSchedules = $this->fillRemainingSlots(
-            $routeId, $unitId, $dateString, $batanganDrivers, $monthStart, $monthEnd, $assignedShifts
-        );
-        $schedules = array_merge($schedules, $fallbackSchedules);
 
         // Final summary
         $finalShiftCount = Schedule::where('unit_id', $unitId)
@@ -428,134 +424,178 @@ class ScheduleGeneratorService
     }
 
     /**
-     * Apply the batangan pattern for 2 primary drivers
+     * Simple batangan assignment: Driver A takes pagi for max 12 days, Driver B takes siang for max 12 days
      *
      * @param  \Illuminate\Database\Eloquent\Collection  $batanganDrivers
      */
-    private function applyBatanganPattern(int $routeId, int $unitId, Carbon $date, $batanganDrivers, array $dateRange, Carbon $monthStart, Carbon $monthEnd, array &$assignedShifts): array
+    private function assignBatanganSimple(int $routeId, int $unitId, Carbon $date, $batanganDrivers, array $dateRange, Carbon $monthStart, Carbon $monthEnd, array &$assignedShifts): array
     {
         $schedules = [];
         $dateString = $date->format('Y-m-d');
 
-        Log::info("=== BATANGAN PATTERN === Starting pattern application for {$dateString}");
+        Log::info("=== BATANGAN SIMPLE === Starting simple assignment for {$dateString}");
 
-        // We need exactly 2 batangan drivers for the pattern
+        // We need at least 2 batangan drivers
         if ($batanganDrivers->count() < 2) {
-            Log::warning("⚠ Insufficient batangan drivers ({$batanganDrivers->count()}/2 required) for pattern on {$dateString}");
+            Log::warning("⚠ Insufficient batangan drivers ({$batanganDrivers->count()}/2 required) for assignment on {$dateString}");
 
             return $schedules;
         }
 
-        // Calculate total days for dynamic max shifts calculation
-        $totalDays = count($dateRange);
-
-        // Calculate pattern position based on date position in the month
-        $startDate = $monthStart;
-        $dayPosition = $startDate->diffInDays($date) + 1;
-
-        // Apply unit-based pattern offset to reduce conflicts across units
-        $unitOffset = $this->getUnitPatternOffset($unitId);
-        $patternPosition = ((($dayPosition - 1) + $unitOffset) % 20) + 1; // Cycle every 20 days with offset
-
-        // Get pattern for this day position
-        $pattern = $this->getPatternForDay($patternPosition);
-
-        Log::info("Pattern Day {$patternPosition}/20 (Unit {$unitId} offset: {$unitOffset}): Driver1={$pattern['driver1']}, Driver2={$pattern['driver2']}");
-
-        // Sort drivers consistently for pattern assignment
+        // Sort drivers consistently
         $sortedDrivers = $batanganDrivers->sortBy('id')->values();
-        $driver1 = $sortedDrivers[0];
-        $driver2 = $sortedDrivers[1];
+        $driverPagi = $sortedDrivers[0];  // First driver always takes PAGI
+        $driverSiang = $sortedDrivers[1]; // Second driver always takes SIANG
 
-        Log::info("Primary drivers: {$driver1->name} ({$driver1->id}), {$driver2->name} ({$driver2->id})");
+        Log::info("Assigned roles: {$driverPagi->name} ({$driverPagi->id}) -> PAGI, {$driverSiang->name} ({$driverSiang->id}) -> SIANG");
 
-        // Apply pattern for Driver 1
-        if ($pattern['driver1'] !== '-') {
-            if ($this->canDriverTakeShift($driver1, $unitId, $dateString, $pattern['driver1'], $monthStart, $monthEnd, $totalDays)) {
-                // Double check for conflicts before creating
-                $conflictCheck = Schedule::where('unit_id', $unitId)
-                    ->where('schedule_date', $dateString)
-                    ->where('shift', $pattern['driver1'])
-                    ->first();
+        // Check if BOTH drivers should skip this day (only if both have same day off - rare)
+        $shouldSkipBatangan = $this->shouldBatanganSkipDay($driverPagi, $driverSiang, $date, $unitId);
 
-                if ($conflictCheck) {
-                    Log::warning("⚠ Pattern conflict: {$pattern['driver1']} shift on {$dateString} already taken by driver {$conflictCheck->driver_id}");
-                } else {
-                    $schedule = Schedule::create([
-                        'route_id' => $routeId,
-                        'unit_id' => $unitId,
-                        'driver_id' => $driver1->id,
-                        'schedule_date' => $dateString,
-                        'shift' => $pattern['driver1'],
-                        'status' => self::SCHEDULE_STATUS_SCHEDULED,
-                    ]);
-                    $schedules[] = $schedule;
-                    $assignedShifts[$pattern['driver1']] = $driver1->id;
+        if ($shouldSkipBatangan) {
+            Log::info("⏭️ Both batangan drivers skip {$dateString} (".Carbon::parse($dateString)->format('l').') - both have weekend rest day');
 
-                    // Get driver's current monthly count for logging
-                    $monthlyCount = Schedule::where('driver_id', $driver1->id)
-                        ->whereBetween('schedule_date', [
-                            $monthStart->format('Y-m-d'),
-                            $monthEnd->format('Y-m-d'),
-                        ])
-                        ->count();
-
-                    Log::info("✓ Batangan pattern: Driver {$driver1->name} ({$driver1->id}) assigned {$pattern['driver1']} shift on {$dateString} (Pattern Day {$patternPosition}, Unit {$unitId} offset: {$unitOffset}, Monthly: {$monthlyCount}/".self::BATANGAN_BASE_MAX_SHIFTS.')');
-                }
-            } else {
-                Log::warning("⚠ Batangan pattern constraint: Driver {$driver1->name} ({$driver1->id}) cannot take {$pattern['driver1']} shift on {$dateString} (Pattern Day {$patternPosition}, Unit {$unitId} offset: {$unitOffset})");
-            }
-        } else {
-            Log::info("○ Batangan pattern: Driver {$driver1->name} ({$driver1->id}) has scheduled day off on {$dateString} (Pattern Day {$patternPosition}, Unit {$unitId} offset: {$unitOffset})");
+            return $schedules;
         }
 
-        // Apply pattern for Driver 2
-        if ($pattern['driver2'] !== '-') {
-            if ($this->canDriverTakeShift($driver2, $unitId, $dateString, $pattern['driver2'], $monthStart, $monthEnd, $totalDays)) {
-                // Double check for conflicts before creating
+        // Get weekend off days for individual driver checks
+        $dayOfWeek = $date->dayOfWeek;
+        $isWeekend = ($dayOfWeek === 0 || $dayOfWeek === 6); // 0 = Sunday, 6 = Saturday
+        $driverPagiOffDay = $isWeekend ? $this->getDriverWeekendOffDay($driverPagi->id, $unitId) : -1;
+        $driverSiangOffDay = $isWeekend ? $this->getDriverWeekendOffDay($driverSiang->id, $unitId) : -1;
+
+        // Assign PAGI shift to first driver (max 12 days)
+        // Skip if this is their weekend off day
+        if (! isset($assignedShifts[self::SHIFT_PAGI])) {
+            if ($isWeekend && $dayOfWeek === $driverPagiOffDay) {
+                Log::info("⏭️ Driver {$driverPagi->name} ({$driverPagi->id}) skips {$dateString} (".Carbon::parse($dateString)->format('l').') - weekend rest day');
+            } elseif ($this->canDriverTakeShift($driverPagi, $unitId, $dateString, self::SHIFT_PAGI, $monthStart, $monthEnd)) {
                 $conflictCheck = Schedule::where('unit_id', $unitId)
                     ->where('schedule_date', $dateString)
-                    ->where('shift', $pattern['driver2'])
+                    ->where('shift', self::SHIFT_PAGI)
                     ->first();
 
-                if ($conflictCheck) {
-                    Log::warning("⚠ Pattern conflict: {$pattern['driver2']} shift on {$dateString} already taken by driver {$conflictCheck->driver_id}");
-                } else {
+                if (! $conflictCheck) {
                     $schedule = Schedule::create([
                         'route_id' => $routeId,
                         'unit_id' => $unitId,
-                        'driver_id' => $driver2->id,
+                        'driver_id' => $driverPagi->id,
                         'schedule_date' => $dateString,
-                        'shift' => $pattern['driver2'],
+                        'shift' => self::SHIFT_PAGI,
                         'status' => self::SCHEDULE_STATUS_SCHEDULED,
                     ]);
                     $schedules[] = $schedule;
-                    $assignedShifts[$pattern['driver2']] = $driver2->id;
+                    $assignedShifts[self::SHIFT_PAGI] = $driverPagi->id;
 
-                    // Get driver's current monthly count for logging
-                    $monthlyCount = Schedule::where('driver_id', $driver2->id)
+                    $monthlyCount = Schedule::where('driver_id', $driverPagi->id)
                         ->whereBetween('schedule_date', [
                             $monthStart->format('Y-m-d'),
                             $monthEnd->format('Y-m-d'),
                         ])
                         ->count();
 
-                    Log::info("✓ Batangan pattern: Driver {$driver2->name} ({$driver2->id}) assigned {$pattern['driver2']} shift on {$dateString} (Pattern Day {$patternPosition}, Unit {$unitId} offset: {$unitOffset}, Monthly: {$monthlyCount}/".self::BATANGAN_BASE_MAX_SHIFTS.')');
+                    Log::info("✓ Batangan PAGI: Driver {$driverPagi->name} ({$driverPagi->id}) assigned on {$dateString} (Monthly: {$monthlyCount}/".self::BATANGAN_BASE_MAX_SHIFTS.')');
+                } else {
+                    Log::warning("⚠ Conflict: PAGI shift on {$dateString} already taken by driver {$conflictCheck->driver_id}");
                 }
             } else {
-                Log::warning("⚠ Batangan pattern constraint: Driver {$driver2->name} ({$driver2->id}) cannot take {$pattern['driver2']} shift on {$dateString} (Pattern Day {$patternPosition}, Unit {$unitId} offset: {$unitOffset})");
+                Log::info("⚠ Driver {$driverPagi->name} ({$driverPagi->id}) cannot take PAGI shift on {$dateString} (limit reached or other constraint)");
             }
-        } else {
-            Log::info("○ Batangan pattern: Driver {$driver2->name} ({$driver2->id}) has scheduled day off on {$dateString} (Pattern Day {$patternPosition}, Unit {$unitId} offset: {$unitOffset})");
+        }
+
+        // Assign SIANG shift to second driver (max 12 days)
+        // Skip if this is their weekend off day
+        if (! isset($assignedShifts[self::SHIFT_SIANG])) {
+            if ($isWeekend && $dayOfWeek === $driverSiangOffDay) {
+                Log::info("⏭️ Driver {$driverSiang->name} ({$driverSiang->id}) skips {$dateString} (".Carbon::parse($dateString)->format('l').') - weekend rest day');
+            } elseif ($this->canDriverTakeShift($driverSiang, $unitId, $dateString, self::SHIFT_SIANG, $monthStart, $monthEnd)) {
+                $conflictCheck = Schedule::where('unit_id', $unitId)
+                    ->where('schedule_date', $dateString)
+                    ->where('shift', self::SHIFT_SIANG)
+                    ->first();
+
+                if (! $conflictCheck) {
+                    $schedule = Schedule::create([
+                        'route_id' => $routeId,
+                        'unit_id' => $unitId,
+                        'driver_id' => $driverSiang->id,
+                        'schedule_date' => $dateString,
+                        'shift' => self::SHIFT_SIANG,
+                        'status' => self::SCHEDULE_STATUS_SCHEDULED,
+                    ]);
+                    $schedules[] = $schedule;
+                    $assignedShifts[self::SHIFT_SIANG] = $driverSiang->id;
+
+                    $monthlyCount = Schedule::where('driver_id', $driverSiang->id)
+                        ->whereBetween('schedule_date', [
+                            $monthStart->format('Y-m-d'),
+                            $monthEnd->format('Y-m-d'),
+                        ])
+                        ->count();
+
+                    Log::info("✓ Batangan SIANG: Driver {$driverSiang->name} ({$driverSiang->id}) assigned on {$dateString} (Monthly: {$monthlyCount}/".self::BATANGAN_BASE_MAX_SHIFTS.')');
+                } else {
+                    Log::warning("⚠ Conflict: SIANG shift on {$dateString} already taken by driver {$conflictCheck->driver_id}");
+                }
+            } else {
+                Log::info("⚠ Driver {$driverSiang->name} ({$driverSiang->id}) cannot take SIANG shift on {$dateString} (limit reached or other constraint)");
+            }
         }
 
         $currentShiftCount = Schedule::where('unit_id', $unitId)
             ->where('schedule_date', $dateString)
             ->count();
 
-        Log::info("=== BATANGAN PATTERN COMPLETE === {$dateString}: ".count($schedules)." pattern shifts applied, total shifts: {$currentShiftCount}/2");
+        Log::info("=== BATANGAN SIMPLE COMPLETE === {$dateString}: ".count($schedules)." shifts assigned, total shifts: {$currentShiftCount}/2");
 
         return $schedules;
+    }
+
+    /**
+     * Determine if batangan drivers should skip this day (weekend logic)
+     * Each driver individually checks their own weekend off day
+     * At least one driver should work on each weekend day
+     *
+     * @param  Driver  $driverPagi
+     * @param  Driver  $driverSiang
+     * @return bool True if BOTH drivers should skip (never happens - at least one works)
+     */
+    private function shouldBatanganSkipDay($driverPagi, $driverSiang, Carbon $date, int $unitId): bool
+    {
+        $dayOfWeek = $date->dayOfWeek; // 0 = Sunday, 6 = Saturday
+
+        // Only check on weekends
+        if ($dayOfWeek !== 0 && $dayOfWeek !== 6) {
+            return false; // Not a weekend, don't skip
+        }
+
+        // Determine which weekend day each driver has off
+        $driverPagiOffDay = $this->getDriverWeekendOffDay($driverPagi->id, $unitId);
+        $driverSiangOffDay = $this->getDriverWeekendOffDay($driverSiang->id, $unitId);
+
+        // BOTH drivers would need to be off for us to skip the day entirely
+        // This should never happen as they're assigned different days
+        // We handle individual driver skipping in assignBatanganSimple()
+        if ($dayOfWeek === $driverPagiOffDay && $dayOfWeek === $driverSiangOffDay) {
+            return true; // Both off - skip day
+        }
+
+        return false; // At least one driver works - continue with individual checks
+    }
+
+    /**
+     * Get the weekend day (0=Sunday, 6=Saturday) that a driver has off
+     * Uses deterministic hash to ensure consistency
+     *
+     * @return int 0 for Sunday, 6 for Saturday
+     */
+    private function getDriverWeekendOffDay(int $driverId, int $unitId): int
+    {
+        // Create a deterministic but "random" assignment using hash
+        $hash = crc32("driver_{$driverId}_unit_{$unitId}");
+
+        // 0 = Sunday, 6 = Saturday
+        return ($hash % 2 === 0) ? 0 : 6;
     }
 
     /**
@@ -570,21 +610,6 @@ class ScheduleGeneratorService
 
         Log::info("=== CADANGAN PHASE === Starting cadangan driver assignment for {$dateString}");
         Log::info('Currently assigned shifts: '.implode(', ', array_keys($assignedShifts)));
-
-        // Calculate total days for dynamic max shifts calculation
-        $totalDays = $monthStart->diffInDays($monthEnd) + 1;
-
-        // Calculate pattern position to check if this is a single-shift day
-        $startDate = Carbon::parse($dateString)->startOfMonth();
-        $currentDate = Carbon::parse($dateString);
-        $dayPosition = $startDate->diffInDays($currentDate) + 1;
-        $unitOffset = $this->getUnitPatternOffset($unitId);
-        $patternPosition = ((($dayPosition - 1) + $unitOffset) % 20) + 1;
-        $isSingleShiftDay = $this->isSingleShiftPatternDay($patternPosition);
-
-        if ($isSingleShiftDay) {
-            Log::info("🎯 PRIORITY: This is a single-shift pattern day (Day {$patternPosition}/20), prioritizing cadangan drivers for empty slot");
-        }
 
         // Check if we already have complete coverage (2 shifts)
         if (count($assignedShifts) >= 2) {
@@ -626,11 +651,15 @@ class ScheduleGeneratorService
         Log::info('Empty shifts available for cadangan drivers: '.implode(', ', $emptyShifts));
         Log::info('Available cadangan drivers: '.$cadanganDrivers->count());
 
-        // Sort cadangan drivers for fair distribution, but prioritize for single-shift days
-        $sortedCadanganDrivers = $this->sortDriversForDistribution($cadanganDrivers, $monthStart, $monthEnd, $dateString);
+        // Use 20-day pattern for cadangan drivers
+        $currentDate = Carbon::parse($dateString);
+        $dayPosition = $monthStart->diffInDays($currentDate) + 1;
+        $patternPosition = (($dayPosition - 1) % 20) + 1; // Cycle every 20 days
 
-        // On single-shift pattern days, be more aggressive in assigning cadangan drivers
-        $maxAttemptsPerShift = $isSingleShiftDay ? $sortedCadanganDrivers->count() : min(3, $sortedCadanganDrivers->count());
+        Log::info("📅 Cadangan pattern: Day {$patternPosition}/20 for {$dateString}");
+
+        // Sort cadangan drivers for the pattern
+        $sortedCadanganDrivers = $cadanganDrivers->sortBy('id')->values();
 
         foreach ($emptyShifts as $shift) {
             // Before assigning, verify we haven't exceeded the 2-shift limit
@@ -646,61 +675,106 @@ class ScheduleGeneratorService
             }
 
             $assignedDriver = null;
-            $attemptCount = 0;
 
-            // Try to assign to an available cadangan driver
-            foreach ($sortedCadanganDrivers as $driver) {
-                $attemptCount++;
+            // Use pattern-based assignment for cadangan drivers
+            // Get pattern for this day to determine if cadangan should work
+            $pattern = $this->getCadanganPatternForDay($patternPosition);
 
-                if ($this->canDriverTakeShift($driver, $unitId, $dateString, $shift, $monthStart, $monthEnd)) {
-                    // Double check for conflicts before creating
+            // Try to assign based on pattern
+            // Pattern defines which shifts are active on each day of the 20-day cycle
+            if ($sortedCadanganDrivers->count() >= 2) {
+                $cadangan1 = $sortedCadanganDrivers[0];
+                $cadangan2 = $sortedCadanganDrivers[1];
+
+                // Determine which cadangan driver should work this shift based on pattern
+                $targetDriver = null;
+
+                if ($shift === self::SHIFT_PAGI && $pattern['driver1'] === self::SHIFT_PAGI) {
+                    $targetDriver = $cadangan1;
+                } elseif ($shift === self::SHIFT_SIANG && $pattern['driver2'] === self::SHIFT_SIANG) {
+                    $targetDriver = $cadangan2;
+                } elseif ($shift === self::SHIFT_PAGI && $pattern['driver2'] === self::SHIFT_PAGI) {
+                    $targetDriver = $cadangan2;
+                } elseif ($shift === self::SHIFT_SIANG && $pattern['driver1'] === self::SHIFT_SIANG) {
+                    $targetDriver = $cadangan1;
+                }
+
+                // Try to assign the target driver
+                if ($targetDriver && $this->canDriverTakeShift($targetDriver, $unitId, $dateString, $shift, $monthStart, $monthEnd)) {
                     $conflictCheck = Schedule::where('unit_id', $unitId)
                         ->where('schedule_date', $dateString)
                         ->where('shift', $shift)
                         ->first();
 
-                    if ($conflictCheck) {
-                        Log::warning("⚠ Shift conflict detected: {$shift} shift on {$dateString} already taken by driver {$conflictCheck->driver_id}");
+                    if (! $conflictCheck) {
+                        $schedule = Schedule::create([
+                            'route_id' => $routeId,
+                            'unit_id' => $unitId,
+                            'driver_id' => $targetDriver->id,
+                            'schedule_date' => $dateString,
+                            'shift' => $shift,
+                            'status' => self::SCHEDULE_STATUS_SCHEDULED,
+                        ]);
+                        $schedules[] = $schedule;
+                        $assignedShifts[$shift] = $targetDriver->id;
+                        $assignedDriver = $targetDriver;
 
-                        continue;
+                        $monthlyCount = Schedule::where('driver_id', $targetDriver->id)
+                            ->whereBetween('schedule_date', [
+                                $monthStart->format('Y-m-d'),
+                                $monthEnd->format('Y-m-d'),
+                            ])
+                            ->count();
+
+                        Log::info("✓ Cadangan pattern: Driver {$targetDriver->name} ({$targetDriver->id}) assigned {$shift} shift on {$dateString} (Pattern Day {$patternPosition}/20, Monthly: {$monthlyCount}/".self::CADANGAN_BASE_MAX_SHIFTS.')');
                     }
-
-                    $schedule = Schedule::create([
-                        'route_id' => $routeId,
-                        'unit_id' => $unitId,
-                        'driver_id' => $driver->id,
-                        'schedule_date' => $dateString,
-                        'shift' => $shift,
-                        'status' => self::SCHEDULE_STATUS_SCHEDULED,
-                    ]);
-                    $schedules[] = $schedule;
-                    $assignedShifts[$shift] = $driver->id;
-                    $assignedDriver = $driver;
-
-                    // Get driver's current monthly count for logging
-                    $monthlyCount = Schedule::where('driver_id', $driver->id)
-                        ->whereBetween('schedule_date', [
-                            $monthStart->format('Y-m-d'),
-                            $monthEnd->format('Y-m-d'),
-                        ])
-                        ->count();
-
-                    $priorityLabel = $isSingleShiftDay ? '🎯 PRIORITY' : '✓';
-                    Log::info("{$priorityLabel} Cadangan fill: Driver {$driver->name} ({$driver->id}) assigned {$shift} shift on {$dateString} (Pattern Day {$patternPosition}, Monthly: {$monthlyCount}/".self::CADANGAN_BASE_MAX_SHIFTS.')');
-                    break;
-                } else {
-                    Log::debug("⚠ Cadangan constraint: Driver {$driver->name} ({$driver->id}) cannot take {$shift} shift on {$dateString}");
                 }
+            }
 
-                // For single-shift days, try more drivers
-                if (! $isSingleShiftDay && $attemptCount >= $maxAttemptsPerShift) {
-                    break;
+            // Fallback: If pattern assignment failed, try any available cadangan driver
+            if (! $assignedDriver) {
+                foreach ($sortedCadanganDrivers as $driver) {
+                    if ($this->canDriverTakeShift($driver, $unitId, $dateString, $shift, $monthStart, $monthEnd)) {
+                        $conflictCheck = Schedule::where('unit_id', $unitId)
+                            ->where('schedule_date', $dateString)
+                            ->where('shift', $shift)
+                            ->first();
+
+                        if ($conflictCheck) {
+                            Log::warning("⚠ Shift conflict detected: {$shift} shift on {$dateString} already taken by driver {$conflictCheck->driver_id}");
+
+                            continue;
+                        }
+
+                        $schedule = Schedule::create([
+                            'route_id' => $routeId,
+                            'unit_id' => $unitId,
+                            'driver_id' => $driver->id,
+                            'schedule_date' => $dateString,
+                            'shift' => $shift,
+                            'status' => self::SCHEDULE_STATUS_SCHEDULED,
+                        ]);
+                        $schedules[] = $schedule;
+                        $assignedShifts[$shift] = $driver->id;
+                        $assignedDriver = $driver;
+
+                        $monthlyCount = Schedule::where('driver_id', $driver->id)
+                            ->whereBetween('schedule_date', [
+                                $monthStart->format('Y-m-d'),
+                                $monthEnd->format('Y-m-d'),
+                            ])
+                            ->count();
+
+                        Log::info("✓ Cadangan fallback: Driver {$driver->name} ({$driver->id}) assigned {$shift} shift on {$dateString} (Monthly: {$monthlyCount}/".self::CADANGAN_BASE_MAX_SHIFTS.')');
+                        break;
+                    } else {
+                        Log::debug("⚠ Cadangan constraint: Driver {$driver->name} ({$driver->id}) cannot take {$shift} shift on {$dateString}");
+                    }
                 }
             }
 
             if (! $assignedDriver) {
-                $priorityLabel = $isSingleShiftDay ? '🎯 PRIORITY FAILED' : '⚠';
-                Log::warning("{$priorityLabel} No available cadangan driver found for {$shift} shift on {$dateString} (Pattern Day {$patternPosition})");
+                Log::warning("⚠ No available cadangan driver found for {$shift} shift on {$dateString} (Pattern Day {$patternPosition}/20)");
             }
         }
 
@@ -961,6 +1035,20 @@ class ScheduleGeneratorService
         ];
 
         return $patterns[$day] ?? ['driver1' => '-', 'driver2' => '-'];
+    }
+
+    /**
+     * Get the cadangan pattern for a specific day (1-20)
+     * This uses the same 20-day pattern as the original batangan pattern
+     * Cadangan drivers work 7 days a week following the pattern
+     *
+     * @param  int  $day  Day position (1-20)
+     * @return array Pattern for driver1 and driver2
+     */
+    private function getCadanganPatternForDay(int $day): array
+    {
+        // Use the same pattern as batangan used to use
+        return $this->getPatternForDay($day);
     }
 
     /**
