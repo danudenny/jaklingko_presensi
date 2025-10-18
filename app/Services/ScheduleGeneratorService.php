@@ -400,14 +400,14 @@ class ScheduleGeneratorService
         }
 
         // Phase 1: Assign batangan drivers to their designated shifts (max 12 days each)
-        if ($batanganDrivers->count() >= 2) {
-            Log::info('🎯 Starting Phase 1: Batangan Simple Assignment (max 12 days each)');
+        if ($batanganDrivers->count() >= 1) {
+            Log::info('🎯 Starting Phase 1: Batangan Assignment (' . $batanganDrivers->count() . ' batangan driver(s) available)');
             $batanganSchedules = $this->assignBatanganSimple(
                 $routeId, $unitId, $date, $batanganDrivers, $dateRange, $monthStart, $monthEnd, $assignedShifts
             );
             $schedules = array_merge($schedules, $batanganSchedules);
         } else {
-            Log::info("⚠ Insufficient batangan drivers ({$batanganDrivers->count()}/2 required), skipping batangan assignment for {$dateString}");
+            Log::info("⚠ No batangan drivers available for {$dateString}, will use cadangan drivers only");
         }
 
         // Phase 2: Fill remaining slots with cadangan drivers
@@ -447,37 +447,99 @@ class ScheduleGeneratorService
 
         Log::info("=== BATANGAN 6-1 PATTERN === Starting assignment for {$dateString}");
 
-        // We need at least 2 batangan drivers
-        if ($batanganDrivers->count() < 2) {
-            Log::warning("⚠ Insufficient batangan drivers ({$batanganDrivers->count()}/2 required) for assignment on {$dateString}");
-
+        // Handle empty case
+        if ($batanganDrivers->isEmpty()) {
+            Log::warning("⚠ No batangan drivers available for assignment on {$dateString}");
             return $schedules;
         }
 
         // Sort drivers consistently
         $sortedDrivers = $batanganDrivers->sortBy('id')->values();
+        
+        // Calculate cycle day based on the period, not individual driver history
+        // This ensures ALL batangan drivers follow the same cycle for this unit
+        $periodStartDate = $dateRange[0] ?? $date;
+        $daysSinceStart = $periodStartDate->diffInDays($date);
+        $cycleDay = ($daysSinceStart % self::BATANGAN_CYCLE_LENGTH) + 1;
+        
+        Log::info("Period-based cycle: Day {$cycleDay}/7 (Days since period start: {$daysSinceStart})");
+
+        // Check if this is an OFF day (day 7 of cycle)
+        $isOffDay = ($cycleDay === self::BATANGAN_CYCLE_LENGTH);
+        
+        if ($isOffDay) {
+            Log::info("🚫 Cycle Day 7 (OFF DAY) for all batangan drivers on {$dateString} - will be covered by cadangan");
+            return $schedules; // Return early, let cadangan fill all shifts
+        }
+
+        // Case 1: Single batangan driver - consistently assign to ONE shift only (PAGI)
+        // Cadangan will cover the other shift (SIANG)
+        if ($batanganDrivers->count() === 1) {
+            $driver = $sortedDrivers[0];
+            Log::info("Single batangan driver: {$driver->name} ({$driver->id}) - will work PAGI shift only");
+            
+            // Always assign to PAGI shift for single batangan driver
+            // This ensures consistency - no crossed shifts
+            $singleDriverShift = self::SHIFT_PAGI;
+            
+            if (!isset($assignedShifts[$singleDriverShift])) {
+                if ($this->canDriverTakeShift($driver, $unitId, $dateString, $singleDriverShift, $monthStart, $monthEnd)) {
+                    $conflictCheck = Schedule::where('unit_id', $unitId)
+                        ->where('schedule_date', $dateString)
+                        ->where('shift', $singleDriverShift)
+                        ->first();
+
+                    if (!$conflictCheck) {
+                        $schedule = Schedule::create([
+                            'route_id' => $routeId,
+                            'unit_id' => $unitId,
+                            'driver_id' => $driver->id,
+                            'schedule_date' => $dateString,
+                            'shift' => $singleDriverShift,
+                            'status' => self::SCHEDULE_STATUS_SCHEDULED,
+                            'cycle_day' => $cycleDay,
+                            'schedule_type' => 'regular',
+                        ]);
+                        $schedules[] = $schedule;
+                        $assignedShifts[$singleDriverShift] = $driver->id;
+
+                        $monthlyCount = Schedule::where('driver_id', $driver->id)
+                            ->whereBetween('schedule_date', [
+                                $monthStart->format('Y-m-d'),
+                                $monthEnd->format('Y-m-d'),
+                            ])
+                            ->count();
+
+                        Log::info("✓ Batangan (Single): Driver {$driver->name} ({$driver->id}) assigned {$singleDriverShift} shift on {$dateString} (Cycle Day {$cycleDay}/7, Monthly: {$monthlyCount}/".self::BATANGAN_BASE_MAX_SHIFTS.')');
+                    } else {
+                        Log::warning("⚠ Conflict: {$singleDriverShift} shift on {$dateString} already taken");
+                    }
+                } else {
+                    Log::info("⚠ Driver {$driver->name} ({$driver->id}) cannot take {$singleDriverShift} shift on {$dateString} (limit reached or other constraint)");
+                }
+            }
+            
+            // DO NOT assign alternate shift - let cadangan cover SIANG shift
+            Log::info("→ Single batangan driver works PAGI only, SIANG shift will be covered by cadangan");
+            
+            return $schedules;
+        }
+
+        // Case 2: Multiple batangan drivers - assign to fixed shifts
         $driverPagi = $sortedDrivers[0];  // First driver always takes PAGI
         $driverSiang = $sortedDrivers[1]; // Second driver always takes SIANG
 
-        Log::info("Assigned roles: {$driverPagi->name} ({$driverPagi->id}) -> PAGI, {$driverSiang->name} ({$driverSiang->id}) -> SIANG");
+        Log::info("Multiple batangan drivers - Assigned roles: {$driverPagi->name} ({$driverPagi->id}) -> PAGI, {$driverSiang->name} ({$driverSiang->id}) -> SIANG");
 
-        // Assign PAGI shift to first driver (following 6-1 pattern)
-        if (! isset($assignedShifts[self::SHIFT_PAGI])) {
-            $cycleResult = $this->getBatanganCycleDay($driverPagi->id, $unitId, $dateString);
-            $cycleDay = $cycleResult['cycle_day'];
-
-            Log::info("Driver {$driverPagi->name} ({$driverPagi->id}) cycle position: Day {$cycleDay}/".self::BATANGAN_CYCLE_LENGTH);
-
-            // Day 7 is off day - skip assignment
-            if ($cycleDay === self::BATANGAN_CYCLE_LENGTH) {
-                Log::info("🚫 Driver {$driverPagi->name} ({$driverPagi->id}) is on OFF day (Day 7 of cycle) - {$dateString}");
-            } elseif ($this->canDriverTakeShift($driverPagi, $unitId, $dateString, self::SHIFT_PAGI, $monthStart, $monthEnd)) {
+        // Assign PAGI shift to first driver
+        if (!isset($assignedShifts[self::SHIFT_PAGI])) {
+            if ($this->canDriverTakeShift($driverPagi, $unitId, $dateString, self::SHIFT_PAGI, $monthStart, $monthEnd)) {
                 $conflictCheck = Schedule::where('unit_id', $unitId)
                     ->where('schedule_date', $dateString)
                     ->where('shift', self::SHIFT_PAGI)
                     ->first();
 
-                if (! $conflictCheck) {
+                if (!$conflictCheck) {
                     $schedule = Schedule::create([
                         'route_id' => $routeId,
                         'unit_id' => $unitId,
@@ -507,23 +569,15 @@ class ScheduleGeneratorService
             }
         }
 
-        // Assign SIANG shift to second driver (following 6-1 pattern)
-        if (! isset($assignedShifts[self::SHIFT_SIANG])) {
-            $cycleResult = $this->getBatanganCycleDay($driverSiang->id, $unitId, $dateString);
-            $cycleDay = $cycleResult['cycle_day'];
-
-            Log::info("Driver {$driverSiang->name} ({$driverSiang->id}) cycle position: Day {$cycleDay}/".self::BATANGAN_CYCLE_LENGTH);
-
-            // Day 7 is off day - skip assignment
-            if ($cycleDay === self::BATANGAN_CYCLE_LENGTH) {
-                Log::info("🚫 Driver {$driverSiang->name} ({$driverSiang->id}) is on OFF day (Day 7 of cycle) - {$dateString}");
-            } elseif ($this->canDriverTakeShift($driverSiang, $unitId, $dateString, self::SHIFT_SIANG, $monthStart, $monthEnd)) {
+        // Assign SIANG shift to second driver
+        if (!isset($assignedShifts[self::SHIFT_SIANG])) {
+            if ($this->canDriverTakeShift($driverSiang, $unitId, $dateString, self::SHIFT_SIANG, $monthStart, $monthEnd)) {
                 $conflictCheck = Schedule::where('unit_id', $unitId)
                     ->where('schedule_date', $dateString)
                     ->where('shift', self::SHIFT_SIANG)
                     ->first();
 
-                if (! $conflictCheck) {
+                if (!$conflictCheck) {
                     $schedule = Schedule::create([
                         'route_id' => $routeId,
                         'unit_id' => $unitId,
@@ -565,6 +619,7 @@ class ScheduleGeneratorService
     /**
      * Get the current cycle day for a batangan driver (1-7)
      * Pattern: Days 1-6 = work, Day 7 = off
+     * PRIORITY: Batangan must work first, only skip on true cycle day 7
      *
      * @return array ['cycle_day' => int (1-7), 'consecutive_days' => int]
      */
@@ -606,8 +661,17 @@ class ScheduleGeneratorService
                 ];
             }
 
-            // If there's a gap, check if we should reset or continue
-            // Gap > 1 day likely means off day or interruption, reset to day 1
+            // If there's a gap of 2 days (skipped day 7), resume at day 1
+            if ($daysDiff === 2 && $lastCycleDay === self::BATANGAN_WORK_DAYS) {
+                // Last work was day 6, skipped day 7, now resume at day 1
+                return [
+                    'cycle_day' => 1,
+                    'consecutive_days' => 0,
+                    'last_schedule_date' => $lastSchedule->schedule_date,
+                ];
+            }
+
+            // If gap is large (> 7 days), reset to day 1 - new cycle
             if ($daysDiff > self::BATANGAN_CYCLE_LENGTH) {
                 return [
                     'cycle_day' => 1,
@@ -616,11 +680,10 @@ class ScheduleGeneratorService
                 ];
             }
 
-            // For gaps of 2-7 days, calculate position
-            $nextCycleDay = (($lastCycleDay + $daysDiff - 1) % self::BATANGAN_CYCLE_LENGTH) + 1;
-
+            // For smaller gaps (2-7 days), assume driver had off day(s), start fresh
+            // This ensures batangan always gets priority to work
             return [
-                'cycle_day' => $nextCycleDay,
+                'cycle_day' => 1,
                 'consecutive_days' => 0,
                 'last_schedule_date' => $lastSchedule->schedule_date,
             ];
@@ -923,7 +986,9 @@ class ScheduleGeneratorService
     }
 
     /**
-     * Sort drivers for fair distribution based on workload
+     * Sort drivers for fair distribution with true round-robin rotation
+     * Uses date-based seeded shuffle to ensure ALL drivers get fair chances
+     * before any driver gets a second shift.
      *
      * @param  \Illuminate\Database\Eloquent\Collection  $drivers
      */
@@ -949,38 +1014,78 @@ class ScheduleGeneratorService
                 'monthly_count' => $monthlyCount,
                 'recent_activity' => $recentActivity,
                 'last_shift_date' => $this->getLastShiftDate($driver->id, $dateString),
+                'driver_id' => $driver->id, // For seeded shuffle
             ];
         }
 
-        // Sort drivers for better distribution:
-        // 1. Fewer monthly shifts first
-        // 2. Less recent activity
-        // 3. Longer time since last shift
-        // 4. Name for consistency
-        usort($driversWithCounts, function ($a, $b) {
-            // Primary: fewer monthly shifts
-            if ($a['monthly_count'] != $b['monthly_count']) {
-                return $a['monthly_count'] <=> $b['monthly_count'];
+        // Group drivers by monthly shift count
+        $grouped = collect($driversWithCounts)->groupBy('monthly_count')->sortKeys();
+
+        $sortedDrivers = [];
+
+        // Process each group separately
+        foreach ($grouped as $count => $group) {
+            // Within each group, create deterministic rotation based on:
+            // 1. Recent activity (fewer first)
+            // 2. Last shift date (older first)
+            // 3. Driver ID (for deterministic shuffle seed)
+            
+            $groupArray = $group->sortBy([
+                ['recent_activity', 'asc'],
+                ['last_shift_date', 'asc'],
+                ['driver_id', 'asc'],
+            ])->values()->all();
+
+            // Use date-based seeded shuffle for rotation within same count
+            // This ensures different drivers get priority on different days
+            $seed = (int) Carbon::parse($dateString)->format('Ymd') + $count;
+            
+            // Shuffle using seeded random for deterministic but rotating order
+            $shuffled = $this->seededShuffle($groupArray, $seed);
+            
+            // Add to final sorted list
+            foreach ($shuffled as $item) {
+                $sortedDrivers[] = $item;
             }
+        }
 
-            // Secondary: less recent activity
-            if ($a['recent_activity'] != $b['recent_activity']) {
-                return $a['recent_activity'] <=> $b['recent_activity'];
-            }
+        // Convert back to driver collection
+        $drivers = collect($sortedDrivers)->pluck('driver');
 
-            // Tertiary: longer time since last shift
-            if ($a['last_shift_date'] != $b['last_shift_date']) {
-                return $a['last_shift_date'] <=> $b['last_shift_date'];
-            }
+        return new \Illuminate\Database\Eloquent\Collection($drivers->all());
+    }
 
-            // Final: alphabetical by name for consistency
-            return $a['driver']->name <=> $b['driver']->name;
-        });
-
-        // Convert back to Eloquent Collection
-        $sortedDrivers = collect($driversWithCounts)->pluck('driver');
-
-        return new \Illuminate\Database\Eloquent\Collection($sortedDrivers->all());
+    /**
+     * Perform seeded shuffle for deterministic rotation
+     * Same seed = same shuffle order (deterministic)
+     * Different seed = different shuffle order (rotation)
+     *
+     * @param array $items Items to shuffle
+     * @param int $seed Seed for random number generator
+     * @return array Shuffled items
+     */
+    private function seededShuffle(array $items, int $seed): array
+    {
+        // Save current state
+        $oldState = mt_rand();
+        
+        // Seed the random number generator
+        mt_srand($seed);
+        
+        // Fisher-Yates shuffle with seeded random
+        $count = count($items);
+        for ($i = $count - 1; $i > 0; $i--) {
+            $j = mt_rand(0, $i);
+            // Swap
+            $temp = $items[$i];
+            $items[$i] = $items[$j];
+            $items[$j] = $temp;
+        }
+        
+        // Restore previous random state
+        mt_srand($oldState);
+        
+        return $items;
     }
 
     /**
@@ -1292,7 +1397,7 @@ class ScheduleGeneratorService
 
         // Calculate dynamic max shifts based on period length
         if ($totalDays === null) {
-            $totalDays = $monthStart->diffInDays($monthEnd) + 1;
+            $totalDays = (int) ($monthStart->diffInDays($monthEnd) + 1);
         }
         $maxShifts = $this->calculateMaxShifts($totalDays, $driver->type);
 

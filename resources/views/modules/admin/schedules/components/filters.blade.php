@@ -3,7 +3,9 @@
         <i class="mr-2 text-indigo-500 fas fa-filter"></i>Filter Jadwal
     </h3>
     
-    <form id="filter-form" method="GET" class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7">
+    <form id="filter-form" method="GET" class="space-y-4">
+        <!-- First Row: Date and Route Filters -->
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
         <div>
             <x-input-label for="month" value="Bulan" class="font-medium text-gray-700" />
             <div class="relative">
@@ -49,20 +51,6 @@
         </div>
         
         <div>
-            <x-input-label for="driver_type" value="Jenis Pengemudi" class="font-medium text-gray-700" />
-            <div class="relative">
-                <select id="driver_type" name="driver_type" class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
-                    <option value="">-- Semua Jenis --</option>
-                    <option value="batangan" {{ $selectedDriverType == 'batangan' ? 'selected' : '' }}>Batangan</option>
-                    <option value="cadangan" {{ $selectedDriverType == 'cadangan' ? 'selected' : '' }}>Cadangan</option>
-                </select>
-                <div class="absolute inset-y-0 right-0 flex items-center px-2 text-white bg-indigo-500 rounded-r-md cursor-pointer">
-                    <i class="fas fa-user-tag"></i>
-                </div>
-            </div>
-        </div>
-        
-        <div>
             <x-input-label for="route" value="Rute" class="font-medium text-gray-700" />
             <div class="relative">
                 <select id="route" name="route" class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
@@ -78,7 +66,24 @@
                 </div>
             </div>
         </div>
-
+        </div>
+        
+        <!-- Second Row: Driver and Unit Filters -->
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+        <div>
+            <x-input-label for="driver_type" value="Jenis Pengemudi" class="font-medium text-gray-700" />
+            <div class="relative">
+                <select id="driver_type" name="driver_type" class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                    <option value="">-- Semua Jenis --</option>
+                    <option value="batangan" {{ $selectedDriverType == 'batangan' ? 'selected' : '' }}>Batangan</option>
+                    <option value="cadangan" {{ $selectedDriverType == 'cadangan' ? 'selected' : '' }}>Cadangan</option>
+                </select>
+                <div class="absolute inset-y-0 right-0 flex items-center px-2 text-white bg-indigo-500 rounded-r-md cursor-pointer">
+                    <i class="fas fa-user-tag"></i>
+                </div>
+            </div>
+        </div>
+        
         <div>
             <x-input-label for="driver" value="Pengemudi" class="font-medium text-gray-700" />
             <div class="relative" 
@@ -102,17 +107,19 @@
                             el.style.display = driverName.includes(term.toLowerCase()) ? '' : 'none';
                         });
                     }
-                    }">
+                    }"
+                    x-on:click.away="open = false">
                 <div class="relative">
                     <input
                         type="text"
                         placeholder="Ketik untuk mencari pengemudi..."
                         class="block w-full pl-10 pr-10 mt-1 border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                        x-on:focus="open = true"
-                        x-on:click.prevent="open = !open; isFirstInput && search === defaultSearch ? search = '' : null; isFirstInput = false"
+                        x-on:click="open = !open; $nextTick(() => { if (isFirstInput && search === defaultSearch) { search = ''; isFirstInput = false; $el.focus(); } })"
                         x-model="search"
                         x-on:input.debounce.250ms="filterDrivers(search)"
                         autocomplete="off"
+                        readonly
+                        onfocus="this.removeAttribute('readonly');"
                     />
                     <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-cur">
                         <i class="text-indigo-500 fas fa-search"></i>
@@ -127,8 +134,12 @@
                 
                 <div 
                     x-show="open"
-                    x-on:click.away="open = false"
-                    x-transition
+                    x-transition:enter="transition ease-out duration-100"
+                    x-transition:enter-start="transform opacity-0 scale-95"
+                    x-transition:enter-end="transform opacity-100 scale-100"
+                    x-transition:leave="transition ease-in duration-75"
+                    x-transition:leave-start="transform opacity-100 scale-100"
+                    x-transition:leave-end="transform opacity-0 scale-95"
                     class="absolute z-40 w-full mt-1 overflow-auto bg-white rounded-md shadow-lg max-h-60"
                     style="display: none;"
                 >
@@ -233,17 +244,19 @@
                             el.style.display = unitInfo.includes(term.toLowerCase()) ? '' : 'none';
                         });
                     }
-                    }">
+                    }"
+                    x-on:click.away="open = false">
                 <div class="relative">
                     <input
                         type="text"
                         placeholder="Ketik untuk mencari unit..."
                         class="block w-full pl-10 pr-10 mt-1 border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                        x-on:focus="open = true"
-                        x-on:click.prevent="open = !open; isFirstInput && search === defaultSearch ? search = '' : null; isFirstInput = false"
+                        x-on:click="open = !open; $nextTick(() => { if (isFirstInput && search === defaultSearch) { search = ''; isFirstInput = false; $el.focus(); } })"
                         x-model="search"
                         x-on:input.debounce.250ms="filterUnits(search)"
                         autocomplete="off"
+                        readonly
+                        onfocus="this.removeAttribute('readonly');"
                     />
                     <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-cur">
                         <i class="text-indigo-500 fas fa-search"></i>
@@ -258,8 +271,12 @@
                 
                 <div 
                     x-show="open" 
-                    x-on:click.away="open = false"
-                    x-transition
+                    x-transition:enter="transition ease-out duration-100"
+                    x-transition:enter-start="transform opacity-0 scale-95"
+                    x-transition:enter-end="transform opacity-100 scale-100"
+                    x-transition:leave="transition ease-in duration-75"
+                    x-transition:leave-start="transform opacity-100 scale-100"
+                    x-transition:leave-end="transform opacity-0 scale-95"
                     class="absolute z-40 w-full mt-1 overflow-auto bg-white rounded-md shadow-lg max-h-60"
                     style="display: none;"
                 >
@@ -319,8 +336,9 @@
                 </div>
             </div>
         </div>
+        </div>
         
-        <div class="flex flex-wrap items-center pt-2 space-x-4 sm:col-span-2 md:col-span-3 lg:col-span-4 xl:col-span-5 2xl:col-span-7">
+        <div class="flex flex-wrap items-center gap-3 pt-2">
             <button type="submit" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow-sm bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 focus:outline-none focus:border-indigo-700 focus:ring focus:ring-indigo-200 active:from-indigo-700 active:to-indigo-800">
                 <i class="mr-2 fas fa-search"></i>Terapkan Filter
             </button>

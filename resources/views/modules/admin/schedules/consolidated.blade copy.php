@@ -73,43 +73,6 @@
             setTimeout(hideLoadingOverlay, 500);
         }
     });
-    
-    // Regenerate Modal Handlers
-    document.addEventListener('DOMContentLoaded', function() {
-        const regenerateBtn = document.getElementById('regenerate-btn');
-        const regenerateModal = document.getElementById('regenerate-modal');
-        const closeRegenerateModal = document.getElementById('close-regenerate-modal');
-        const cancelRegenerate = document.getElementById('cancel-regenerate');
-        
-        // Show modal
-        if (regenerateBtn) {
-            regenerateBtn.addEventListener('click', function() {
-                regenerateModal.classList.remove('hidden');
-                regenerateModal.classList.add('flex');
-            });
-        }
-        
-        // Close modal handlers
-        function closeModal() {
-            regenerateModal.classList.add('hidden');
-            regenerateModal.classList.remove('flex');
-        }
-        
-        if (closeRegenerateModal) {
-            closeRegenerateModal.addEventListener('click', closeModal);
-        }
-        
-        if (cancelRegenerate) {
-            cancelRegenerate.addEventListener('click', closeModal);
-        }
-        
-        // Close on outside click
-        regenerateModal.addEventListener('click', function(e) {
-            if (e.target === regenerateModal) {
-                closeModal();
-            }
-        });
-    });
 </script>
 @endpush
 <div class="w-full px-4 container-fluid">
@@ -125,47 +88,19 @@
         </x-slot>
         <x-slot name="actions">
             <div class="flex flex-wrap gap-2">
-                <!-- Buat Jadwal Dropdown -->
-                <div class="relative dropdown">
-                    <button class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow dropdown-toggle bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600" type="button">
-                        <i class="mr-2 fas fa-calendar-plus"></i>
-                        Buat Jadwal
-                        <i class="ml-2 text-xs fas fa-chevron-down"></i>
-                    </button>
-                    <div class="absolute left-0 z-50 hidden w-56 p-2 mt-2 space-y-1 bg-white rounded-md shadow-lg dropdown-menu ring-1 ring-black ring-opacity-5">
-                        <a href="{{ route('schedules.generate.form') }}" class="block px-4 py-2 text-xs font-medium text-gray-700 rounded-md hover:bg-indigo-50 hover:text-indigo-900">
-                            <i class="mr-2 text-indigo-500 fas fa-calendar-plus"></i>
-                            Baru (Full Form)
-                            <p class="mt-1 text-xs text-gray-500">Generate jadwal dengan semua parameter</p>
-                        </a>
-                        <button id="regenerate-btn" type="button" class="block w-full px-4 py-2 text-xs font-medium text-left text-gray-700 rounded-md hover:bg-orange-50 hover:text-orange-900">
-                            <i class="mr-2 text-orange-500 fas fa-sync-alt"></i>
-                            Generate Ulang
-                            <p class="mt-1 text-xs text-gray-500">Pilih bulan dan periode saja</p>
-                        </button>
-                    </div>
-                </div>
+                <a href="{{ route('schedules.generate.form') }}" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600">
+                    <i class="mr-2 fas fa-calendar-plus"></i>
+                    Buat Jadwal
+                </a>
+                <button id="show-unassigned-btn" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600">
+                    <i class="mr-2 fas fa-user-slash"></i>
+                    Pengemudi Belum Terjadwal
+                </button>
                 
-                <!-- Statistik Dropdown -->
-                <div class="relative dropdown">
-                    <button class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow dropdown-toggle bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600" type="button">
-                        <i class="mr-2 fas fa-chart-bar"></i>
-                        Statistik
-                        <i class="ml-2 text-xs fas fa-chevron-down"></i>
-                    </button>
-                    <div class="absolute left-0 z-50 hidden w-56 p-2 mt-2 space-y-1 bg-white rounded-md shadow-lg dropdown-menu ring-1 ring-black ring-opacity-5">
-                        <button id="show-stats-btn" type="button" class="block w-full px-4 py-2 text-xs font-medium text-left text-gray-700 rounded-md hover:bg-purple-50 hover:text-purple-900">
-                            <i class="mr-2 text-purple-500 fas fa-chart-bar"></i>
-                            Statistik Jadwal
-                            <p class="mt-1 text-xs text-gray-500">Lihat statistik dan analisis jadwal</p>
-                        </button>
-                        <button id="show-unassigned-btn" type="button" class="block w-full px-4 py-2 text-xs font-medium text-left text-gray-700 rounded-md hover:bg-blue-50 hover:text-blue-900">
-                            <i class="mr-2 text-blue-500 fas fa-user-slash"></i>
-                            Pengemudi Belum Terjadwal
-                            <p class="mt-1 text-xs text-gray-500">Lihat daftar pengemudi yang belum dijadwalkan</p>
-                        </button>
-                    </div>
-                </div>
+                <button id="show-stats-btn" class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600">
+                    <i class="mr-2 fas fa-chart-bar"></i>
+                    Statistik
+                </button>
                 
                 <div class="relative dropdown">
                     <button class="inline-flex items-center px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition duration-150 ease-in-out border border-transparent rounded-md shadow dropdown-toggle bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600" type="button">
@@ -216,18 +151,12 @@
                 <a href="{{ route('schedules.index', array_merge(request()->query(), ['period' => 1])) }}" 
                     class="w-1/2 py-2 px-4 text-center rounded-md transition-all duration-200 {{ $period == 1 ? 'bg-white shadow-sm font-medium text-indigo-700' : 'text-gray-600 hover:bg-gray-50' }}">
                     <i class="mr-2 fas fa-calendar-day"></i>
-                    <div class="inline-flex flex-col items-center">
-                        <span>Periode 1</span>
-                        <span class="text-xs {{ $period == 1 ? 'text-indigo-500' : 'text-gray-500' }}">(1-15 {{ Carbon\Carbon::create($year, $month, 1)->format('M') }})</span>
-                    </div>
+                    Periode 1
                 </a>
                 <a href="{{ route('schedules.index', array_merge(request()->query(), ['period' => 2])) }}" 
                     class="w-1/2 py-2 px-4 text-center rounded-md transition-all duration-200 {{ $period == 2 ? 'bg-white shadow-sm font-medium text-indigo-700' : 'text-gray-600 hover:bg-gray-50' }}">
                     <i class="mr-2 fas fa-calendar-day"></i>
-                    <div class="inline-flex flex-col items-center">
-                        <span>Periode 2</span>
-                        <span class="text-xs {{ $period == 2 ? 'text-indigo-500' : 'text-gray-500' }}">(16-{{ Carbon\Carbon::create($year, $month, 1)->endOfMonth()->format('d M') }})</span>
-                    </div>
+                    Periode 2
                 </a>
             </div>
         </div>
@@ -251,6 +180,11 @@
                             <th scope="col" class="w-32 px-3 py-3 text-xs font-medium tracking-wider text-left text-gray-700 uppercase">
                                 <div class="flex items-center">
                                     <i class="mr-1 text-indigo-400 fas fa-user"></i> Pengemudi
+                                </div>
+                            </th>
+                            <th scope="col" class="w-16 px-3 py-3 text-xs font-medium tracking-wider text-left text-gray-700 uppercase">
+                                <div class="flex items-center">
+                                    <i class="mr-1 text-indigo-400 fas fa-clock"></i> Shift
                                 </div>
                             </th>
                             @foreach($dateRange as $date)
@@ -313,7 +247,7 @@
                     <tbody class="bg-white divide-y divide-gray-200">
                         @if(count($routeUnitDrivers) === 0)
                             <tr>
-                                <td colspan="{{ 3 + count($dateRange) + 1 }}" class="px-3 py-8 text-center">
+                                <td colspan="{{ 4 + count($dateRange) + 1 }}" class="px-3 py-8 text-center">
                                     <div class="flex flex-col items-center justify-center">
                                         <i class="mb-3 text-5xl text-gray-300 fas fa-calendar-times"></i>
                                         <p class="text-lg text-gray-500">Tidak ada jadwal untuk periode ini.</p>
@@ -324,7 +258,7 @@
                         @else
                             @foreach($routeUnitDrivers as $routeGroup)
                                 <tr class="bg-indigo-50 route-header" data-route-id="{{ $routeGroup['route']->id }}" onclick="toggleRouteContent({{ $routeGroup['route']->id }}, event)">
-                                    <td colspan="{{ 3 + count($dateRange) + 1 }}" class="px-3 py-3 font-medium text-indigo-900 border-b border-indigo-100">
+                                    <td colspan="{{ 4 + count($dateRange) + 1 }}" class="px-3 py-3 font-medium text-indigo-900 border-b border-indigo-100">
                                         <div class="flex items-center justify-between">
                                             <div class="flex items-center">
                                                 <div class="flex items-center justify-center w-6 h-6 mr-2 text-white bg-indigo-600 rounded-full">
@@ -346,7 +280,7 @@
                                 @foreach($routeGroup['units'] as $unitGroup)
                                     <tr class="bg-blue-50 unit-header" data-unit-id="{{ $unitGroup['unit']->id }}" onclick="toggleUnitContent({{ $unitGroup['unit']->id }}, event)">
                                         <td class="px-3 py-2 text-right"></td>
-                                        <td colspan="{{ 2 + count($dateRange) + 1 }}" class="px-3 py-2 font-medium text-blue-800 border-b border-blue-100">
+                                        <td colspan="{{ 3 + count($dateRange) + 1 }}" class="px-3 py-2 font-medium text-blue-800 border-b border-blue-100">
                                             <div class="flex items-center justify-between">
                                                 <div class="flex items-center">
                                                     <div class="flex items-center justify-center w-5 h-5 mr-2 text-white bg-blue-500 rounded-full">
@@ -387,6 +321,9 @@
                                                     </div>
                                                 </div>
                                             </td>
+                                            <td class="px-3 py-3 text-sm">
+                                                <span class="text-xs text-gray-500">All Shifts</span>
+                                            </td>
 
                                             @foreach($dateRange as $date)
                                                 @php
@@ -402,33 +339,19 @@
                                                     // Determine shift type to display
                                                     $shiftDisplay = '';
                                                     $shiftTitle = '';
-                                                    $shiftColorClass = '';
                                                     
                                                     if ($pagiAssigned && $siangAssigned) {
                                                         $shiftDisplay = 'P+S';
                                                         $shiftTitle = 'Pagi + Siang';
-                                                        // Purple for both shifts
-                                                        $shiftColorClass = $driverInfo['driver']->type == 'batangan' 
-                                                            ? 'bg-purple-100 text-purple-800 hover:bg-purple-200' 
-                                                            : 'bg-purple-100 text-purple-800 hover:bg-purple-200';
                                                     } elseif ($pagiAssigned) {
                                                         $shiftDisplay = 'P';
                                                         $shiftTitle = 'Shift Pagi';
-                                                        // Blue for Pagi
-                                                        $shiftColorClass = $driverInfo['driver']->type == 'batangan' 
-                                                            ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' 
-                                                            : 'bg-sky-100 text-sky-800 hover:bg-sky-200';
                                                     } elseif ($siangAssigned) {
                                                         $shiftDisplay = 'S';
                                                         $shiftTitle = 'Shift Siang';
-                                                        // Orange/Amber for Siang
-                                                        $shiftColorClass = $driverInfo['driver']->type == 'batangan' 
-                                                            ? 'bg-orange-100 text-orange-800 hover:bg-orange-200' 
-                                                            : 'bg-amber-100 text-amber-800 hover:bg-amber-200';
                                                     } elseif ($pagiBackup || $siangBackup) {
                                                         $shiftDisplay = 'B';
                                                         $shiftTitle = 'Backup';
-                                                        $shiftColorClass = 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
                                                     }
                                                     
                                                     // Determine day type for highlighting
@@ -456,7 +379,7 @@
                                                     @elseif($isOnLeave)
                                                         <span class="inline-flex items-center justify-center w-8 h-6 text-xs font-semibold text-red-800 transition-all bg-red-100 rounded hover:bg-red-200" title="Pengemudi Sedang Cuti">OFF</span>
                                                     @elseif($shiftDisplay)
-                                                        <span class="inline-flex items-center justify-center w-8 h-6 text-xs font-semibold transition-all rounded {{ $shiftColorClass }}" title="{{ $shiftTitle }}">{{ $shiftDisplay }}</span>
+                                                        <span class="inline-flex items-center justify-center w-8 h-6 text-xs font-semibold transition-all rounded {{ $driverInfo['driver']->type == 'batangan' ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-blue-100 text-blue-800 hover:bg-blue-200' }}" title="{{ $shiftTitle }}">{{ $shiftDisplay }}</span>
                                                     @else
                                                         <span class="inline-flex items-center justify-center w-8 h-6 text-xs text-gray-300 transition-all border border-gray-200 rounded hover:bg-gray-100">-</span>
                                                     @endif
@@ -487,7 +410,7 @@
                                 
                                 <!-- Spacer row between route groups -->
                                 <tr class="h-4">
-                                    <td colspan="{{ 3 + count($dateRange) + 1 }}" class="border-b"></td>
+                                    <td colspan="{{ 4 + count($dateRange) + 1 }}" class="border-b"></td>
                                 </tr>
                             @endforeach
                         @endif
@@ -504,83 +427,6 @@
         
         <!-- Stats Drawer -->
         @include('modules.admin.schedules.components.stats-drawer')
-    </div>
-    
-    <!-- Regenerate Modal -->
-    <div id="regenerate-modal" class="fixed inset-0 z-50 items-center justify-center hidden bg-black bg-opacity-50">
-        <div class="w-full max-w-md p-6 mx-4 bg-white rounded-lg shadow-xl">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-900">
-                    <i class="mr-2 text-orange-500 fas fa-sync-alt"></i>
-                    Generate Ulang Jadwal
-                </h3>
-                <button id="close-regenerate-modal" class="text-gray-400 transition-colors hover:text-gray-600">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <form action="{{ route('schedules.regenerate') }}" method="POST">
-                @csrf
-                
-                <div class="space-y-4">
-                    <div>
-                        <label for="regenerate_month" class="block mb-2 text-sm font-medium text-gray-700">
-                            Bulan <span class="text-red-500">*</span>
-                        </label>
-                        <select id="regenerate_month" name="month" required class="block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
-                            @foreach(range(1, 12) as $m)
-                                <option value="{{ $m }}" {{ $month == $m ? 'selected' : '' }}>
-                                    {{ Carbon\Carbon::create(null, $m, 1)->format('F') }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label for="regenerate_year" class="block mb-2 text-sm font-medium text-gray-700">
-                            Tahun <span class="text-red-500">*</span>
-                        </label>
-                        <select id="regenerate_year" name="year" required class="block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
-                            @foreach(range(date('Y')-2, date('Y')+1) as $y)
-                                <option value="{{ $y }}" {{ $year == $y ? 'selected' : '' }}>{{ $y }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label for="regenerate_period" class="block mb-2 text-sm font-medium text-gray-700">
-                            Periode <span class="text-red-500">*</span>
-                        </label>
-                        <select id="regenerate_period" name="period" required class="block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
-                            <option value="">-- Pilih Periode --</option>
-                            <option value="1-15" {{ $period == '1-15' ? 'selected' : '' }}>1-15 (Periode 1)</option>
-                            <option value="16-akhir" {{ $period == '16-akhir' ? 'selected' : '' }}>16-Akhir Bulan (Periode 2)</option>
-                            <option value="full" {{ $period == 'full' ? 'selected' : '' }}>Full Bulan (1-Akhir)</option>
-                        </select>
-                    </div>
-                    
-                    <div class="p-3 text-sm border-l-4 border-orange-400 rounded bg-orange-50">
-                        <div class="flex">
-                            <i class="mt-0.5 mr-2 text-orange-500 fas fa-exclamation-triangle"></i>
-                            <div>
-                                <p class="font-medium text-orange-800">Perhatian:</p>
-                                <p class="mt-1 text-orange-700">Jadwal yang sudah ada untuk bulan dan periode ini akan dihapus dan diganti dengan jadwal baru.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="flex gap-3 mt-6">
-                    <button type="button" id="cancel-regenerate" class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 transition-colors bg-white border border-gray-300 rounded-md hover:bg-gray-50">
-                        Batal
-                    </button>
-                    <button type="submit" class="flex-1 px-4 py-2 text-sm font-medium text-white transition-colors rounded-md bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-500 hover:to-orange-600">
-                        <i class="mr-2 fas fa-sync-alt"></i>
-                        Generate Ulang
-                    </button>
-                </div>
-            </form>
-        </div>
     </div>
     
     <!-- Loading Overlay -->

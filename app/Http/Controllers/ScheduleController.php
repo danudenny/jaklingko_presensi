@@ -751,6 +751,103 @@ class ScheduleController extends Controller
         }
     }
 
+    /**
+     * Regenerate schedules for a specific month and period
+     * Only requires month, year, and period - will regenerate all routes
+     */
+    public function regenerate(Request $request)
+    {
+        $request->validate([
+            'month' => 'required|integer|min:1|max:12',
+            'year' => 'required|integer|min:2020|max:2030',
+            'period' => 'required|in:1-15,16-akhir,full'
+        ]);
+
+        $month = $request->month;
+        $year = $request->year;
+        $period = $request->period;
+        
+        // Determine date range based on period
+        if ($period === '1-15') {
+            $startDate = Carbon::createFromDate($year, $month, 1)->format('Y-m-d');
+            $endDate = Carbon::createFromDate($year, $month, 15)->format('Y-m-d');
+        } elseif ($period === '16-akhir') {
+            $startDate = Carbon::createFromDate($year, $month, 16)->format('Y-m-d');
+            $endDate = Carbon::createFromDate($year, $month)->endOfMonth()->format('Y-m-d');
+        } else { // full
+            $startDate = Carbon::createFromDate($year, $month, 1)->format('Y-m-d');
+            $endDate = Carbon::createFromDate($year, $month)->endOfMonth()->format('Y-m-d');
+        }
+
+        try {
+            DB::beginTransaction();
+            
+            // Delete existing schedules for this period
+            $deletedCount = Schedule::whereBetween('schedule_date', [$startDate, $endDate])->delete();
+            
+            // Get all active routes
+            $routes = Route::where('status', 'active')->get();
+            
+            if ($routes->isEmpty()) {
+                DB::rollBack();
+                return redirect()->back()->with('error', 'Tidak ada rute aktif yang ditemukan.');
+            }
+            
+            $scheduleService = new ScheduleGeneratorService();
+            $totalGenerated = 0;
+            $errors = [];
+            
+            // Generate schedules for each route
+            foreach ($routes as $route) {
+                // Get all units for this route
+                $units = Unit::where('route_id', $route->id)
+                    ->where('status', 'active')
+                    ->get();
+                
+                foreach ($units as $unit) {
+                    $result = $scheduleService->generateSchedules(
+                        $route->id,
+                        $unit->id,
+                        $startDate,
+                        $endDate
+                    );
+                    
+                    if ($result['success']) {
+                        $totalGenerated += $result['data']['total_schedules'] ?? 0;
+                    } else {
+                        $errors[] = "Route {$route->name}, Unit {$unit->unit_number}: {$result['message']}";
+                    }
+                }
+            }
+            
+            DB::commit();
+            
+            $periodName = $period === '1-15' ? 'Periode 1 (1-15)' : ($period === '16-akhir' ? 'Periode 2 (16-Akhir)' : 'Full Bulan');
+            $monthName = Carbon::create(null, $month, 1)->format('F');
+            
+            $message = "Berhasil regenerate jadwal untuk {$monthName} {$year} - {$periodName}. ";
+            $message .= "Menghapus {$deletedCount} jadwal lama, membuat {$totalGenerated} jadwal baru.";
+            
+            if (!empty($errors)) {
+                $message .= " Terdapat " . count($errors) . " error pada beberapa unit.";
+                Log::warning('Schedule regeneration errors', $errors);
+            }
+            
+            return redirect()->route('schedules.index', [
+                'month' => $month,
+                'year' => $year,
+                'period' => $period === '1-15' ? 1 : 2
+            ])->with('success', $message);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Schedule regeneration failed: ' . $e->getMessage());
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Gagal regenerate jadwal: ' . $e->getMessage());
+        }
+    }
+
     public function update(Request $request): JsonResponse
     {
         try {            

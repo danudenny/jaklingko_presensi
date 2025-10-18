@@ -15,33 +15,41 @@
     </div>
     
     <div class="p-5">
-        <!-- Driver Status Section -->
+        <!-- Shift Display Section -->
         <div class="mb-5">
-            <h4 class="text-sm font-semibold text-gray-600 mb-3 border-b pb-1">Status Pengemudi</h4>
+            <h4 class="text-sm font-semibold text-gray-600 mb-3 border-b pb-1">Shift Pengemudi</h4>
             <div class="grid grid-cols-1 gap-3">
                 <div class="flex items-center">
-                    <span class="inline-flex items-center justify-center w-7 h-7 mr-3 text-green-800 bg-green-100 rounded-full shadow-sm">
-                        <i class="fas fa-check"></i>
-                    </span>
-                    <span class="text-sm text-gray-700">Pengemudi Batangan</span>
+                    <span class="inline-flex items-center justify-center w-10 h-7 mr-3 text-xs font-semibold text-blue-800 bg-blue-100 rounded shadow-sm">P</span>
+                    <span class="text-sm text-gray-700">Shift Pagi - Batangan (Biru Tua)</span>
                 </div>
                 <div class="flex items-center">
-                    <span class="inline-flex items-center justify-center w-7 h-7 mr-3 rounded-full cadangan-checkmark shadow-sm">
-                        <i class="fas fa-check"></i>
-                    </span>
-                    <span class="text-sm text-gray-700">Pengemudi Cadangan</span>
+                    <span class="inline-flex items-center justify-center w-10 h-7 mr-3 text-xs font-semibold text-sky-800 bg-sky-100 rounded shadow-sm">P</span>
+                    <span class="text-sm text-gray-700">Shift Pagi - Cadangan (Biru Muda)</span>
                 </div>
                 <div class="flex items-center">
-                    <span class="inline-flex items-center justify-center w-7 h-7 mr-3 rounded-full bg-amber-100 text-amber-800 shadow-sm">
-                        <i class="fas fa-user-shield"></i>
-                    </span>
-                    <span class="text-sm text-gray-700">Pengemudi Backup</span>
+                    <span class="inline-flex items-center justify-center w-10 h-7 mr-3 text-xs font-semibold text-orange-800 bg-orange-100 rounded shadow-sm">S</span>
+                    <span class="text-sm text-gray-700">Shift Siang - Batangan (Oranye)</span>
                 </div>
                 <div class="flex items-center">
-                    <span class="inline-flex items-center justify-center w-7 h-7 mr-3 rounded-full bg-red-100 text-red-800 shadow-sm">
-                        <i class="fas fa-times"></i>
-                    </span>
-                    <span class="text-sm text-gray-700">Pengemudi Sedang Cuti</span>
+                    <span class="inline-flex items-center justify-center w-10 h-7 mr-3 text-xs font-semibold text-amber-800 bg-amber-100 rounded shadow-sm">S</span>
+                    <span class="text-sm text-gray-700">Shift Siang - Cadangan (Kuning)</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="inline-flex items-center justify-center w-10 h-7 mr-3 text-xs font-semibold text-purple-800 bg-purple-100 rounded shadow-sm">P+S</span>
+                    <span class="text-sm text-gray-700">Kedua Shift (Ungu)</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="inline-flex items-center justify-center w-10 h-7 mr-3 text-xs font-semibold text-yellow-800 bg-yellow-100 rounded shadow-sm">B</span>
+                    <span class="text-sm text-gray-700">Backup (Kuning Cerah)</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="inline-flex items-center justify-center w-10 h-7 mr-3 text-xs font-semibold rounded bg-red-100 text-red-800 shadow-sm">OFF</span>
+                    <span class="text-sm text-gray-700">Cuti / Libur (Merah)</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="inline-flex items-center justify-center w-10 h-7 mr-3 text-xs text-gray-300 border border-gray-200 rounded shadow-sm">-</span>
+                    <span class="text-sm text-gray-700">Tidak Dijadwalkan</span>
                 </div>
             </div>
         </div>
@@ -51,15 +59,11 @@
             <h4 class="text-sm font-semibold text-gray-600 mb-3 border-b pb-1">Status Unit</h4>
             <div class="grid grid-cols-1 gap-3">
                 <div class="flex items-center">
-                    <span class="inline-flex items-center justify-center w-7 h-7 mr-3 rounded-full bg-teal-100 text-teal-800 shadow-sm">
-                        <i class="fas fa-wrench"></i>
-                    </span>
-                    <span class="text-sm text-gray-700">Unit Dalam Perawatan</span>
+                    <span class="inline-flex items-center justify-center w-10 h-7 mr-3 text-xs font-semibold text-teal-800 bg-teal-100 rounded shadow-sm">M</span>
+                    <span class="text-sm text-gray-700">Unit Dalam Perawatan (Maintenance)</span>
                 </div>
                 <div class="flex items-center">
-                    <span class="inline-flex items-center justify-center w-7 h-7 mr-3 rounded-full renops-indicator shadow-sm">
-                        <i class="fas fa-exclamation"></i>
-                    </span>
+                    <span class="inline-flex items-center justify-center w-10 h-7 mr-3 text-xs font-semibold rounded renops-indicator shadow-sm">R</span>
                     <span class="text-sm text-gray-700">Unit Tidak Beroperasi (Renops)</span>
                 </div>
             </div>
@@ -67,19 +71,19 @@
         
         <!-- Shift Section -->
         <div class="mb-5">
-            <h4 class="text-sm font-semibold text-gray-600 mb-3 border-b pb-1">Shift</h4>
+            <h4 class="text-sm font-semibold text-gray-600 mb-3 border-b pb-1">Waktu Shift</h4>
             <div class="grid grid-cols-1 gap-3">
                 <div class="flex items-center">
                     <span class="inline-flex items-center justify-center px-3 py-1 mr-3 text-xs font-medium text-blue-600 bg-blue-100 rounded shadow-sm">
                         <i class="mr-1 fas fa-sun"></i>Pagi
                     </span>
-                    <span class="text-sm text-gray-700">Shift Pagi</span>
+                    <span class="text-sm text-gray-700">Shift Pagi (06:00 - 14:00)</span>
                 </div>
                 <div class="flex items-center">
                     <span class="inline-flex items-center justify-center px-3 py-1 mr-3 text-xs font-medium rounded text-amber-600 bg-amber-100 shadow-sm">
                         <i class="mr-1 fas fa-moon"></i>Siang
                     </span>
-                    <span class="text-sm text-gray-700">Shift Siang</span>
+                    <span class="text-sm text-gray-700">Shift Siang (14:00 - 22:00)</span>
                 </div>
             </div>
         </div>

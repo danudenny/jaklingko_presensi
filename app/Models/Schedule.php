@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Carbon\Carbon;
 
 class Schedule extends Model
 {
@@ -19,6 +19,8 @@ class Schedule extends Model
         'backup_driver_id',
         'notes',
         'status',
+        'cycle_day',
+        'schedule_type',
     ];
 
     protected $casts = [
@@ -112,8 +114,7 @@ class Schedule extends Model
 
     /**
      * Check if a driver can be assigned to this schedule based on shift constraints
-     * 
-     * @param Driver $driver
+     *
      * @return bool
      */
     public function canAssignDriver(Driver $driver)
@@ -162,8 +163,8 @@ class Schedule extends Model
 
     /**
      * Create a driver history record for this schedule
-     * 
-     * @param bool $asBackup
+     *
+     * @param  bool  $asBackup
      * @return DriverHistory
      */
     public function createDriverHistory($asBackup = false)
