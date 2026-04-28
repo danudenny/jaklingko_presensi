@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -15,10 +14,10 @@ return new class extends Migration
         Schema::table('global_kilometer_reports', function (Blueprint $table) {
             // Add the shift column
             $table->string('shift')->nullable()->after('report_date')->comment('pagi or siang');
+            
+            // Create a new unique index that includes shift
+            $table->unique(['driver_id', 'unit_id', 'report_date', 'shift', 'period'], 'global_km_reports_shift_unique');
         });
-        
-        // Create a new unique index that includes shift, without dropping the old one first
-        DB::statement('ALTER TABLE global_kilometer_reports ADD UNIQUE KEY global_km_reports_shift_unique (driver_id, unit_id, report_date, shift, period)');
     }
 
     /**
@@ -26,10 +25,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // Drop the new unique constraint
-        DB::statement('ALTER TABLE global_kilometer_reports DROP INDEX global_km_reports_shift_unique');
-        
         Schema::table('global_kilometer_reports', function (Blueprint $table) {
+            // Drop the unique constraint
+            $table->dropUnique('global_km_reports_shift_unique');
+            
             // Drop the shift column
             $table->dropColumn('shift');
         });

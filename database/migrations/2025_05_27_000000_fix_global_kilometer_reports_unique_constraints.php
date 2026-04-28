@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -12,8 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Drop the old unique constraint
-        DB::statement('ALTER TABLE global_kilometer_reports DROP INDEX global_km_reports_unique');
+        Schema::table('global_kilometer_reports', function (Blueprint $table) {
+            // Drop the old unique constraint if it exists
+            $table->dropUnique('global_km_reports_unique');
+        });
     }
 
     /**
@@ -21,7 +22,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // Add back the old unique constraint
-        DB::statement('ALTER TABLE global_kilometer_reports ADD UNIQUE KEY global_km_reports_unique (driver_id, unit_id, report_date, period)');
+        Schema::table('global_kilometer_reports', function (Blueprint $table) {
+            // Add back the old unique constraint
+            $table->unique(['driver_id', 'unit_id', 'report_date', 'period'], 'global_km_reports_unique');
+        });
     }
 };
