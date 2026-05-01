@@ -78,7 +78,7 @@ class ScheduleController extends Controller
         
         $routes = Route::orderBy('route_number')->get();
         $drivers = Driver::where('status', 'aktif')
-            ->orderByRaw('CASE WHEN type = "batangan" THEN 0 ELSE 1 END')
+            ->orderByRaw("CASE WHEN type = 'batangan' THEN 0 ELSE 1 END")
             ->orderBy('name')
             ->get();
         $units = Unit::where('status', 'aktif')
