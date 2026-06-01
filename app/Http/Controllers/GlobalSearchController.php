@@ -27,10 +27,12 @@ class GlobalSearchController extends Controller
             ]);
         }
         
-        // Search for drivers
-        $drivers = Driver::where('name', 'like', "%{$query}%")
-            ->orWhere('ktp', 'like', "%{$query}%")
-            ->orWhere('phone', 'like', "%{$query}%")
+        $lowerQuery = strtolower($query);
+
+        // Search for drivers (case-insensitive for PostgreSQL)
+        $drivers = Driver::whereRaw("LOWER(name) LIKE ?", ["%{$lowerQuery}%"])
+            ->orWhereRaw("LOWER(ktp) LIKE ?", ["%{$lowerQuery}%"])
+            ->orWhereRaw("LOWER(phone) LIKE ?", ["%{$lowerQuery}%"])
             ->limit(5)
             ->get()
             ->map(function ($driver) {
@@ -38,14 +40,14 @@ class GlobalSearchController extends Controller
                     'id' => $driver->id,
                     'name' => $driver->name,
                     'type' => $driver->type,
-                    'identifier' => $driver->ktp, // Using KTP as identifier
+                    'identifier' => $driver->ktp,
                     'url' => route('drivers.show', $driver->id),
                 ];
             });
-        
+
         // Search for units
-        $units = Unit::where('unit_number', 'like', "%{$query}%")
-            ->orWhere('plate_number', 'like', "%{$query}%")
+        $units = Unit::whereRaw("LOWER(unit_number) LIKE ?", ["%{$lowerQuery}%"])
+            ->orWhereRaw("LOWER(plate_number) LIKE ?", ["%{$lowerQuery}%"])
             ->limit(5)
             ->get()
             ->map(function ($unit) {
@@ -57,10 +59,10 @@ class GlobalSearchController extends Controller
                     'url' => route('units.show', $unit->id),
                 ];
             });
-        
+
         // Search for routes
-        $routes = Route::where('route_number', 'like', "%{$query}%")
-            ->orWhere('name', 'like', "%{$query}%")
+        $routes = Route::whereRaw("LOWER(route_number) LIKE ?", ["%{$lowerQuery}%"])
+            ->orWhereRaw("LOWER(name) LIKE ?", ["%{$lowerQuery}%"])
             ->limit(5)
             ->get()
             ->map(function ($route) {

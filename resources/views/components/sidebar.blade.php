@@ -1,15 +1,19 @@
 @props(['mobile' => false])
 
 @php
+    $currentRoute = request()->route()->getName();
+
     $navGroups = [
         [
             'label' => 'Utama',
+            'icon' => 'fa-house',
             'items' => [
                 ['route' => 'dashboard', 'icon' => 'fa-house', 'text' => 'Dashboard'],
             ]
         ],
         [
             'label' => 'Manajemen',
+            'icon' => 'fa-id-card',
             'items' => [
                 ['route' => 'drivers.index', 'icon' => 'fa-id-card', 'text' => 'Pengemudi'],
                 ['route' => 'units.index', 'icon' => 'fa-car', 'text' => 'Unit'],
@@ -19,6 +23,7 @@
         ],
         [
             'label' => 'Operasional',
+            'icon' => 'fa-car-tunnel',
             'items' => [
                 ['route' => 'renops.index', 'icon' => 'fa-car-tunnel', 'text' => 'Renops'],
                 ['route' => 'schedules.index', 'icon' => 'fa-calendar-day', 'text' => 'Jadwal', 'pulse' => true],
@@ -28,6 +33,7 @@
         ],
         [
             'label' => 'Pelaporan',
+            'icon' => 'fa-person-walking-arrow-right',
             'items' => [
                 ['route' => 'leave-requests.index', 'icon' => 'fa-person-walking-arrow-right', 'text' => 'Pengajuan Cuti'],
                 ['route' => 'unit-problems.index', 'icon' => 'fa-car-burst', 'text' => 'Laporan Masalah'],
@@ -39,17 +45,32 @@
     if (Auth::user()->isSuperAdmin()) {
         array_splice($navGroups, 1, 0, [[
             'label' => 'Admin',
+            'icon' => 'fa-users-cog',
             'items' => [
                 ['route' => 'users.index', 'icon' => 'fa-users', 'text' => 'Pengguna'],
             ]
         ]]);
     }
+
+    $currentRouteName = request()->route()->getName() ?? '';
+    $currentBase = explode('.', $currentRouteName)[0];
+    $activeGroupIndex = 0;
+    foreach ($navGroups as $index => $group) {
+        foreach ($group['items'] as $item) {
+            $itemBase = explode('.', $item['route'])[0];
+            // Match by base route name: schedules.generate -> schedules -> matches schedules.index group
+            if ($currentBase === $itemBase) {
+                $activeGroupIndex = $index;
+                break 2;
+            }
+        }
+    }
 @endphp
 
 <div
-    x-data
-    class="{{ $mobile ? 'h-full' : 'h-screen fixed left-0 top-0' }} flex bg-transparent transition-all duration-300 z-30"
-    :class="{ 'w-[296px]': !$store.sidebar.collapsed || {{ $mobile ? 'true' : 'false' }}, 'w-[68px]': $store.sidebar.collapsed && !{{ $mobile ? 'true' : 'false' }} }"
+    x-data="{ activeGroup: {{ $activeGroupIndex }} }"
+    class="{{ $mobile ? 'h-full' : 'h-screen' }} flex transition-all duration-300"
+    :class="{ 'w-[68px]': $store.sidebar.collapsed && !{{ $mobile ? 'true' : 'false' }}, 'w-[296px]': !$store.sidebar.collapsed || {{ $mobile ? 'true' : 'false' }} }"
 >
     {{-- Icon Rail --}}
     <div class="flex flex-col w-[68px] shrink-0 bg-[#0c1526] border-r border-[#1a2744]">
@@ -62,49 +83,32 @@
             </div>
         </div>
 
-        {{-- User Avatar --}}
-        <div class="flex items-center justify-center py-3 border-b border-[#1a2744]">
-            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-[#3b82f6] to-[#8b5cf6] flex items-center justify-center ring-2 ring-[#1e3a5f]">
-                <span class="text-xs font-bold text-white">{{ substr(Auth::user()->name, 0, 1) }}</span>
-            </div>
-        </div>
-
-        {{-- Icon Buttons --}}
+        {{-- Group Icons --}}
         <nav class="flex-1 flex flex-col items-center gap-1 py-3 overflow-y-auto">
-            @foreach($navGroups as $group)
-                <div class="w-full flex flex-col items-center">
-                    @foreach($group['items'] as $item)
-                        <a
-                            href="{{ route($item['route']) }}"
-                            class="relative flex items-center justify-center w-11 h-11 rounded-xl transition-all duration-200 group
-                                {{ request()->routeIs($item['route'])
-                                    ? 'bg-[#1e3a5f] text-[#60a5fa] shadow-inner'
-                                    : 'text-[#64748b] hover:text-[#94a3b8] hover:bg-[#111d32]' }}"
-                        >
-                            <i class="fa-solid {{ $item['icon'] }} text-[15px]"></i>
+            @foreach($navGroups as $groupIndex => $group)
+                <button
+                    @click="activeGroup = {{ $groupIndex }}; $store.sidebar.collapsed && ($store.sidebar.toggle())"
+                    @mouseenter="$store.sidebar.collapsed && (activeGroup = {{ $groupIndex }})"
+                    class="group relative flex items-center justify-center w-11 h-11 rounded-xl transition-all duration-200"
+                    :class="activeGroup === {{ $groupIndex }} ? 'bg-[#1e3a5f] text-[#60a5fa]' : 'text-[#64748b] hover:text-[#94a3b8] hover:bg-[#111d32]'"
+                >
+                    <i class="fa-solid {{ $group['icon'] }} text-[15px]"></i>
 
-                            @if(request()->routeIs($item['route']))
-                                <span class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-[#3b82f6]"></span>
-                            @endif
+                    <span x-show="activeGroup === {{ $groupIndex }}" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-[#3b82f6]"></span>
 
-                            @if(!empty($item['pulse']))
-                                <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-[#ef4444] rounded-full animate-pulse"></span>
-                            @endif
+                    @if(collect($group['items'])->contains('pulse', true))
+                        <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-[#ef4444] rounded-full animate-pulse"></span>
+                    @endif
 
-                            <span
-                                x-show="$store.sidebar.collapsed && !{{ $mobile ? 'true' : 'false' }}"
-                                x-cloak
-                                class="absolute left-full ml-3 px-2.5 py-1.5 bg-[#1e293b] text-[#e2e8f0] text-xs font-medium rounded-lg shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none border border-[#334155]"
-                            >
-                                {{ $item['text'] }}
-                            </span>
-                        </a>
-                    @endforeach
-                </div>
-
-                @if(!$loop->last)
-                    <div class="w-6 my-1.5 border-t border-[#1a2744]"></div>
-                @endif
+                    {{-- Tooltip --}}
+                    <span
+                        x-show="$store.sidebar.collapsed"
+                        x-cloak
+                        class="absolute left-full ml-3 px-2.5 py-1.5 bg-[#1e293b] text-[#e2e8f0] text-xs font-medium rounded-lg shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none border border-[#334155]"
+                    >
+                        {{ $group['label'] }}
+                    </span>
+                </button>
             @endforeach
         </nav>
 
@@ -126,7 +130,7 @@
         @endif
     </div>
 
-    {{-- Expanded Panel --}}
+    {{-- Sub Panel --}}
     <div
         x-show="!$store.sidebar.collapsed || {{ $mobile ? 'true' : 'false' }}"
         x-transition:enter="transition ease-out duration-300"
@@ -142,34 +146,26 @@
             <span class="text-[15px] font-semibold text-[#e2e8f0] tracking-wide">{{ config('app.name', 'Presensi') }}</span>
         </div>
 
-        {{-- User Info --}}
-        <div class="px-5 py-3.5 border-b border-[#1a2744]">
-            <p class="text-[13px] font-medium text-[#e2e8f0] truncate">{{ Auth::user()->name }}</p>
-            <p class="text-[11px] text-[#64748b] mt-0.5">
-                @if(Auth::user()->isSuperAdmin())
-                    Super Admin
-                @else
-                    Admin
-                @endif
-            </p>
-        </div>
-
-        {{-- Nav Items --}}
+        {{-- Active Group Items --}}
         <nav class="flex-1 overflow-y-auto py-3 px-3 space-y-4">
-            @foreach($navGroups as $group)
-                <div>
+            @foreach($navGroups as $groupIndex => $group)
+                <div x-show="activeGroup === {{ $groupIndex }}" x-transition>
                     <p class="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-[#475569]">{{ $group['label'] }}</p>
                     <div class="space-y-0.5">
                         @foreach($group['items'] as $item)
+                            @php
+                                $itemBase = explode('.', $item['route'])[0];
+                                $isActive = $currentBase === $itemBase;
+                            @endphp
                             <a
                                 href="{{ route($item['route']) }}"
                                 class="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-200
-                                    {{ request()->routeIs($item['route'])
+                                    {{ $isActive
                                         ? 'bg-[#1e3a5f] text-[#60a5fa]'
                                         : 'text-[#94a3b8] hover:bg-[#111d32] hover:text-[#e2e8f0]' }}"
                             >
                                 <i class="fa-solid {{ $item['icon'] }} w-4 text-center text-[13px]
-                                    {{ request()->routeIs($item['route']) ? 'text-[#60a5fa]' : 'text-[#64748b]' }}"></i>
+                                    {{ $isActive ? 'text-[#60a5fa]' : 'text-[#64748b]' }}"></i>
                                 <span>{{ $item['text'] }}</span>
                                 @if(!empty($item['pulse']))
                                     <span class="ml-auto w-1.5 h-1.5 bg-[#ef4444] rounded-full animate-pulse"></span>

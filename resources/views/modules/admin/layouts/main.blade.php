@@ -16,6 +16,17 @@
 
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('sidebar', {
+                collapsed: localStorage.getItem('sidebar_collapsed') === 'true',
+                toggle() {
+                    this.collapsed = !this.collapsed;
+                    localStorage.setItem('sidebar_collapsed', this.collapsed);
+                }
+            });
+        });
+    </script>
     
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -43,6 +54,9 @@
         };
     </script>
     
+    <!-- x-cloak: hide elements before Alpine initializes -->
+    <style>[x-cloak] { display: none !important; }</style>
+
     <!-- Custom Styles -->
     @stack('styles')
 </head>
@@ -92,7 +106,7 @@
         </div>
 
         <!-- Desktop Sidebar -->
-        <div class="hidden lg:block lg:shrink-0 transition-all duration-300" x-data="{}" :style="{ width: $store.sidebar.collapsed ? '68px' : '296px' }">
+        <div class="hidden lg:flex lg:shrink-0 h-full">
             @include('components.sidebar', ['mobile' => false])
         </div>
 
@@ -164,17 +178,9 @@
         </div>
     </div>
 
-    <!-- Alpine.js Store Setup -->
+    <!-- Alpine.js Drawer Data -->
     <script>
         document.addEventListener('alpine:init', () => {
-            Alpine.store('sidebar', {
-                collapsed: localStorage.getItem('sidebar_collapsed') === 'true',
-                toggle() {
-                    this.collapsed = !this.collapsed;
-                    localStorage.setItem('sidebar_collapsed', this.collapsed);
-                }
-            });
-            
             Alpine.data('drawer', () => ({
                 open(title, content) {
                     this.drawerTitle = title;

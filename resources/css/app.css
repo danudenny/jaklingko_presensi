@@ -1,3 +1,8 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Alpine.js x-cloak: hide elements before Alpine initializes */
+[x-cloak] {
+    display: none !important;
+}
