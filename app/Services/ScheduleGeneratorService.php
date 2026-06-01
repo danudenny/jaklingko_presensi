@@ -354,7 +354,7 @@ class ScheduleGeneratorService
             ->whereHas('units', function ($query) use ($unitId) {
                 $query->where('units.id', $unitId);
             })
-            ->orderByRaw('CASE WHEN type = "batangan" THEN 0 ELSE 1 END')
+            ->orderByRaw("CASE WHEN type = 'batangan' THEN 0 ELSE 1 END")
             ->orderBy('name')
             ->get();
     }
@@ -1589,7 +1589,7 @@ class ScheduleGeneratorService
             ->where('unit_id', $unitId)
             ->where('schedule_date', $dateString)
             ->groupBy('driver_id')
-            ->having('count', '>', 1)
+            ->havingRaw('count(*) > 1')
             ->get();
 
         if ($duplicateDrivers->isNotEmpty()) {
@@ -1603,7 +1603,7 @@ class ScheduleGeneratorService
             ->where('unit_id', $unitId)
             ->where('schedule_date', $dateString)
             ->groupBy('shift')
-            ->having('count', '>', 1)
+            ->havingRaw('count(*) > 1')
             ->get();
 
         if ($duplicateShifts->isNotEmpty()) {

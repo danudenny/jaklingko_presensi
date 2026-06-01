@@ -268,7 +268,7 @@ class ScheduleCompletionService
             ->whereHas('units', function($query) use ($unitId) {
                 $query->where('units.id', $unitId);
             })
-            ->orderByRaw('CASE WHEN type = "cadangan" THEN 0 ELSE 1 END') // Prioritize cadangan for completion
+            ->orderByRaw("CASE WHEN type = 'cadangan' THEN 0 ELSE 1 END") // Prioritize cadangan for completion
             ->orderBy('name')
             ->get();
     }
