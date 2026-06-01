@@ -9,7 +9,7 @@
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
-    <link href="https://fonts.bunny.net/css?family=space-grotesk:400,500,600,700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.bunny.net/css?family=plus-jakarta-sans:400,500,600,700&display=swap" rel="stylesheet" />
 
     <!-- Scripts -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -92,7 +92,7 @@
         </div>
 
         <!-- Desktop Sidebar -->
-        <div class="hidden lg:block lg:flex-shrink-0 lg:w-64">
+        <div class="hidden lg:flex lg:shrink-0">
             @include('components.sidebar', ['mobile' => false])
         </div>
 
