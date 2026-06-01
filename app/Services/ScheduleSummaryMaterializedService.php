@@ -35,8 +35,8 @@ class ScheduleSummaryMaterializedService
                     r.name as route_name,
                     s.unit_id,
                     u.unit_number,
-                    YEAR(s.schedule_date) as year,
-                    MONTH(s.schedule_date) as month,
+                    EXTRACT(YEAR FROM s.schedule_date) as year,
+                    EXTRACT(MONTH FROM s.schedule_date) as month,
                     COUNT(*) as total_days,
                     NOW() as created_at,
                     NOW() as updated_at
@@ -45,7 +45,7 @@ class ScheduleSummaryMaterializedService
                 JOIN routes r ON s.route_id = r.id
                 JOIN units u ON s.unit_id = u.id
                 WHERE s.status = 'scheduled'
-                GROUP BY s.driver_id, d.name, d.type, d.rekening, s.route_id, r.name, s.unit_id, u.unit_number, YEAR(s.schedule_date), MONTH(s.schedule_date)
+                GROUP BY s.driver_id, d.name, d.type, d.rekening, s.route_id, r.name, s.unit_id, u.unit_number, EXTRACT(YEAR FROM s.schedule_date), EXTRACT(MONTH FROM s.schedule_date)
                 ORDER BY year DESC, month DESC, d.name, u.unit_number
             ");
             
@@ -221,12 +221,12 @@ class ScheduleSummaryMaterializedService
     public function getDataStats()
     {
         $stats = DB::table('schedule_summary_materialized')
-            ->selectRaw('
+            ->selectRaw("
                 COUNT(*) as total_records,
-                MIN(CONCAT(year, "-", LPAD(month, 2, "0"), "-01")) as earliest_date,
-                MAX(CONCAT(year, "-", LPAD(month, 2, "0"), "-01")) as latest_date,
+                MIN(year || '-' || LPAD(month::text, 2, '0') || '-01') as earliest_date,
+                MAX(year || '-' || LPAD(month::text, 2, '0') || '-01') as latest_date,
                 MAX(updated_at) as last_updated
-            ')
+            ")
             ->first();
             
         return [
