@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('leave_requests', function (Blueprint $table) {
-            $table->string('documentation')->nullable()->after('admin_notes');
+            $table->string('documentation')->nullable();
         });
     }
 

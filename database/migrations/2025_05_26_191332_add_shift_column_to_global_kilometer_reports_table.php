@@ -12,11 +12,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('global_kilometer_reports', function (Blueprint $table) {
-            // Add the shift column
-            $table->string('shift')->nullable()->after('report_date')->comment('pagi or siang');
-            
-            // Create a new unique index that includes shift
-            $table->unique(['driver_id', 'unit_id', 'report_date', 'shift', 'period'], 'global_km_reports_shift_unique');
+            $table->string('shift')
+                ->nullable()
+                ->comment('pagi or siang');
+
+            $table->unique(
+                ['driver_id', 'unit_id', 'report_date', 'shift', 'period'],
+                'global_km_reports_shift_unique'
+            );
         });
     }
 

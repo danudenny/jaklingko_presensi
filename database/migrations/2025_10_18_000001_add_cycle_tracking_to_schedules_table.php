@@ -16,11 +16,11 @@ return new class extends Migration
             // cycle_day tracks position in the 7-day cycle (1-7)
             // Day 1-6: Working days
             // Day 7: Off/Cadangan day
-            $table->tinyInteger('cycle_day')->nullable()->after('shift')
+            $table->tinyInteger('cycle_day')->nullable()
                 ->comment('Position in 7-day cycle for batangan drivers (1-6=work, 7=off/cadangan)');
 
             // Add status field to mark schedule type
-            $table->enum('schedule_type', ['regular', 'off', 'cadangan_cover'])->default('regular')->after('cycle_day')
+            $table->enum('schedule_type', ['regular', 'off', 'cadangan_cover'])->default('regular')
                 ->comment('regular=normal shift, off=rest day, cadangan_cover=covered by cadangan');
         });
     }

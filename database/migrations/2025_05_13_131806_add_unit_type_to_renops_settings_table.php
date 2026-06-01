@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('renops_settings', function (Blueprint $table) {
-            $table->string('unit_type')->default('all')->after('mode');
+            $table->string('unit_type')->default('all');
         });
     }
 

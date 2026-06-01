@@ -16,8 +16,8 @@ return new class extends Migration
             $table->renameColumn('schedule_count', 'total_schedules');
             
             // Add morning_shifts and afternoon_shifts columns
-            $table->integer('morning_shifts')->default(0)->after('total_schedules');
-            $table->integer('afternoon_shifts')->default(0)->after('morning_shifts');
+            $table->integer('morning_shifts')->default(0);
+            $table->integer('afternoon_shifts')->default(0);
         });
     }
 

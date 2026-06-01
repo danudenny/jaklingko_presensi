@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('unit_problems', function (Blueprint $table) {
-            $table->boolean('needs_repair')->default(false)->after('on_schedule');
+            $table->boolean('needs_repair')->default(false);
         });
     }
 

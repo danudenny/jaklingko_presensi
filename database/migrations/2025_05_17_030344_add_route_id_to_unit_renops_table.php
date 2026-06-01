@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('unit_renops', function (Blueprint $table) {
-            $table->foreignId('route_id')->nullable()->after('unit_id')->constrained('routes');
+            $table->foreignId('route_id')->nullable()->constrained('routes');
         });
     }
 

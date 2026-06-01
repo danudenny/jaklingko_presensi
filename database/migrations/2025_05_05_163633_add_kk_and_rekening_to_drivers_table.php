@@ -12,8 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('drivers', function (Blueprint $table) {
-            $table->string('kk', 16)->nullable()->after('kpp')->comment('Kartu Keluarga number');
-            $table->string('rekening', 20)->nullable()->after('kk')->comment('Bank account number');
+            $table->string('kk', 16)->nullable()->comment('Kartu Keluarga number');
+            $table->string('rekening', 20)->nullable()->comment('Bank account number');
         });
     }
 

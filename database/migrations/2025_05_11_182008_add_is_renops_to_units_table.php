@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('units', function (Blueprint $table) {
-            $table->boolean('is_renops')->default(false)->after('status');
+            $table->boolean('is_renops')->default(false);
         });
     }
 
