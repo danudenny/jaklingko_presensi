@@ -47,19 +47,9 @@
 @endphp
 
 <div
-    x-data="{
-        hoveredGroup: null,
-        expandedGroup: null,
-        isCollapsed: {{ $mobile ? 'false' : '$store.sidebar.collapsed' }},
-        isActiveRoute(route) {
-            return {{ json_encode(request()->routeIs('*')) }}.some(r => route.includes(r));
-        },
-        toggleGroup(label) {
-            this.expandedGroup = this.expandedGroup === label ? null : label;
-        }
-    }"
+    x-data
     class="{{ $mobile ? 'h-full' : 'h-screen fixed left-0 top-0' }} flex bg-transparent transition-all duration-300 z-30"
-    :class="{ 'w-64': !isCollapsed || {{ $mobile ? 'true' : 'false' }}, 'w-[68px]': isCollapsed && !{{ $mobile ? 'true' : 'false' }} }"
+    :class="{ 'w-[296px]': !$store.sidebar.collapsed || {{ $mobile ? 'true' : 'false' }}, 'w-[68px]': $store.sidebar.collapsed && !{{ $mobile ? 'true' : 'false' }} }"
 >
     {{-- Icon Rail --}}
     <div class="flex flex-col w-[68px] shrink-0 bg-[#0c1526] border-r border-[#1a2744]">
@@ -86,9 +76,6 @@
                     @foreach($group['items'] as $item)
                         <a
                             href="{{ route($item['route']) }}"
-                            @mouseenter="{{ $mobile ? 'false' : '!isCollapsed' }} && (hoveredGroup = '{{ $group['label'] }}')"
-                            @mouseleave="hoveredGroup = null"
-                            @click="{{ $mobile ? 'false' : 'isCollapsed' }} && toggleGroup('{{ $group['label'] }}')"
                             class="relative flex items-center justify-center w-11 h-11 rounded-xl transition-all duration-200 group
                                 {{ request()->routeIs($item['route'])
                                     ? 'bg-[#1e3a5f] text-[#60a5fa] shadow-inner'
@@ -96,19 +83,16 @@
                         >
                             <i class="fa-solid {{ $item['icon'] }} text-[15px]"></i>
 
-                            {{-- Active indicator bar --}}
                             @if(request()->routeIs($item['route']))
                                 <span class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-[#3b82f6]"></span>
                             @endif
 
-                            {{-- Pulse dot --}}
                             @if(!empty($item['pulse']))
                                 <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-[#ef4444] rounded-full animate-pulse"></span>
                             @endif
 
-                            {{-- Tooltip on collapsed --}}
                             <span
-                                x-show="isCollapsed && !{{ $mobile ? 'true' : 'false' }}"
+                                x-show="$store.sidebar.collapsed && !{{ $mobile ? 'true' : 'false' }}"
                                 x-cloak
                                 class="absolute left-full ml-3 px-2.5 py-1.5 bg-[#1e293b] text-[#e2e8f0] text-xs font-medium rounded-lg shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none border border-[#334155]"
                             >
@@ -118,7 +102,6 @@
                     @endforeach
                 </div>
 
-                {{-- Separator between groups --}}
                 @if(!$loop->last)
                     <div class="w-6 my-1.5 border-t border-[#1a2744]"></div>
                 @endif
@@ -129,13 +112,13 @@
         @if(!$mobile)
         <div class="flex items-center justify-center py-3 border-t border-[#1a2744]">
             <button
-                @click="$store.sidebar.toggle(); isCollapsed = $store.sidebar.collapsed"
+                @click="$store.sidebar.toggle()"
                 class="flex items-center justify-center w-9 h-9 rounded-lg text-[#64748b] hover:text-[#94a3b8] hover:bg-[#111d32] transition-all duration-200"
             >
-                <svg x-show="!isCollapsed" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg x-show="!$store.sidebar.collapsed" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
                 </svg>
-                <svg x-show="isCollapsed" x-cloak xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg x-show="$store.sidebar.collapsed" x-cloak xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                 </svg>
             </button>
@@ -145,7 +128,7 @@
 
     {{-- Expanded Panel --}}
     <div
-        x-show="!isCollapsed || {{ $mobile ? 'true' : 'false' }}"
+        x-show="!$store.sidebar.collapsed || {{ $mobile ? 'true' : 'false' }}"
         x-transition:enter="transition ease-out duration-300"
         x-transition:enter-start="opacity-0 -translate-x-4"
         x-transition:enter-end="opacity-100 translate-x-0"

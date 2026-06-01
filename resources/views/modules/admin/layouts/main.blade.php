@@ -92,7 +92,7 @@
         </div>
 
         <!-- Desktop Sidebar -->
-        <div class="hidden lg:flex lg:shrink-0">
+        <div class="hidden lg:block lg:shrink-0 transition-all duration-300" x-data="{}" :style="{ width: $store.sidebar.collapsed ? '68px' : '296px' }">
             @include('components.sidebar', ['mobile' => false])
         </div>
 
